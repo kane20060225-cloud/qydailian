@@ -93,12 +93,13 @@ const logoutBtn = document.getElementById('logoutBtn');
 
 // ==================== 初始化 ====================
 function init() {
-  updateDetailCards();
-  refreshPrice();
-  generatePlayers();
-  checkLoginStatus();
-  bindUpdateRole();  // 绑定角色更新按钮
+    updateDetailCards();
+    refreshPrice();
+    generatePlayers();
+    checkLoginStatus();
+    bindUpdateRole();
 }
+
 // ==================== 板块切换 ====================
 document.querySelectorAll('.menu-card').forEach(card => {
     card.addEventListener('click', () => {
@@ -338,6 +339,11 @@ function checkLoginStatus() {
     if (adminBtn) {
         adminBtn.style.display = (role === 'admin') ? 'block' : 'none';
     }
+
+    const boosterBtn = document.getElementById('boosterPanelBtn');
+    if (boosterBtn) {
+        boosterBtn.style.display = (role === 'booster' || role === 'admin') ? 'block' : 'none';
+    }
 }
 
 logoutBtn.addEventListener('click', () => {
@@ -480,13 +486,10 @@ async function loadProfile() {
     }
 }
 
-// 订单加载（包含支付状态判断）
+// 订单加载
 async function loadOrders() {
     const list = document.getElementById('orderList');
-    if (!list) {
-        console.error('订单容器未找到');
-        return;
-    }
+    if (!list) return;
     const token = localStorage.getItem('token');
     if (!token) {
         list.innerHTML = '<p style="color:var(--red)">请先登录</p>';
@@ -595,9 +598,9 @@ const refreshOrdersBtn = document.getElementById('refreshOrdersBtn');
 const adminOrderList = document.getElementById('adminOrderList');
 
 adminPanelBtn.addEventListener('click', () => {
-  adminModal.style.display = 'flex';
-  loadAdminOrders();
-  loadUserList(); // 加载用户列表
+    adminModal.style.display = 'flex';
+    loadAdminOrders();
+    loadUserList();
 });
 closeAdminBtn.addEventListener('click', () => adminModal.style.display = 'none');
 adminModal.addEventListener('click', (e) => { if (e.target === adminModal) adminModal.style.display = 'none'; });
@@ -653,68 +656,6 @@ function renderAdminOrders(orders) {
     html += '</table>';
     adminOrderList.innerHTML = html;
 }
-
-
-// 加载用户列表到下拉框
-async function loadUserList() {
-  const token = localStorage.getItem('token');
-  const select = document.getElementById('userSelect');
-  if (!select) return;
-  try {
-    const res = await fetch(`${API_BASE}/admin/users`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (!res.ok) throw new Error('获取失败');
-    const users = await res.json();
-    select.innerHTML = '<option value="">-- 选择用户 --</option>' +
-      users.map(u => `<option value="${u.id}">${u.username} (${u.role})</option>`).join('');
-  } catch (err) {
-    select.innerHTML = '<option value="">加载失败</option>';
-  }
-}
-
-// 绑定更新角色按钮事件
-function bindUpdateRole() {
-  const btn = document.getElementById('updateRoleBtn');
-  if (!btn) return;
-  btn.addEventListener('click', async () => {
-    const token = localStorage.getItem('token');
-    const userId = document.getElementById('userSelect').value;
-    const role = document.getElementById('roleSelect').value;
-    const msgEl = document.getElementById('roleUpdateMsg');
-    if (!userId) {
-      msgEl.textContent = '请先选择一个用户';
-      return;
-    }
-    try {
-      const res = await fetch(`${API_BASE}/admin/users/${userId}/role`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ role })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        msgEl.textContent = '✅ ' + data.message;
-        loadUserList(); // 刷新下拉列表显示新角色
-      } else {
-        msgEl.textContent = '❌ ' + (data.error || '操作失败');
-      }
-    } catch (err) {
-      msgEl.textContent = '❌ 网络错误';
-    }
-  });
-}
-
-
-
-
-
-
-
-
 
 // 修改订单状态
 window.updateOrderStatus = async function(selectEl) {
@@ -792,6 +733,58 @@ document.addEventListener('click', async (e) => {
 
 statusFilter.addEventListener('change', loadAdminOrders);
 refreshOrdersBtn.addEventListener('click', loadAdminOrders);
+
+// ==================== 用户角色管理（管理员） ====================
+async function loadUserList() {
+    const token = localStorage.getItem('token');
+    const select = document.getElementById('userSelect');
+    if (!select) return;
+    try {
+        const res = await fetch(`${API_BASE}/admin/users`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error('获取失败');
+        const users = await res.json();
+        select.innerHTML = '<option value="">-- 选择用户 --</option>' +
+            users.map(u => `<option value="${u.id}">${u.username} (${u.role})</option>`).join('');
+    } catch (err) {
+        select.innerHTML = '<option value="">加载失败</option>';
+    }
+}
+
+function bindUpdateRole() {
+    const btn = document.getElementById('updateRoleBtn');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+        const token = localStorage.getItem('token');
+        const userId = document.getElementById('userSelect').value;
+        const role = document.getElementById('roleSelect').value;
+        const msgEl = document.getElementById('roleUpdateMsg');
+        if (!userId) {
+            msgEl.textContent = '请先选择一个用户';
+            return;
+        }
+        try {
+            const res = await fetch(`${API_BASE}/admin/users/${userId}/role`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ role })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                msgEl.textContent = '✅ ' + data.message;
+                loadUserList();
+            } else {
+                msgEl.textContent = '❌ ' + (data.error || '操作失败');
+            }
+        } catch (err) {
+            msgEl.textContent = '❌ 网络错误';
+        }
+    });
+}
 
 // ==================== 支付凭证上传 ====================
 let currentOrderNo = '';
@@ -876,6 +869,150 @@ submitPaymentBtn.addEventListener('click', async () => {
         }
     } catch (err) {
         paymentError.textContent = '网络错误';
+    }
+});
+
+// ==================== 打手面板 ====================
+const boosterPanelBtn = document.getElementById('boosterPanelBtn');
+const boosterModal = document.getElementById('boosterModal');
+const closeBoosterBtn = document.getElementById('closeBoosterBtn');
+
+boosterPanelBtn.addEventListener('click', () => {
+    boosterModal.style.display = 'flex';
+    loadHallOrders();
+});
+closeBoosterBtn.addEventListener('click', () => boosterModal.style.display = 'none');
+boosterModal.addEventListener('click', (e) => { if (e.target === boosterModal) boosterModal.style.display = 'none'; });
+
+// 打手面板 Tab 切换
+document.querySelectorAll('.booster-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.booster-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.dataset.tab;
+        document.querySelectorAll('.booster-tab-content').forEach(c => c.style.display = 'none');
+        document.getElementById(target).style.display = 'block';
+        
+        if (target === 'booster-hall') loadHallOrders();
+        else if (target === 'booster-my') loadMyBoosterOrders();
+        else if (target === 'booster-earnings') loadEarnings();
+    });
+});
+
+async function loadHallOrders() {
+    const token = localStorage.getItem('token');
+    const list = document.getElementById('hallOrderList');
+    try {
+        const res = await fetch(`${API_BASE}/booster/hall`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const orders = await res.json();
+        if (!orders.length) {
+            list.innerHTML = '<p>暂无待接订单</p>';
+            return;
+        }
+        let html = '<table><tr><th>订单号</th><th>项目</th><th>打手</th><th>金额</th><th>操作</th></tr>';
+        orders.forEach(o => {
+            html += `<tr>
+                <td>${o.order_no}</td>
+                <td>${o.project} - ${o.detail}</td>
+                <td>${o.player_name}</td>
+                <td>¥${o.total_price}</td>
+                <td><button class="take-order-btn" data-order="${o.order_no}">接单</button></td>
+            </tr>`;
+        });
+        html += '</table>';
+        list.innerHTML = html;
+    } catch (err) {
+        list.innerHTML = '<p style="color:var(--red)">加载失败</p>';
+    }
+}
+
+async function loadMyBoosterOrders() {
+    const token = localStorage.getItem('token');
+    const list = document.getElementById('myBoosterOrderList');
+    try {
+        const res = await fetch(`${API_BASE}/booster/my-orders`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const orders = await res.json();
+        if (!orders.length) {
+            list.innerHTML = '<p>暂无订单</p>';
+            return;
+        }
+        const statusMap = { pending: '待接单', playing: '代练中', done: '已完成' };
+        let html = '<table><tr><th>订单号</th><th>项目</th><th>金额</th><th>状态</th><th>操作</th></tr>';
+        orders.forEach(o => {
+            html += `<tr>
+                <td>${o.order_no}</td>
+                <td>${o.project} - ${o.detail}</td>
+                <td>¥${o.total_price}</td>
+                <td>${statusMap[o.status] || o.status}</td>
+                <td>${o.status === 'playing' ? `<button class="complete-order-btn" data-order="${o.order_no}">完成</button>` : ''}</td>
+            </tr>`;
+        });
+        html += '</table>';
+        list.innerHTML = html;
+    } catch (err) {
+        list.innerHTML = '<p style="color:var(--red)">加载失败</p>';
+    }
+}
+
+async function loadEarnings() {
+    const token = localStorage.getItem('token');
+    const display = document.getElementById('earningsDisplay');
+    try {
+        const res = await fetch(`${API_BASE}/booster/earnings`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        display.innerHTML = `<p>累计收益：<strong>¥${data.earnings}</strong></p>`;
+    } catch (err) {
+        display.innerHTML = '<p style="color:var(--red)">加载失败</p>';
+    }
+}
+
+// 接单与完成事件委托
+document.addEventListener('click', async (e) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    if (e.target.classList.contains('take-order-btn')) {
+        const orderNo = e.target.dataset.order;
+        try {
+            const res = await fetch(`${API_BASE}/booster/take/${orderNo}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast('✅ 接单成功');
+                loadHallOrders();
+            } else {
+                showToast('❌ ' + (data.error || '接单失败'));
+            }
+        } catch (err) {
+            showToast('❌ 网络错误');
+        }
+    }
+
+    if (e.target.classList.contains('complete-order-btn')) {
+        const orderNo = e.target.dataset.order;
+        try {
+            const res = await fetch(`${API_BASE}/booster/complete/${orderNo}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast(`✅ 订单已完成，收益 ¥${data.earnings}`);
+                loadMyBoosterOrders();
+            } else {
+                showToast('❌ ' + (data.error || '操作失败'));
+            }
+        } catch (err) {
+            showToast('❌ 网络错误');
+        }
     }
 });
 

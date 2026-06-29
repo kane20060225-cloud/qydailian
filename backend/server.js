@@ -9,8 +9,8 @@ const fs = require('fs');
 
 const app = express();
 
-// 静态文件
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// 静态文件（假设 server.js 与 public 目录同级）
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(cors());
 app.use(express.json());
 
@@ -326,6 +326,22 @@ app.put('/api/admin/orders/:orderNo/confirm-payment', adminMiddleware, async (re
   }
 });
 
+// 管理员放入接单大厅
+app.put('/api/admin/orders/:orderNo/hall', adminMiddleware, async (req, res) => {
+  const { orderNo } = req.params;
+  try {
+    const [result] = await pool.execute(
+      'UPDATE orders SET hall_status = ? WHERE order_no = ?',
+      ['open', orderNo]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: '订单不存在' });
+    res.json({ success: true, message: '已放入接单大厅' });
+  } catch (err) {
+    console.error('放入大厅失败:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
 // ==================== 用户角色管理（管理员专用） ====================
 app.get('/api/admin/users', adminMiddleware, async (req, res) => {
   try {
@@ -349,26 +365,6 @@ app.put('/api/admin/users/:userId/role', adminMiddleware, async (req, res) => {
     res.json({ success: true, message: `用户角色已更新为 ${role}` });
   } catch (err) {
     console.error('更新角色失败:', err);
-    res.status(500).json({ error: '服务器错误' });
-  }
-});
-
-
-
-
-
-// 管理员放入接单大厅
-app.put('/api/admin/orders/:orderNo/hall', adminMiddleware, async (req, res) => {
-  const { orderNo } = req.params;
-  try {
-    const [result] = await pool.execute(
-      'UPDATE orders SET hall_status = ? WHERE order_no = ?',
-      ['open', orderNo]
-    );
-    if (result.affectedRows === 0) return res.status(404).json({ error: '订单不存在' });
-    res.json({ success: true, message: '已放入接单大厅' });
-  } catch (err) {
-    console.error('放入大厅失败:', err);
     res.status(500).json({ error: '服务器错误' });
   }
 });
