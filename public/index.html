@@ -237,10 +237,13 @@
         </div>
     </div>
 
-    <!-- 管理面板弹窗 -->
+       <!-- 管理面板弹窗 -->
     <div class="modal-overlay" id="adminModal" style="display: none;">
         <div class="modal-card admin-modal">
-            <div class="modal-header"><h3>🛠️ 管理面板</h3><button class="modal-close" id="closeAdminBtn">&times;</button></div>
+            <div class="modal-header">
+                <h3>🛠️ 管理面板</h3>
+                <button class="modal-close" id="closeAdminBtn">&times;</button>
+            </div>
             <div class="admin-content">
                 <div class="admin-filter">
                     <label>筛选状态：</label>
@@ -253,9 +256,27 @@
                     <button id="refreshOrdersBtn">刷新</button>
                 </div>
                 <div id="adminOrderList" class="admin-order-list">加载中...</div>
+                
+                <!-- 用户角色管理 -->
+                <div class="admin-role-section" style="margin-top:30px; border-top:1px solid var(--border); padding-top:20px;">
+                    <h4 style="margin-bottom:12px;">👥 修改用户角色</h4>
+                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                        <select id="userSelect" style="flex:1; min-width:150px;">
+                            <option value="">-- 选择用户 --</option>
+                        </select>
+                        <select id="roleSelect" style="width:130px;">
+                            <option value="user">普通用户</option>
+                            <option value="booster">打手</option>
+                            <option value="admin">管理员</option>
+                        </select>
+                        <button id="updateRoleBtn" class="submit-btn" style="margin:0; padding:8px 16px;">更新角色</button>
+                    </div>
+                    <p id="roleUpdateMsg" style="margin-top:6px; font-size:0.85rem; color:var(--green);"></p>
+                </div>
             </div>
         </div>
     </div>
+
 
     <!-- 支付凭证上传弹窗 -->
     <div class="modal-overlay" id="paymentModal" style="display: none;">

@@ -326,6 +326,37 @@ app.put('/api/admin/orders/:orderNo/confirm-payment', adminMiddleware, async (re
   }
 });
 
+// ==================== 用户角色管理（管理员专用） ====================
+app.get('/api/admin/users', adminMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT id, username, role FROM users ORDER BY id');
+    res.json(rows);
+  } catch (err) {
+    console.error('获取用户列表失败:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+app.put('/api/admin/users/:userId/role', adminMiddleware, async (req, res) => {
+  const { userId } = req.params;
+  const { role } = req.body;
+  if (!['user', 'booster', 'admin'].includes(role)) {
+    return res.status(400).json({ error: '无效的角色值，可选：user, booster, admin' });
+  }
+  try {
+    const [result] = await pool.execute('UPDATE users SET role = ? WHERE id = ?', [role, userId]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: '用户不存在' });
+    res.json({ success: true, message: `用户角色已更新为 ${role}` });
+  } catch (err) {
+    console.error('更新角色失败:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+
+
+
+
 // 管理员放入接单大厅
 app.put('/api/admin/orders/:orderNo/hall', adminMiddleware, async (req, res) => {
   const { orderNo } = req.params;

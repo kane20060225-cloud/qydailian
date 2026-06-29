@@ -93,12 +93,12 @@ const logoutBtn = document.getElementById('logoutBtn');
 
 // ==================== 初始化 ====================
 function init() {
-    updateDetailCards();
-    refreshPrice();
-    generatePlayers();
-    checkLoginStatus();
+  updateDetailCards();
+  refreshPrice();
+  generatePlayers();
+  checkLoginStatus();
+  bindUpdateRole();  // 绑定角色更新按钮
 }
-
 // ==================== 板块切换 ====================
 document.querySelectorAll('.menu-card').forEach(card => {
     card.addEventListener('click', () => {
@@ -595,8 +595,9 @@ const refreshOrdersBtn = document.getElementById('refreshOrdersBtn');
 const adminOrderList = document.getElementById('adminOrderList');
 
 adminPanelBtn.addEventListener('click', () => {
-    adminModal.style.display = 'flex';
-    loadAdminOrders();
+  adminModal.style.display = 'flex';
+  loadAdminOrders();
+  loadUserList(); // 加载用户列表
 });
 closeAdminBtn.addEventListener('click', () => adminModal.style.display = 'none');
 adminModal.addEventListener('click', (e) => { if (e.target === adminModal) adminModal.style.display = 'none'; });
@@ -652,6 +653,68 @@ function renderAdminOrders(orders) {
     html += '</table>';
     adminOrderList.innerHTML = html;
 }
+
+
+// 加载用户列表到下拉框
+async function loadUserList() {
+  const token = localStorage.getItem('token');
+  const select = document.getElementById('userSelect');
+  if (!select) return;
+  try {
+    const res = await fetch(`${API_BASE}/admin/users`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('获取失败');
+    const users = await res.json();
+    select.innerHTML = '<option value="">-- 选择用户 --</option>' +
+      users.map(u => `<option value="${u.id}">${u.username} (${u.role})</option>`).join('');
+  } catch (err) {
+    select.innerHTML = '<option value="">加载失败</option>';
+  }
+}
+
+// 绑定更新角色按钮事件
+function bindUpdateRole() {
+  const btn = document.getElementById('updateRoleBtn');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const token = localStorage.getItem('token');
+    const userId = document.getElementById('userSelect').value;
+    const role = document.getElementById('roleSelect').value;
+    const msgEl = document.getElementById('roleUpdateMsg');
+    if (!userId) {
+      msgEl.textContent = '请先选择一个用户';
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/admin/users/${userId}/role`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ role })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        msgEl.textContent = '✅ ' + data.message;
+        loadUserList(); // 刷新下拉列表显示新角色
+      } else {
+        msgEl.textContent = '❌ ' + (data.error || '操作失败');
+      }
+    } catch (err) {
+      msgEl.textContent = '❌ 网络错误';
+    }
+  });
+}
+
+
+
+
+
+
+
+
 
 // 修改订单状态
 window.updateOrderStatus = async function(selectEl) {
