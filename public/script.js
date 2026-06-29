@@ -1,0 +1,820 @@
+// ==================== 工具函数 ====================
+function showToast(msg) {
+    const toast = document.createElement('div');
+    toast.className = 'toast-message';
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2500);
+}
+
+// ==================== 配置 ====================
+const API_BASE = 'http://localhost:3000/api';
+
+const projectDetails = {
+    silver: { name:'银币', a:{desc:'有紫狗牌有高级银币',price:8.8}, b:{desc:'无紫狗牌有高级银币',price:12.8}, c:{desc:'无紫狗牌无高级银币',price:14.8} },
+    exp: { name:'单车经验', a:{desc:'有紫狗牌有高级经验',price:3.8}, b:{desc:'无紫狗牌有高级经验',price:5.8}, c:{desc:'无紫狗牌无高级经验',price:6.8} },
+    winrate: { name:'胜率', a:{desc:'70%胜率/10场',price:19.8}, b:{desc:'75%胜率/10场',price:24.8}, c:{desc:'80%胜率/10场',price:34.8} },
+    average: { name:'场均', a:{desc:'3000场均/10场',price:19.8}, b:{desc:'3300场均/10场',price:28.8}, c:{desc:'3500场均/10场',price:37.8} },
+    mmedal: { name:'M章', a:{desc:'1个M章',price:29.8}, b:{desc:'3个M章',price:57.8}, c:{desc:'5个M章',price:138.8} },
+    rings: { name:'三环', a:{desc:'一环',price:68.8}, b:{desc:'二环',price:158.8}, c:{desc:'三环',price:248.8} },
+    rating: { name:'评级', a:{desc:'3千到4千/百分',price:11.8}, b:{desc:'4千到5千/百分',price:14.8}, c:{desc:'5千到6千/百分',price:29.8} }
+};
+
+const playerData = [
+    { key:'jia', name:'情谊', title:'金牌打手', rate:1.2 },
+    { key:'yi', name:'大飞', title:'金牌打手', rate:1.2 },
+    { key:'bing', name:'Hansza', title:'银牌打手', rate:1.1 },
+    { key:'ding', name:'梅花糕', title:'银牌打手', rate:1.1 },
+    { key:'wu', name:'日日', title:'银牌打手', rate:1.1 },
+    { key:'ji', name:'子夜', title:'男娘打手', rate:1.2 },
+    { key:'geng', name:'灵月', title:'银牌打手', rate:1.1 },
+    { key:'xin', name:'土豆', title:'铜牌打手', rate:1.0 },
+    { key:'ren', name:'谷', title:'铜牌打手', rate:1.0 },
+    { key:'gui', name:'小黑子', title:'特惠打手', rate:0.9 }
+];
+
+// ==================== DOM元素引用 ====================
+// 板块切换
+const mainMenu = document.getElementById('mainMenu');
+const sections = {
+    boost: document.getElementById('sectionBoost'),
+    tools: document.getElementById('sectionTools'),
+    news: document.getElementById('sectionNews')
+};
+
+// 代练相关
+const projectRadios = document.querySelectorAll('input[name="project"]');
+const detailRadios = document.querySelectorAll('input[name="detail"]');
+const detailDescA = document.getElementById('detailDescA');
+const detailDescB = document.getElementById('detailDescB');
+const detailDescC = document.getElementById('detailDescC');
+const detailPriceA = document.getElementById('detailPriceA');
+const detailPriceB = document.getElementById('detailPriceB');
+const detailPriceC = document.getElementById('detailPriceC');
+const qtyInput = document.getElementById('quantityInput');
+const qtyMinus = document.getElementById('qtyMinus');
+const qtyPlus = document.getElementById('qtyPlus');
+const urgentCheck = document.getElementById('urgentCheckbox');
+const urgentRow = document.getElementById('urgentRow');
+const basePriceDisplay = document.getElementById('basePriceDisplay');
+const qtyMultDisplay = document.getElementById('qtyMultiplierDisplay');
+const playerMultDisplay = document.getElementById('playerMultiplierDisplay');
+const totalPriceDisplay = document.getElementById('totalPriceDisplay');
+const copyBtn = document.getElementById('copyBtn');
+const copyFeedback = document.getElementById('copyFeedback');
+
+// 计算器
+const calcTypeRadios = document.querySelectorAll('input[name="calcType"]');
+const calcUnit = document.getElementById('calcLabelUnit');
+const calcTargetL = document.getElementById('calcTargetLabel');
+const calcExpL = document.getElementById('calcExpectedLabel');
+const calcResult = document.getElementById('calcResult');
+
+// 用户相关
+const openRegisterBtn = document.getElementById('openRegisterBtn');
+const openLoginBtn = document.getElementById('openLoginBtn');
+const registerModal = document.getElementById('registerModal');
+const closeRegisterBtn = document.getElementById('closeRegisterBtn');
+const registerForm = document.getElementById('registerForm');
+const regError = document.getElementById('regError');
+const toLoginLink = document.getElementById('toLoginLink');
+
+const loginModal = document.getElementById('loginModal');
+const closeLoginBtn = document.getElementById('closeLoginBtn');
+const loginForm = document.getElementById('loginForm');
+const loginError = document.getElementById('loginError');
+const toRegisterLink = document.getElementById('toRegisterLink');
+
+const userMenu = document.getElementById('userMenu');
+const userMenuBtn = document.getElementById('userMenuBtn');
+const userDropdown = document.getElementById('userDropdown');
+const displayUsername = document.getElementById('displayUsername');
+const logoutBtn = document.getElementById('logoutBtn');
+
+// ==================== 初始化 ====================
+function init() {
+    updateDetailCards();
+    refreshPrice();
+    generatePlayers();
+    checkLoginStatus();
+}
+
+// ==================== 板块切换 ====================
+document.querySelectorAll('.menu-card').forEach(card => {
+    card.addEventListener('click', () => {
+        const target = card.dataset.target;
+        mainMenu.style.display = 'none';
+        Object.values(sections).forEach(sec => sec.style.display = 'none');
+        sections[target].style.display = 'block';
+    });
+});
+
+document.querySelectorAll('.back-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        Object.values(sections).forEach(sec => sec.style.display = 'none');
+        mainMenu.style.display = 'flex';
+    });
+});
+
+// ==================== 打手列表生成 ====================
+function generatePlayers() {
+    const grid = document.getElementById('playerGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    playerData.forEach((p, idx) => {
+        const label = document.createElement('label');
+        label.className = 'player-card';
+        label.innerHTML = `
+            <input type="radio" name="player" value="${p.key}" ${idx===3?'checked':''}>
+            <div class="player-inner">
+                <span class="player-name">${p.name}</span>
+                <span class="player-title">${p.title}</span>
+                <span class="player-rate">${p.rate}x</span>
+            </div>
+        `;
+        grid.appendChild(label);
+    });
+}
+
+// ==================== 代练价格计算 ====================
+function getSelectedProject() {
+    const checked = document.querySelector('input[name="project"]:checked');
+    return checked ? checked.value : 'silver';
+}
+function getSelectedDetail() {
+    const checked = document.querySelector('input[name="detail"]:checked');
+    return checked ? checked.value : 'a';
+}
+function getQty() {
+    let qty = parseInt(qtyInput.value, 10);
+    if (isNaN(qty) || qty < 1) qty = 1;
+    if (qty > 99) qty = 99;
+    return qty;
+}
+function getPlayerRate() {
+    const checked = document.querySelector('input[name="player"]:checked');
+    if (!checked) return 1.0;
+    const found = playerData.find(p => p.key === checked.value);
+    return found ? found.rate : 1.0;
+}
+function isUrgent() { return urgentCheck.checked; }
+
+function updateDetailCards() {
+    const p = projectDetails[getSelectedProject()];
+    detailDescA.textContent = p.a.desc;
+    detailDescB.textContent = p.b.desc;
+    detailDescC.textContent = p.c.desc;
+    detailPriceA.textContent = `¥${p.a.price}`;
+    detailPriceB.textContent = `¥${p.b.price}`;
+    detailPriceC.textContent = `¥${p.c.price}`;
+}
+
+function calcTotal() {
+    const base = projectDetails[getSelectedProject()][getSelectedDetail()].price;
+    return base * getQty() * getPlayerRate() * (isUrgent() ? 1.1 : 1);
+}
+
+function refreshPrice() {
+    const base = projectDetails[getSelectedProject()][getSelectedDetail()].price;
+    basePriceDisplay.textContent = `¥${base.toFixed(2)}`;
+    qtyMultDisplay.textContent = `×${getQty()}`;
+    playerMultDisplay.textContent = `×${getPlayerRate().toFixed(2)}`;
+    totalPriceDisplay.textContent = `¥${calcTotal().toFixed(2)}`;
+    urgentRow.style.display = isUrgent() ? 'flex' : 'none';
+}
+
+// 监听变化
+projectRadios.forEach(r => r.addEventListener('change', () => { updateDetailCards(); refreshPrice(); }));
+detailRadios.forEach(r => r.addEventListener('change', refreshPrice));
+qtyMinus.addEventListener('click', () => {
+    if (getQty() > 1) { qtyInput.value = getQty() - 1; refreshPrice(); }
+});
+qtyPlus.addEventListener('click', () => {
+    if (getQty() < 99) { qtyInput.value = getQty() + 1; refreshPrice(); }
+});
+qtyInput.addEventListener('input', () => { qtyInput.value = getQty(); refreshPrice(); });
+urgentCheck.addEventListener('change', refreshPrice);
+document.addEventListener('change', e => { if (e.target.name === 'player') refreshPrice(); });
+
+// 复制订单
+copyBtn.addEventListener('click', async () => {
+    const p = projectDetails[getSelectedProject()];
+    const detailKey = getSelectedDetail();
+    const playerChecked = document.querySelector('input[name="player"]:checked');
+    const playerInfo = playerData.find(pd => pd.key === playerChecked?.value) || { name:'未知', rate:getPlayerRate() };
+    const remark = document.getElementById('remarkInput')?.value.trim() || '';
+    const remarkLine = remark ? `\n📝 备注：${remark}` : '';
+    const token = localStorage.getItem('token');
+    const currentUsername = localStorage.getItem('username');
+    const userLine = (token && currentUsername) ? `\n👤 下单用户：${currentUsername}` : '';
+
+    const order = `【WOTB情谊代练订单】
+🎯 项目：${p.name}
+📋 详情：方案${detailKey.toUpperCase()} - ${p[detailKey].desc}
+🔢 数量：${getQty()}
+👤 打手：${playerInfo.name} (${playerInfo.rate}x)
+⚡ 加急：${isUrgent()?'是':'否'}
+💰 总价：¥${calcTotal().toFixed(2)}
+📅 下单时间：${new Date().toLocaleString()}${remarkLine}${userLine}
+---
+如需帮助请联系客服`;
+    try {
+        await navigator.clipboard.writeText(order);
+        copyFeedback.classList.add('show');
+        setTimeout(() => copyFeedback.classList.remove('show'), 1800);
+        showToast('✅ 订单已复制');
+    } catch (err) {
+        showToast('❌ 复制失败，请手动复制');
+    }
+});
+
+// 客服复制按钮
+document.querySelectorAll('.contact-copy-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const text = btn.dataset.copy;
+        await navigator.clipboard.writeText(text);
+        const orig = btn.textContent;
+        btn.textContent = '✅ 已复制';
+        setTimeout(() => btn.textContent = orig, 1500);
+        showToast('✅ 已复制到剪贴板');
+    });
+});
+
+// ==================== 计算器 ====================
+calcTypeRadios.forEach(r => r.addEventListener('change', () => {
+    const type = r.value;
+    calcUnit.textContent = type === 'winrate' ? '胜率' : '场均伤害';
+    calcTargetL.textContent = type === 'winrate' ? '胜率' : '场均伤害';
+    calcExpL.textContent = type === 'winrate' ? '胜率' : '场均伤害';
+    calcResult.style.display = 'none';
+}));
+
+document.getElementById('calcBtn').addEventListener('click', () => {
+    const type = document.querySelector('input[name="calcType"]:checked').value;
+    const cur = parseFloat(document.getElementById('currentValue').value);
+    const battles = parseInt(document.getElementById('currentBattles').value);
+    const target = parseFloat(document.getElementById('targetValue').value);
+    const exp = parseFloat(document.getElementById('expectedValue').value);
+    const calcResultDiv = document.getElementById('calcResult');
+    const calcResultText = document.getElementById('calcResultText');
+    const copyCalcBtn = document.getElementById('copyCalcResultBtn');
+
+    if (isNaN(cur) || isNaN(battles) || isNaN(target) || isNaN(exp) || battles < 1) {
+        calcResultText.innerHTML = '❌ 请填写完整有效数值';
+        copyCalcBtn.style.display = 'none';
+        calcResultDiv.style.display = 'block';
+        return;
+    }
+    if (exp <= target) {
+        calcResultText.innerHTML = '⚠️ 预期值必须高于目标值，否则无法达成';
+        copyCalcBtn.style.display = 'none';
+        calcResultDiv.style.display = 'block';
+        return;
+    }
+
+    const needed = (target - cur) * battles / (exp - target);
+    if (needed <= 0) {
+        calcResultText.innerHTML = '✅ 当前数据已达标，无需再打';
+        copyCalcBtn.style.display = 'none';
+        calcResultDiv.style.display = 'block';
+        return;
+    }
+
+    const round = Math.ceil(needed);
+    calcResultText.innerHTML = `🎯 还需要 <strong>${round}</strong> 场<br><small>精确计算 ${needed.toFixed(2)} 场，向上取整</small>`;
+    copyCalcBtn.style.display = 'inline-block';
+    calcResultDiv.style.display = 'block';
+
+    copyCalcBtn.onclick = async () => {
+        const typeText = type === 'winrate' ? '胜率' : '场均伤害';
+        const unit = type === 'winrate' ? '%' : '';
+        const fullText = `【坦克世界闪击战 - 自助计算】
+类型：${typeText}
+当前数据：${cur}${unit}（场次 ${battles}）
+目标数据：${target}${unit}
+预期每场：${exp}${unit}
+计算结果：需要再打 ${round} 场（精确计算 ${needed.toFixed(2)} 场）`;
+        try {
+            await navigator.clipboard.writeText(fullText);
+            showToast('✅ 完整结果已复制');
+        } catch (err) {
+            showToast('❌ 复制失败');
+        }
+    };
+});
+
+// ==================== 新闻 ====================
+const newsData = [
+    { title:'🎉 夏季联赛预告', time:'2026-06-29', content:'2026夏季联赛即将开始，代练业务同步支持各类教学。' },
+    { title:'⚡ 周末优惠活动', time:'2026-06-29', content:'本周六日全场下单优惠10%，代练价格大幅下降，欢迎下单！' },
+    { title:'🛡️ 账号安全提醒', time:'2026-06-29', content:'近期出现第三方虚假代练，请认准本站唯一客服联系方式，谨防上当。' }
+];
+document.getElementById('newsContainer').innerHTML = newsData.map(n => `
+    <div class="news-item">
+        <div class="news-title">${n.title}</div>
+        <div class="news-time">${n.time}</div>
+        <div class="news-content">${n.content}</div>
+    </div>
+`).join('');
+
+// ==================== 用户登录状态管理 ====================
+function checkLoginStatus() {
+    const token = localStorage.getItem('token');
+    const username = localStorage.getItem('username');
+    const role = localStorage.getItem('role');
+
+    if (token && username) {
+        openRegisterBtn.style.display = 'none';
+        openLoginBtn.style.display = 'none';
+        userMenu.style.display = 'block';
+        displayUsername.textContent = username;
+    } else {
+        openRegisterBtn.style.display = 'inline-block';
+        openLoginBtn.style.display = 'inline-block';
+        userMenu.style.display = 'none';
+    }
+
+    const adminBtn = document.getElementById('adminPanelBtn');
+    if (adminBtn) {
+        adminBtn.style.display = (role === 'admin') ? 'block' : 'none';
+    }
+}
+
+logoutBtn.addEventListener('click', () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('username');
+    localStorage.removeItem('role');
+    checkLoginStatus();
+    userDropdown.style.display = 'none';
+    showToast('👋 已退出登录');
+});
+
+userMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    userDropdown.style.display = userDropdown.style.display === 'block' ? 'none' : 'block';
+});
+document.addEventListener('click', () => {
+    userDropdown.style.display = 'none';
+});
+
+// ==================== 注册弹窗 ====================
+openRegisterBtn.addEventListener('click', () => { registerModal.style.display = 'flex'; });
+closeRegisterBtn.addEventListener('click', () => { registerModal.style.display = 'none'; regError.textContent = ''; });
+registerModal.addEventListener('click', (e) => { if (e.target === registerModal) { registerModal.style.display = 'none'; regError.textContent = ''; } });
+
+registerForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('regUsername').value.trim();
+    const password = document.getElementById('regPassword').value;
+    const email = document.getElementById('regEmail').value.trim();
+    const phone = document.getElementById('regPhone').value.trim();
+    const referral = document.getElementById('regReferral').value.trim();
+    if (!username || !password) { regError.textContent = '用户名和密码必填'; return; }
+    if (password.length < 6) { regError.textContent = '密码至少6位'; return; }
+    try {
+        const res = await fetch(`${API_BASE}/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, email, phone, referralCode: referral })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast('✅ 注册成功！请登录');
+            registerModal.style.display = 'none';
+            registerForm.reset();
+            regError.textContent = '';
+        } else {
+            regError.textContent = data.error || '注册失败';
+        }
+    } catch (err) {
+        regError.textContent = '网络错误，请检查后端是否启动';
+    }
+});
+
+toLoginLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    registerModal.style.display = 'none';
+    loginModal.style.display = 'flex';
+});
+toRegisterLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    loginModal.style.display = 'none';
+    registerModal.style.display = 'flex';
+});
+
+// ==================== 登录弹窗 ====================
+openLoginBtn.addEventListener('click', () => { loginModal.style.display = 'flex'; });
+closeLoginBtn.addEventListener('click', () => { loginModal.style.display = 'none'; loginError.textContent = ''; });
+loginModal.addEventListener('click', (e) => { if (e.target === loginModal) { loginModal.style.display = 'none'; loginError.textContent = ''; } });
+
+loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    if (!username || !password) { loginError.textContent = '用户名和密码不能为空'; return; }
+    try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('username', data.user.username);
+            localStorage.setItem('role', data.user.role);
+            checkLoginStatus();
+            loginModal.style.display = 'none';
+            loginError.textContent = '';
+            showToast('✅ 登录成功！');
+        } else {
+            loginError.textContent = data.error || '登录失败，请检查用户名密码';
+        }
+    } catch (err) {
+        loginError.textContent = '网络错误，请检查后端是否启动';
+    }
+});
+
+// ==================== 个人中心 ====================
+const profileBtn = document.getElementById('profileBtn');
+const profileModal = document.getElementById('profileModal');
+const closeProfileBtn = document.getElementById('closeProfileBtn');
+const profileInfo = document.getElementById('profileInfo');
+
+profileBtn.addEventListener('click', async () => {
+    profileModal.style.display = 'flex';
+    await loadProfile();
+    await loadOrders();
+});
+
+closeProfileBtn.addEventListener('click', () => {
+    profileModal.style.display = 'none';
+});
+profileModal.addEventListener('click', (e) => {
+    if (e.target === profileModal) profileModal.style.display = 'none';
+});
+
+async function loadProfile() {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        profileInfo.innerHTML = '<p style="color:var(--red)">请先登录</p>';
+        return;
+    }
+    try {
+        const res = await fetch(`${API_BASE}/user/profile`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error('获取失败');
+        const user = await res.json();
+        profileInfo.innerHTML = `
+            <p><span>用户名：</span><span>${user.username}</span></p>
+            <p><span>邮箱：</span><span>${user.email || '未填写'}</span></p>
+            <p><span>手机：</span><span>${user.phone || '未填写'}</span></p>
+            <p><span>余额：</span><span>¥${user.balance}</span></p>
+            <p><span>信誉分：</span><span>${user.reputation}</span></p>
+            <p><span>推荐码：</span><span>${user.referral_code}</span></p>
+            <p><span>注册时间：</span><span>${new Date(user.created_at).toLocaleString()}</span></p>
+        `;
+    } catch (err) {
+        profileInfo.innerHTML = '<p style="color:var(--red)">加载失败</p>';
+    }
+}
+
+// 订单加载（包含支付状态判断）
+async function loadOrders() {
+    const list = document.getElementById('orderList');
+    if (!list) {
+        console.error('订单容器未找到');
+        return;
+    }
+    const token = localStorage.getItem('token');
+    if (!token) {
+        list.innerHTML = '<p style="color:var(--red)">请先登录</p>';
+        return;
+    }
+    try {
+        const res = await fetch(`${API_BASE}/user/orders`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error('获取失败');
+        const orders = await res.json();
+        if (!Array.isArray(orders) || orders.length === 0) {
+            list.innerHTML = '<p style="color:var(--text-muted)">暂无订单</p>';
+            return;
+        }
+
+        const statusMap = { pending: '待接单', playing: '代练中', done: '已完成' };
+        const paymentStatusMap = { unpaid: '未支付', pending: '待确认', paid: '已支付' };
+        let html = '<table class="order-table"><tr><th>订单号</th><th>项目</th><th>金额</th><th>状态</th><th>支付</th><th>操作</th><th>时间</th></tr>';
+
+        orders.forEach(o => {
+            let actionHtml = '';
+            if (o.payment_status === 'unpaid') {
+                actionHtml = `<button class="upload-payment-btn" data-order="${o.order_no}">上传凭证</button>`;
+            } else if (o.payment_status === 'paid') {
+                actionHtml = '已确认';
+            } else {
+                actionHtml = '审核中';
+            }
+
+            html += `<tr>
+                <td>${o.order_no}</td>
+                <td>${o.project} - ${o.detail}</td>
+                <td>¥${o.total_price}</td>
+                <td><span class="order-status status-${o.status}">${statusMap[o.status] || o.status}</span></td>
+                <td><span class="payment-status payment-${o.payment_status}">${paymentStatusMap[o.payment_status] || '未知'}</span></td>
+                <td>${actionHtml}</td>
+                <td>${new Date(o.created_at).toLocaleString()}</td>
+            </tr>`;
+        });
+        html += '</table>';
+        list.innerHTML = html;
+    } catch (err) {
+        console.error('加载订单失败：', err);
+        list.innerHTML = '<p style="color:var(--red)">加载失败</p>';
+    }
+}
+
+// ==================== 提交订单 ====================
+const submitOrderBtn = document.getElementById('submitOrderBtn');
+submitOrderBtn.addEventListener('click', async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        showToast('❌ 请先登录后再提交订单');
+        return;
+    }
+    const project = getSelectedProject();
+    const detail = getSelectedDetail();
+    const qty = getQty();
+    const playerRate = getPlayerRate();
+    const playerChecked = document.querySelector('input[name="player"]:checked');
+    const playerKey = playerChecked ? playerChecked.value : 'ding';
+    const playerInfo = playerData.find(p => p.key === playerKey) || { name: '未选', rate: playerRate };
+    const urgent = isUrgent();
+    const total = calcTotal();
+    const base = projectDetails[project][detail].price;
+    const remark = document.getElementById('remarkInput')?.value.trim() || '';
+
+    const body = {
+        project: projectDetails[project].name,
+        detail: `${detail.toUpperCase()} - ${projectDetails[project][detail].desc}`,
+        quantity: qty,
+        player_name: playerInfo.name,
+        price: base,
+        urgent,
+        total_price: total,
+        remark
+    };
+
+    try {
+        const res = await fetch(`${API_BASE}/orders`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast(`✅ 订单提交成功！订单号：${data.order_no}`);
+        } else {
+            showToast('❌ ' + (data.error || '提交失败'));
+        }
+    } catch (err) {
+        showToast('❌ 网络错误，请稍后重试');
+    }
+});
+
+// ==================== 管理面板 ====================
+const adminPanelBtn = document.getElementById('adminPanelBtn');
+const adminModal = document.getElementById('adminModal');
+const closeAdminBtn = document.getElementById('closeAdminBtn');
+const statusFilter = document.getElementById('statusFilter');
+const refreshOrdersBtn = document.getElementById('refreshOrdersBtn');
+const adminOrderList = document.getElementById('adminOrderList');
+
+adminPanelBtn.addEventListener('click', () => {
+    adminModal.style.display = 'flex';
+    loadAdminOrders();
+});
+closeAdminBtn.addEventListener('click', () => adminModal.style.display = 'none');
+adminModal.addEventListener('click', (e) => { if (e.target === adminModal) adminModal.style.display = 'none'; });
+
+async function loadAdminOrders() {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    const status = statusFilter.value;
+    try {
+        const res = await fetch(`${API_BASE}/admin/orders`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const orders = await res.json();
+        if (!Array.isArray(orders)) throw new Error('数据错误');
+        const filtered = status ? orders.filter(o => o.status === status) : orders;
+        renderAdminOrders(filtered);
+    } catch (err) {
+        adminOrderList.innerHTML = '<p style="color:var(--red)">加载失败</p>';
+    }
+}
+
+function renderAdminOrders(orders) {
+    const statusOptions = ['pending', 'playing', 'done'];
+    const statusText = { pending: '待接单', playing: '代练中', done: '已完成' };
+    const paymentStatusMap = { unpaid: '未支付', pending: '待确认', paid: '已支付' };
+
+    if (orders.length === 0) {
+        adminOrderList.innerHTML = '<p>暂无订单</p>';
+        return;
+    }
+
+    let html = '<table><tr><th>订单号</th><th>用户</th><th>项目</th><th>打手</th><th>金额</th><th>状态</th><th>支付</th><th>操作</th><th>时间</th></tr>';
+    orders.forEach(o => {
+        html += `<tr>
+            <td>${o.order_no}</td>
+            <td>${o.username}</td>
+            <td>${o.project} - ${o.detail}</td>
+            <td>${o.player_name}</td>
+            <td>¥${o.total_price}</td>
+            <td><span class="order-status status-${o.status}">${statusText[o.status] || o.status}</span></td>
+            <td><span class="payment-status payment-${o.payment_status}">${paymentStatusMap[o.payment_status] || o.payment_status}</span></td>
+            <td>
+                <select class="status-select" data-order="${o.order_no}" onchange="updateOrderStatus(this)">
+                    ${statusOptions.map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${statusText[s]}</option>`).join('')}
+                </select>
+                ${o.payment_status === 'pending' ? `<button class="confirm-payment-btn" data-order="${o.order_no}">确认收款</button>` : ''}
+                ${o.payment_screenshot ? ` <a href="/uploads/${o.payment_screenshot}" target="_blank" style="font-size:0.7rem;">截图</a>` : ''}
+                <button class="delete-order-btn" data-order="${o.order_no}">删除</button>
+            </td>
+            <td>${new Date(o.created_at).toLocaleString()}</td>
+        </tr>`;
+    });
+    html += '</table>';
+    adminOrderList.innerHTML = html;
+}
+
+// 修改订单状态
+window.updateOrderStatus = async function(selectEl) {
+    const orderNo = selectEl.dataset.order;
+    const newStatus = selectEl.value;
+    const token = localStorage.getItem('token');
+    try {
+        const res = await fetch(`${API_BASE}/admin/orders/${orderNo}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ status: newStatus })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast('✅ 状态更新成功');
+        } else {
+            showToast('❌ ' + (data.error || '更新失败'));
+            loadAdminOrders();
+        }
+    } catch (err) {
+        showToast('❌ 网络错误');
+        loadAdminOrders();
+    }
+};
+
+// 确认支付与删除订单事件委托
+document.addEventListener('click', async (e) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    // 确认收款
+    if (e.target.classList.contains('confirm-payment-btn')) {
+        const orderNo = e.target.dataset.order;
+        try {
+            const res = await fetch(`${API_BASE}/admin/orders/${orderNo}/confirm-payment`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast('✅ 已确认支付，订单转为代练中');
+                loadAdminOrders();
+            } else {
+                showToast('❌ ' + (data.error || '操作失败'));
+            }
+        } catch (err) {
+            showToast('❌ 网络错误');
+        }
+    }
+
+    // 删除订单
+    if (e.target.classList.contains('delete-order-btn')) {
+        const orderNo = e.target.dataset.order;
+        if (!confirm(`确定要删除订单 ${orderNo} 吗？此操作不可恢复。`)) return;
+        try {
+            const res = await fetch(`${API_BASE}/admin/orders/${orderNo}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast('🗑️ 订单已删除');
+                loadAdminOrders();
+            } else {
+                showToast('❌ ' + (data.error || '删除失败'));
+            }
+        } catch (err) {
+            showToast('❌ 网络错误');
+        }
+    }
+});
+
+statusFilter.addEventListener('change', loadAdminOrders);
+refreshOrdersBtn.addEventListener('click', loadAdminOrders);
+
+// ==================== 支付凭证上传 ====================
+let currentOrderNo = '';
+const paymentModal = document.getElementById('paymentModal');
+const closePaymentBtn = document.getElementById('closePaymentBtn');
+const paymentFile = document.getElementById('paymentFile');
+const pasteArea = document.getElementById('pasteArea');
+const previewImage = document.getElementById('previewImage');
+const submitPaymentBtn = document.getElementById('submitPaymentBtn');
+const paymentError = document.getElementById('paymentError');
+
+document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('upload-payment-btn')) {
+        currentOrderNo = e.target.dataset.order;
+        paymentModal.style.display = 'flex';
+        paymentError.textContent = '';
+        previewImage.style.display = 'none';
+        paymentFile.value = '';
+        pasteArea.innerText = '';
+    }
+});
+
+closePaymentBtn.addEventListener('click', () => paymentModal.style.display = 'none');
+paymentModal.addEventListener('click', (e) => { if (e.target === paymentModal) paymentModal.style.display = 'none'; });
+
+paymentFile.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        previewImage.src = ev.target.result;
+        previewImage.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+});
+
+pasteArea.addEventListener('paste', (e) => {
+    const items = e.clipboardData.items;
+    for (let item of items) {
+        if (item.type.indexOf('image') !== -1) {
+            const blob = item.getAsFile();
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                previewImage.src = ev.target.result;
+                previewImage.style.display = 'block';
+            };
+            reader.readAsDataURL(blob);
+            e.preventDefault();
+        }
+    }
+});
+
+submitPaymentBtn.addEventListener('click', async () => {
+    const token = localStorage.getItem('token');
+    if (!token) { paymentError.textContent = '请先登录'; return; }
+    if (!currentOrderNo) { paymentError.textContent = '订单号异常'; return; }
+    
+    const screenshot = previewImage.src;
+    if (!screenshot || screenshot === window.location.href) {
+        paymentError.textContent = '请先选择或粘贴截图';
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/orders/${currentOrderNo}/payment`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ screenshot })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast('✅ 支付凭证已提交，等待确认');
+            paymentModal.style.display = 'none';
+            if (profileModal.style.display === 'flex') {
+                await loadOrders();
+            }
+        } else {
+            paymentError.textContent = data.error || '提交失败';
+        }
+    } catch (err) {
+        paymentError.textContent = '网络错误';
+    }
+});
+
+// 页面加载启动
+init();
