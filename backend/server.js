@@ -373,7 +373,8 @@ app.put('/api/admin/users/:userId/role', adminMiddleware, async (req, res) => {
 app.get('/api/booster/hall', boosterMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, created_at 
+      `SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, created_at,
+       (total_price * 0.75) AS earnings
        FROM orders WHERE hall_status = 'open' AND booster_id IS NULL AND status = 'pending'
        ORDER BY created_at DESC`
     );
@@ -417,7 +418,8 @@ app.post('/api/booster/take/:orderNo', boosterMiddleware, async (req, res) => {
 app.get('/api/booster/my-orders', boosterMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, created_at 
+      `SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, created_at,
+       (total_price * 0.75) AS earnings
        FROM orders WHERE booster_id = ? ORDER BY created_at DESC`,
       [req.userId]
     );
@@ -444,7 +446,7 @@ app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) =
       return res.status(400).json({ error: '订单无法完成' });
     }
     const order = rows[0];
-    const earnings = order.total_price * 0.7;
+    const earnings = order.total_price * 0.75;
     await connection.execute('UPDATE orders SET status = ? WHERE order_no = ?', ['done', orderNo]);
     await connection.execute('UPDATE users SET earnings = earnings + ? WHERE id = ?', [earnings, boosterId]);
     await connection.commit();

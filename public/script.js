@@ -937,14 +937,14 @@ async function loadHallOrders() {
         }
         let html = '<table><tr><th>订单号</th><th>项目</th><th>打手</th><th>金额</th><th>操作</th></tr>';
         orders.forEach(o => {
-            html += `<tr>
-                <td>${o.order_no}</td>
-                <td>${o.project} - ${o.detail}</td>
-                <td>${o.player_name}</td>
-                <td>¥${o.total_price}</td>
-                <td><button class="take-order-btn" data-order="${o.order_no}">接单</button></td>
-            </tr>`;
-        });
+    html += `<tr>
+        <td>${o.order_no}</td>
+        <td>${o.project} - ${o.detail}</td>
+        <td>${o.player_name}</td>
+        <td>¥${Number(o.earnings).toFixed(2)} <span style="color:var(--text-muted);font-size:0.75rem;">(预估收益)</span></td>
+        <td><button class="take-order-btn" data-order="${o.order_no}">接单</button></td>
+    </tr>`;
+});
         html += '</table>';
         list.innerHTML = html;
     } catch (err) {
@@ -967,14 +967,14 @@ async function loadMyBoosterOrders() {
         const statusMap = { pending: '待接单', playing: '代练中', done: '已完成' };
         let html = '<table><tr><th>订单号</th><th>项目</th><th>金额</th><th>状态</th><th>操作</th></tr>';
         orders.forEach(o => {
-            html += `<tr>
-                <td>${o.order_no}</td>
-                <td>${o.project} - ${o.detail}</td>
-                <td>¥${o.total_price}</td>
-                <td>${statusMap[o.status] || o.status}</td>
-                <td>${o.status === 'playing' ? `<button class="complete-order-btn" data-order="${o.order_no}">完成</button>` : ''}</td>
-            </tr>`;
-        });
+    html += `<tr>
+        <td>${o.order_no}</td>
+        <td>${o.project} - ${o.detail}</td>
+        <td>¥${Number(o.earnings).toFixed(2)} <span style="color:var(--text-muted);font-size:0.75rem;">(预估收益)</span></td>
+        <td>${statusMap[o.status] || o.status}</td>
+        <td>${o.status === 'playing' ? `<button class="complete-order-btn" data-order="${o.order_no}">完成</button>` : ''}</td>
+    </tr>`;
+});
         html += '</table>';
         list.innerHTML = html;
     } catch (err) {
