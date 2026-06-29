@@ -8,7 +8,7 @@ function showToast(msg) {
 }
 
 // ==================== 配置 ====================
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = '/api';
 
 const projectDetails = {
     silver: { name:'银币', a:{desc:'有紫狗牌有高级银币',price:8.8}, b:{desc:'无紫狗牌有高级银币',price:12.8}, c:{desc:'无紫狗牌无高级银币',price:14.8} },
