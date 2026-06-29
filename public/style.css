@@ -728,3 +728,39 @@ body {
     background: rgba(248,81,73,0.25);
     box-shadow: 0 0 8px rgba(248,81,73,0.4);
 }
+
+/* 打手面板 */
+.booster-modal {
+    width: 1100px;
+    max-width: 95vw;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+.booster-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+}
+.booster-tab {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 8px 20px;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all var(--transition);
+}
+.booster-tab.active {
+    background: rgba(240,160,80,0.1);
+    color: var(--accent);
+}
+.booster-tab-content { display: none; }
+.booster-tab-content.active { display: block; }
+
+/* 游戏信息卡片 */
+.form-group input[type="password"] {
+    /* 沿用现有样式 */
+}
