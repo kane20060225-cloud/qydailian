@@ -860,3 +860,21 @@ body {
     background: #0f172a;
     border-radius: var(--radius-sm);
 }
+
+.hall-btn {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--accent);
+    background: rgba(240,160,80,0.1);
+    color: var(--accent);
+    font-size: 0.8rem;
+    cursor: pointer;
+    margin: 2px;
+    white-space: nowrap;
+    display: inline-block;
+    transition: all var(--transition);
+}
+.hall-btn:hover {
+    background: rgba(240,160,80,0.2);
+    box-shadow: 0 0 8px var(--accent-glow);
+}

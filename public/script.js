@@ -39,7 +39,8 @@ const mainMenu = document.getElementById('mainMenu');
 const sections = {
     boost: document.getElementById('sectionBoost'),
     tools: document.getElementById('sectionTools'),
-    news: document.getElementById('sectionNews')
+    news: document.getElementById('sectionNews'),
+    announcement: document.getElementById('sectionAnnouncement')   // 新增公告板块
 };
 
 // 代练相关
@@ -106,7 +107,9 @@ document.querySelectorAll('.menu-card').forEach(card => {
         const target = card.dataset.target;
         mainMenu.style.display = 'none';
         Object.values(sections).forEach(sec => sec.style.display = 'none');
-        sections[target].style.display = 'block';
+        if (sections[target]) {
+            sections[target].style.display = 'block';
+        }
     });
 });
 
@@ -648,6 +651,7 @@ function renderAdminOrders(orders) {
                 </select>
                 ${o.payment_status === 'pending' ? `<button class="confirm-payment-btn" data-order="${o.order_no}">确认收款</button>` : ''}
                 ${o.payment_screenshot ? ` <a href="/uploads/${o.payment_screenshot}" target="_blank" style="font-size:0.7rem;">截图</a>` : ''}
+                ${o.hall_status !== 'open' && o.status === 'pending' ? `<button class="hall-btn" data-order="${o.order_no}">放入大厅</button>` : ''}
                 <button class="delete-order-btn" data-order="${o.order_no}">删除</button>
             </td>
             <td>${new Date(o.created_at).toLocaleString()}</td>
@@ -700,6 +704,26 @@ document.addEventListener('click', async (e) => {
             const data = await res.json();
             if (res.ok) {
                 showToast('✅ 已确认支付，订单转为代练中');
+                loadAdminOrders();
+            } else {
+                showToast('❌ ' + (data.error || '操作失败'));
+            }
+        } catch (err) {
+            showToast('❌ 网络错误');
+        }
+    }
+
+    // 放入大厅
+    if (e.target.classList.contains('hall-btn')) {
+        const orderNo = e.target.dataset.order;
+        try {
+            const res = await fetch(`${API_BASE}/admin/orders/${orderNo}/hall`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast('✅ 订单已放入接单大厅');
                 loadAdminOrders();
             } else {
                 showToast('❌ ' + (data.error || '操作失败'));
