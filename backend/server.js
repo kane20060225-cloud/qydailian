@@ -12,7 +12,7 @@ const app = express();
 // 静态文件
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_change_me';
 
