@@ -1027,3 +1027,9 @@ body {
     background: rgba(240,160,80,0.2);
     box-shadow: 0 0 8px var(--accent-glow);
 }
+
+/* ====== 这把玩什么转盘 ====== */
+#wheelCanvas {
+    display: block;
+    margin: 0 auto;
+}

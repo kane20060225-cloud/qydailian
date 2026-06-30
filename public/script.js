@@ -101,6 +101,7 @@ function init() {
     bindUpdateRole();
     initChestSimulator();
     initToolSubMenu();
+    initWheel();
 }
 
 // ==================== 板块切换 ====================
@@ -1222,12 +1223,44 @@ function initChestSimulator() {
     renderChests();
 }
 
+const tankList = [
+    "T-54", "狮式", "IS-7", "AMX 50B", "M48 Patton",
+    "E-100", "T110E5", "FV215b", "T-62A", "Leopard 1",
+    "Bat.-Chat. 25t", "STB-1", "Object 140", "60TP", "Kranvagn",
+    "Progetto M40", "TVP T50/51", "AMX 13 105", "WZ-132-1", "T-100 LT",
+    "Sheridan", "Rhm. Pzw.", "Grille 15", "FV4005", "Strv 103B",
+    "BC 155 58", "G.W. E 100", "T92", "Conqueror GC", "M53/55",
+    "Obj. 261", "FV3805", "Maus", "Type 5 Heavy", "E3",
+    "Jagdpanzer E 100", "T110E4", "Badger", "Object 268", "WZ-113G FT",
+    "T57 Heavy", "AMX 50 120", "VK 72.01(K)", "Chieftain", "Super Conqueror",
+    "Carro da Combattimento", "Rinoceronte", "Vz.55", "Minotauro", "Ho-Ri III",
+    "Object 705A", "ST-II", "BZ-75", "M-V-Y", "T95/FV4201",
+    "Emil II", "Udes 15/16", "CS-63", "Object 430U", "K-91",
+    "T-22 medium", "E 50 M", "Panzer 58", "121B", "122 TM",
+    "Manticore", "WZ-132-1", "T-100", "AMX 13 105", "Rheinmetall Pzw.",
+    "JPanther II", "T25/2", "Charioteer", "Smasher", "Gorynych",
+    "T-34-85 Rudy", "Bretagne Panther", "Pudel", "Turán III", "T26E3 Eagle",
+    "Thunder", "Sexton I", "AMX Canon d'assaut", "ISU-130", "T-34-3",
+    "T-44-100", "Lowe", "M6A2E1", "T34", "AMX CDC",
+    "FCM 50 t", "Strv 81", "Primo Victoria", "Dicker Max", "Rheinmetall Skorpion",
+    "SU-130PM", "TS-5", "WZ-120-1G FT", "IS-6", "Object 252U"
+];
+// 如果不够 100 个可以复制一些补充，但建议凑满 100 个
+while (tankList.length < 100) {
+    tankList.push("随机坦克" + tankList.length);
+}
+
+
+
+
+
 // ==================== 独立工具子菜单 ====================
 function initToolSubMenu() {
     const tabs = document.querySelectorAll('.tool-tab');
     const panels = {
         calculator: document.getElementById('toolCalculator'),
-        chestsim: document.getElementById('toolChestSim')
+        chestsim: document.getElementById('toolChestSim'),
+        randomtank: document.getElementById('toolRandomTank')   // 新增转盘面板
     };
 
     tabs.forEach(tab => {
@@ -1240,6 +1273,125 @@ function initToolSubMenu() {
         });
     });
 }
+
+let wheelAngle = 0;            // 当前旋转角度（弧度）
+let spinning = false;
+let wheelCanvas, wheelCtx;
+
+function initWheel() {
+    wheelCanvas = document.getElementById('wheelCanvas');
+    if (!wheelCanvas) return;
+    wheelCtx = wheelCanvas.getContext('2d');
+    drawWheel(0);
+}
+
+function drawWheel(rotation = 0) {
+    const ctx = wheelCtx;
+    const w = wheelCanvas.width;
+    const h = wheelCanvas.height;
+    const cx = w / 2, cy = h / 2;
+    const radius = Math.min(cx, cy) - 5;
+    const sliceAngle = (2 * Math.PI) / tankList.length;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // 绘制扇形
+    for (let i = 0; i < tankList.length; i++) {
+        const startAngle = i * sliceAngle + rotation;
+        const endAngle = startAngle + sliceAngle;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, radius, startAngle, endAngle);
+        ctx.closePath();
+        ctx.fillStyle = i % 2 === 0 ? '#2a3a50' : '#1e2a3a';
+        ctx.fill();
+        ctx.strokeStyle = '#0a0f1a';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // 文字（缩略编号）
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(startAngle + sliceAngle / 2);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#e2e8f0";
+        ctx.font = "8px sans-serif";
+        ctx.fillText(i + 1, radius - 10, 3);
+        ctx.restore();
+    }
+
+    // 中心圆
+    ctx.beginPath();
+    ctx.arc(cx, cy, 30, 0, 2 * Math.PI);
+    ctx.fillStyle = '#f0a050';
+    ctx.fill();
+    ctx.strokeStyle = '#0a0f1a';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = "bold 14px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("GO", cx, cy);
+
+    // 固定指针（三角形）
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - radius + 8);
+    ctx.lineTo(cx - 8, cy - radius - 8);
+    ctx.lineTo(cx + 8, cy - radius - 8);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+}
+
+// 开始旋转
+function spinWheel() {
+    if (spinning) return;
+    spinning = true;
+
+    const targetSlice = Math.floor(Math.random() * tankList.length);
+    const sliceAngle = (2 * Math.PI) / tankList.length;
+    // 目标角度：让指针（上方）对齐扇形中心，指针方向为 -PI/2 (270°)
+    const targetMiddleAngle = targetSlice * sliceAngle + sliceAngle / 2;
+    // 需要转到的最终角度 = 2*PI*n - targetMiddleAngle + PI/2（使指针指向上方）
+    const fullSpins = 5 + Math.floor(Math.random() * 5); // 5~9圈
+    const targetAngle = fullSpins * 2 * Math.PI + (2 * Math.PI - targetMiddleAngle) + Math.PI / 2;
+
+    const startAngle = wheelAngle;
+    const duration = 4000; // 4秒
+    const startTime = performance.now();
+
+    function animate(now) {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        // easeOutCubic
+        const ease = 1 - Math.pow(1 - progress, 3);
+        wheelAngle = startAngle + targetAngle * ease;
+        drawWheel(wheelAngle);
+
+        if (progress < 1) {
+            requestAnimationFrame(animate);
+        } else {
+            // 停止
+            wheelAngle = wheelAngle % (2 * Math.PI);
+            const normalizedAngle = (wheelAngle + Math.PI * 2) % (Math.PI * 2);
+            const pointerAngle = (2 * Math.PI - normalizedAngle + Math.PI / 2) % (2 * Math.PI);
+            const finalSlice = Math.floor(pointerAngle / sliceAngle) % tankList.length;
+            const result = tankList[finalSlice];
+            document.getElementById('wheelResult').textContent = `🎉 抽中：${result}`;
+            spinning = false;
+        }
+    }
+
+    requestAnimationFrame(animate);
+}
+
+document.getElementById('spinWheelBtn')?.addEventListener('click', spinWheel);
+// 点击转盘也能触发
+document.getElementById('wheelCanvas')?.addEventListener('click', spinWheel);
+
+
+
 
 // 启动
 init();
