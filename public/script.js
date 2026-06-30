@@ -35,59 +35,59 @@ const playerData = [
 
 // ==================== 开箱模拟器配置 ====================
 const chestsConfig = [
-    { id: 1, name: '钢铁先锋补给箱',   price: 500,  image: 'images/chests/chest_1.png', desc: '经典战斗资源补给，开出强力道具。' },
-    { id: 2, name: '烈焰风暴军需箱',     price: 800,  image: 'images/chests/chest_2.png', desc: '火焰主题，内含稀有坦克碎片。' },
-    { id: 3, name: '暗夜猎手神秘箱',     price: 1000, image: 'images/chests/chest_3.png', desc: '夜战专属，高概率出全局经验。' },
-    { id: 4, name: '雷霆万钧箱',        price: 1200, image: 'images/chests/chest_4.png', desc: '雷电系列，有机会获得高级坦克。' },
-    { id: 5, name: '冰霜之赐补给箱',     price: 1500, image: 'images/chests/chest_5.png', desc: '冰雪奇缘，内含稀有银币加成。' },
-    { id: 6, name: '黄金时代宝箱',       price: 2000, image: 'images/chests/chest_6.png', desc: '经典怀旧，出金币概率较高。' },
-    { id: 7, name: '未来先锋科技箱',     price: 2500, image: 'images/chests/chest_7.png', desc: '未来科技，有极小概率出绝版坦克。' },
-    { id: 8, name: '狂怒战车箱',         price: 3000, image: 'images/chests/chest_8.png', desc: '专为狂战士打造，必出好东西。' },
-    { id: 9, name: '传奇指挥官宝箱',     price: 5000, image: 'images/chests/chest_9.png', desc: '传奇级别，概率获得稀有指挥官坦克。' }
+    { id: 1, name: '美国集装箱箱',   price: 198,  image: 'images/chests/chest_1.png', desc: '经典战斗资源补给，开出强力道具。' },
+    { id: 2, name: '苏联集装箱',     price: 198,  image: 'images/chests/chest_2.png', desc: '火焰主题，内含稀有坦克碎片。' },
+    { id: 3, name: '顶尖捕食者集装箱',     price: 498, image: 'images/chests/chest_3.png', desc: '夜战专属，高概率出全局经验。' },
+    { id: 4, name: '超赞集装箱',        price: 288, image: 'images/chests/chest_4.png', desc: '雷电系列，有机会获得高级坦克。' },
+    { id: 5, name: '我全都要集装箱',     price: 98, image: 'images/chests/chest_5.png', desc: '冰雪奇缘，内含稀有银币加成。' },
+    { id: 6, name: '超大集装箱',       price: 198, image: 'images/chests/chest_6.png', desc: '经典怀旧，出金币概率较高。' },
+    { id: 7, name: '重坦集装箱',     price: 88, image: 'images/chests/chest_7.png', desc: '未来科技，有极小概率出绝版坦克。' },
+    { id: 8, name: '泰坦集装箱箱',         price: 388, image: 'images/chests/chest_8.png', desc: '专为狂战士打造，必出好东西。' },
+    { id: 9, name: '赛季集装箱',     price: 588, image: 'images/chests/chest_9.png', desc: '传奇级别，概率获得稀有指挥官坦克。' }
 ];
 
 const normalPool = [
-    { name: '银币 x500',       weight: 30 },
-    { name: '银币强化剂 x1',   weight: 20 },
-    { name: '战斗经验强化剂 x1', weight: 20 },
-    { name: '全局经验强化剂 x1', weight: 15 },
-    { name: '金币 x50',        weight: 10 }
+    { name: '银币 x50000',       weight: 30 },
+    { name: '银币强化剂 x10',   weight: 20 },
+    { name: '战斗经验强化剂 x10', weight: 20 },
+    { name: '全局经验强化剂 x10', weight: 15 },
+    { name: '金币 x500',        weight: 10 }
 ];
 const normalTotalWeight = normalPool.reduce((s, i) => s + i.weight, 0);
 
 const rarePool = [
     { name: 'T-54 原型',       weight: 5 },
     { name: '狮式',            weight: 4 },
-    { name: 'AMX 50 100',      weight: 3 },
+    { name: 'AMX 30B',        weight: 3 },
     { name: 'IS-6 无畏',       weight: 2 },
     { name: '黑豹 88',         weight: 2 },
-    { name: 'M46 巴顿 KR',     weight: 2 },
+    { name: 'M60',             weight: 2 },
     { name: 'Strv 81',         weight: 1 },
-    { name: 'FV4202',          weight: 1 }
+    { name: '菲利斯',           weight: 1 }
 ];
 const rareTotalWeight = rarePool.reduce((s, i) => s + i.weight, 0);
 
 // ==================== 这把玩什么 - 坦克库 ====================
 const tankList = [
-    "T-54", "狮式", "IS-7", "AMX 50B", "M48 Patton",
+    "T-54", "鼠式", "IS-7", "AMX 50B", "M48 Patton",
     "E-100", "T110E5", "FV215b", "T-62A", "Leopard 1",
     "Bat.-Chat. 25t", "STB-1", "Object 140", "60TP", "Kranvagn",
-    "Progetto M40", "TVP T50/51", "AMX 13 105", "WZ-132-1", "T-100 LT",
-    "Sheridan", "Rhm. Pzw.", "Grille 15", "FV4005", "Strv 103B",
-    "BC 155 58", "G.W. E 100", "T92", "Conqueror GC", "M53/55",
-    "Obj. 261", "FV3805", "Maus", "Type 5 Heavy", "E3",
-    "Jagdpanzer E 100", "T110E4", "Badger", "Object 268", "WZ-113G FT",
-    "T57 Heavy", "AMX 50 120", "VK 72.01(K)", "Chieftain", "Super Conqueror",
-    "Carro da Combattimento", "Rinoceronte", "Vz.55", "Minotauro", "Ho-Ri III",
-    "Object 705A", "ST-II", "BZ-75", "M-V-Y", "T95/FV4201",
-    "Emil II", "Udes 15/16", "CS-63", "Object 430U", "K-91",
+    "Progetto M40/65", "TVP T50/51", "AMX 30B", "WZ-132-1", "T-100 LT",
+    "Sheridan", "Rhm. Pzw.", "Grille 15", "FV4005", "Strv K",
+    "Foch 155", "斯柯达T27", "T95E6", "Super Conqueror ", "TRV",
+    "Obj. 263", "FV215b 183", "穆拉特工程", "Type 5 Heavy", "T110E3",
+    "Jagdpanzer E 100", "T110E4", "BadgerFV217", "Object 268", "WZ-113G FT",
+    "T57 Heavy", "埃里希概念车", "VK 72.01(K)", "ChieftainMK6", "752工程",
+    "Carro 45T", "Rinoceronte", "Vz.55", "Minotauro", "Ho-Ri III",
+    "GSOR", "Lion", "BZ-75", "M-VI-Y", "菲利斯",
+    "AC阿特拉斯", "野牛C45", "CS-63", "Object 430U", "K-91",
     "T-22 medium", "E 50 M", "Panzer 58", "121B", "122 TM",
-    "Manticore", "WZ-132-1", "T-100", "AMX 13 105", "Rheinmetall Pzw.",
-    "JPanther II", "T25/2", "Charioteer", "Smasher", "Gorynych",
-    "T-34-85 Rudy", "Bretagne Panther", "Pudel", "Turán III", "T26E3 Eagle",
-    "Thunder", "Sexton I", "AMX Canon d'assaut", "ISU-130", "T-34-3",
-    "T-44-100", "Lowe", "M6A2E1", "T34", "AMX CDC",
-    "FCM 50 t", "Strv 81", "Primo Victoria", "Dicker Max", "Rheinmetall Skorpion",
+    "56TP", "斯柯达T56", "埃米尔1951", "AMX 30原", "T77",
+    "JPanther II", "Object268/4", "德古拉", "Smasher", "Rammer",
+    "T-34-85 Rudy", "WZ-113", "WZ-121", "Type 71", "NC70B",
+    "BZT-70", "260工程", "114SP2", "ISU-130", "T-34-3",
+    "T-44-100", "XM66F", "M6A2E1", "T34", "AMX CDC",
+    "FCM 50 t", "Strv 81", "WZ-111 5A", "116F3", "KPZ70",
     "SU-130PM", "TS-5", "WZ-120-1G FT", "IS-6", "Object 252U"
 ];
 while (tankList.length < 100) {
