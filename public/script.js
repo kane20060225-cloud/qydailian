@@ -1063,35 +1063,35 @@ document.addEventListener('click', async (e) => {
 // ==================== 开箱模拟器 ====================
 // 配置数据
 const chestsConfig = [
-    { id: 1, name: '钢铁先锋补给箱',   price: 500,  image: 'images/chests/chest_1.png', desc: '经典战斗资源补给，开出强力道具。' },
-    { id: 2, name: '烈焰风暴军需箱',     price: 800,  image: 'images/chests/chest_2.png', desc: '火焰主题，内含稀有坦克碎片。' },
-    { id: 3, name: '暗夜猎手神秘箱',     price: 1000, image: 'images/chests/chest_3.png', desc: '夜战专属，高概率出全局经验。' },
-    { id: 4, name: '雷霆万钧箱',        price: 1200, image: 'images/chests/chest_4.png', desc: '雷电系列，有机会获得高级坦克。' },
-    { id: 5, name: '冰霜之赐补给箱',     price: 1500, image: 'images/chests/chest_5.png', desc: '冰雪奇缘，内含稀有银币加成。' },
-    { id: 6, name: '黄金时代宝箱',       price: 2000, image: 'images/chests/chest_6.png', desc: '经典怀旧，出金币概率较高。' },
-    { id: 7, name: '未来先锋科技箱',     price: 2500, image: 'images/chests/chest_7.png', desc: '未来科技，有极小概率出绝版坦克。' },
-    { id: 8, name: '狂怒战车箱',         price: 3000, image: 'images/chests/chest_8.png', desc: '专为狂战士打造，必出好东西。' },
-    { id: 9, name: '传奇指挥官宝箱',     price: 5000, image: 'images/chests/chest_9.png', desc: '传奇级别，概率获得稀有指挥官坦克。' }
+    { id: 1, name: '美国集装箱',   price: 500,  image: 'images/chests/chest_1.png', desc: '经典战斗资源补给，开出强力道具。' },
+    { id: 2, name: '苏联集装箱',     price: 800,  image: 'images/chests/chest_2.png', desc: '火焰主题，内含稀有坦克碎片。' },
+    { id: 3, name: '顶尖捕食者集装箱',     price: 1000, image: 'images/chests/chest_3.png', desc: '夜战专属，高概率出全局经验。' },
+    { id: 4, name: '超赞集装箱',        price: 1200, image: 'images/chests/chest_4.png', desc: '雷电系列，有机会获得高级坦克。' },
+    { id: 5, name: '全收集集装箱',     price: 1500, image: 'images/chests/chest_5.png', desc: '冰雪奇缘，内含稀有银币加成。' },
+    { id: 6, name: '超大集装箱',       price: 2000, image: 'images/chests/chest_6.png', desc: '经典怀旧，出金币概率较高。' },
+    { id: 7, name: '重坦集装箱',     price: 2500, image: 'images/chests/chest_7.png', desc: '未来科技，有极小概率出绝版坦克。' },
+    { id: 8, name: '泰坦集装箱',         price: 3000, image: 'images/chests/chest_8.png', desc: '专为狂战士打造，必出好东西。' },
+    { id: 9, name: '赛季集装箱',     price: 5000, image: 'images/chests/chest_9.png', desc: '传奇级别，概率获得稀有指挥官坦克。' }
 ];
 
 const normalPool = [
-    { name: '银币 x500',       weight: 30 },
-    { name: '银币强化剂 x1',   weight: 20 },
-    { name: '战斗经验强化剂 x1', weight: 20 },
-    { name: '全局经验强化剂 x1', weight: 15 },
-    { name: '金币 x50',        weight: 10 }
+    { name: '银币 x50000',       weight: 30 },
+    { name: '银币强化剂 x10',   weight: 20 },
+    { name: '战斗经验强化剂 x10', weight: 20 },
+    { name: '全局经验强化剂 x10', weight: 15 },
+    { name: '金币 x500',        weight: 10 }
 ];
 const normalTotalWeight = normalPool.reduce((s, i) => s + i.weight, 0);
 
 const rarePool = [
     { name: 'T-54 原型',       weight: 5 },
     { name: '狮式',            weight: 4 },
-    { name: 'AMX 50 100',      weight: 3 },
+    { name: 'AMX 30B',         weight: 3 },
     { name: 'IS-6 无畏',       weight: 2 },
     { name: '黑豹 88',         weight: 2 },
-    { name: 'M46 巴顿 KR',     weight: 2 },
+    { name: 'M60',             weight: 2 },
     { name: 'Strv 81',         weight: 1 },
-    { name: 'FV4202',          weight: 1 }
+    { name: 'Strv K',          weight: 1 }
 ];
 const rareTotalWeight = rarePool.reduce((s, i) => s + i.weight, 0);
 
@@ -1130,7 +1130,7 @@ function doCheckin() {
 function doRecharge() {
     const newBalance = getTickets() + 1000;
     setTickets(newBalance);
-    showToast('💰 充值成功！获得1000军需券（模拟）');
+    showToast('💰 充值成功！获得1000军需券');
 }
 
 function renderChests() {
