@@ -40,7 +40,7 @@ const sections = {
     boost: document.getElementById('sectionBoost'),
     tools: document.getElementById('sectionTools'),
     news: document.getElementById('sectionNews'),
-    announcement: document.getElementById('sectionAnnouncement')   // 新增公告板块
+    announcement: document.getElementById('sectionAnnouncement')
 };
 
 // 代练相关
@@ -99,6 +99,8 @@ function init() {
     generatePlayers();
     checkLoginStatus();
     bindUpdateRole();
+    initChestSimulator();
+    initToolSubMenu();
 }
 
 // ==================== 板块切换 ====================
@@ -200,7 +202,7 @@ qtyInput.addEventListener('input', () => { qtyInput.value = getQty(); refreshPri
 urgentCheck.addEventListener('change', refreshPrice);
 document.addEventListener('change', e => { if (e.target.name === 'player') refreshPrice(); });
 
-// 复制订单
+// 复制订单（降级方案）
 copyBtn.addEventListener('click', async () => {
     const p = projectDetails[getSelectedProject()];
     const detailKey = getSelectedDetail();
@@ -222,13 +224,37 @@ copyBtn.addEventListener('click', async () => {
 📅 下单时间：${new Date().toLocaleString()}${remarkLine}${userLine}
 ---
 如需帮助请联系客服`;
+
+    if (navigator.clipboard && window.isSecureContext) {
+        try {
+            await navigator.clipboard.writeText(order);
+            copyFeedback.classList.add('show');
+            setTimeout(() => copyFeedback.classList.remove('show'), 1800);
+            showToast('✅ 订单已复制');
+            return;
+        } catch (err) {}
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = order;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
     try {
-        await navigator.clipboard.writeText(order);
-        copyFeedback.classList.add('show');
-        setTimeout(() => copyFeedback.classList.remove('show'), 1800);
-        showToast('✅ 订单已复制');
+        const successful = document.execCommand('copy');
+        if (successful) {
+            copyFeedback.classList.add('show');
+            setTimeout(() => copyFeedback.classList.remove('show'), 1800);
+            showToast('✅ 订单已复制');
+        } else {
+            showToast('❌ 复制失败，请手动复制');
+        }
     } catch (err) {
         showToast('❌ 复制失败，请手动复制');
+    } finally {
+        document.body.removeChild(textarea);
     }
 });
 
@@ -661,7 +687,6 @@ function renderAdminOrders(orders) {
     adminOrderList.innerHTML = html;
 }
 
-// 修改订单状态
 window.updateOrderStatus = async function(selectEl) {
     const orderNo = selectEl.dataset.order;
     const newStatus = selectEl.value;
@@ -688,12 +713,11 @@ window.updateOrderStatus = async function(selectEl) {
     }
 };
 
-// 确认支付与删除订单事件委托
+// 管理面板事件委托
 document.addEventListener('click', async (e) => {
     const token = localStorage.getItem('token');
     if (!token) return;
 
-    // 确认收款
     if (e.target.classList.contains('confirm-payment-btn')) {
         const orderNo = e.target.dataset.order;
         try {
@@ -713,7 +737,6 @@ document.addEventListener('click', async (e) => {
         }
     }
 
-    // 放入大厅
     if (e.target.classList.contains('hall-btn')) {
         const orderNo = e.target.dataset.order;
         try {
@@ -733,10 +756,9 @@ document.addEventListener('click', async (e) => {
         }
     }
 
-    // 删除订单
     if (e.target.classList.contains('delete-order-btn')) {
         const orderNo = e.target.dataset.order;
-        if (!confirm(`确定要删除订单 ${orderNo} 吗？此操作不可恢复。`)) return;
+        if (!confirm(`确定要删除订单 ${orderNo} 吗？`)) return;
         try {
             const res = await fetch(`${API_BASE}/admin/orders/${orderNo}`, {
                 method: 'DELETE',
@@ -758,7 +780,7 @@ document.addEventListener('click', async (e) => {
 statusFilter.addEventListener('change', loadAdminOrders);
 refreshOrdersBtn.addEventListener('click', loadAdminOrders);
 
-// ==================== 用户角色管理（管理员） ====================
+// 用户角色管理
 async function loadUserList() {
     const token = localStorage.getItem('token');
     const select = document.getElementById('userSelect');
@@ -908,7 +930,6 @@ boosterPanelBtn.addEventListener('click', () => {
 closeBoosterBtn.addEventListener('click', () => boosterModal.style.display = 'none');
 boosterModal.addEventListener('click', (e) => { if (e.target === boosterModal) boosterModal.style.display = 'none'; });
 
-// 打手面板 Tab 切换
 document.querySelectorAll('.booster-tab').forEach(tab => {
     tab.addEventListener('click', () => {
         document.querySelectorAll('.booster-tab').forEach(t => t.classList.remove('active'));
@@ -935,16 +956,16 @@ async function loadHallOrders() {
             list.innerHTML = '<p>暂无待接订单</p>';
             return;
         }
-        let html = '<table><tr><th>订单号</th><th>项目</th><th>打手</th><th>金额</th><th>操作</th></tr>';
+        let html = '<table><tr><th>订单号</th><th>项目</th><th>打手</th><th>预估收益</th><th>操作</th></tr>';
         orders.forEach(o => {
-    html += `<tr>
-        <td>${o.order_no}</td>
-        <td>${o.project} - ${o.detail}</td>
-        <td>${o.player_name}</td>
-        <td>¥${Number(o.earnings).toFixed(2)} <span style="color:var(--text-muted);font-size:0.75rem;">(预估收益)</span></td>
-        <td><button class="take-order-btn" data-order="${o.order_no}">接单</button></td>
-    </tr>`;
-});
+            html += `<tr>
+                <td>${o.order_no}</td>
+                <td>${o.project} - ${o.detail}</td>
+                <td>${o.player_name}</td>
+                <td>¥${Number(o.earnings).toFixed(2)}</td>
+                <td><button class="take-order-btn" data-order="${o.order_no}">接单</button></td>
+            </tr>`;
+        });
         html += '</table>';
         list.innerHTML = html;
     } catch (err) {
@@ -965,16 +986,16 @@ async function loadMyBoosterOrders() {
             return;
         }
         const statusMap = { pending: '待接单', playing: '代练中', done: '已完成' };
-        let html = '<table><tr><th>订单号</th><th>项目</th><th>金额</th><th>状态</th><th>操作</th></tr>';
+        let html = '<table><tr><th>订单号</th><th>项目</th><th>预估收益</th><th>状态</th><th>操作</th></tr>';
         orders.forEach(o => {
-    html += `<tr>
-        <td>${o.order_no}</td>
-        <td>${o.project} - ${o.detail}</td>
-        <td>¥${Number(o.earnings).toFixed(2)} <span style="color:var(--text-muted);font-size:0.75rem;">(预估收益)</span></td>
-        <td>${statusMap[o.status] || o.status}</td>
-        <td>${o.status === 'playing' ? `<button class="complete-order-btn" data-order="${o.order_no}">完成</button>` : ''}</td>
-    </tr>`;
-});
+            html += `<tr>
+                <td>${o.order_no}</td>
+                <td>${o.project} - ${o.detail}</td>
+                <td>¥${Number(o.earnings).toFixed(2)}</td>
+                <td>${statusMap[o.status] || o.status}</td>
+                <td>${o.status === 'playing' ? `<button class="complete-order-btn" data-order="${o.order_no}">完成</button>` : ''}</td>
+            </tr>`;
+        });
         html += '</table>';
         list.innerHTML = html;
     } catch (err) {
@@ -996,7 +1017,6 @@ async function loadEarnings() {
     }
 }
 
-// 接单与完成事件委托
 document.addEventListener('click', async (e) => {
     const token = localStorage.getItem('token');
     if (!token) return;
@@ -1040,5 +1060,186 @@ document.addEventListener('click', async (e) => {
     }
 });
 
-// 页面加载启动
+// ==================== 开箱模拟器 ====================
+// 配置数据
+const chestsConfig = [
+    { id: 1, name: '钢铁先锋补给箱',   price: 500,  image: 'images/chests/chest_1.png', desc: '经典战斗资源补给，开出强力道具。' },
+    { id: 2, name: '烈焰风暴军需箱',     price: 800,  image: 'images/chests/chest_2.png', desc: '火焰主题，内含稀有坦克碎片。' },
+    { id: 3, name: '暗夜猎手神秘箱',     price: 1000, image: 'images/chests/chest_3.png', desc: '夜战专属，高概率出全局经验。' },
+    { id: 4, name: '雷霆万钧箱',        price: 1200, image: 'images/chests/chest_4.png', desc: '雷电系列，有机会获得高级坦克。' },
+    { id: 5, name: '冰霜之赐补给箱',     price: 1500, image: 'images/chests/chest_5.png', desc: '冰雪奇缘，内含稀有银币加成。' },
+    { id: 6, name: '黄金时代宝箱',       price: 2000, image: 'images/chests/chest_6.png', desc: '经典怀旧，出金币概率较高。' },
+    { id: 7, name: '未来先锋科技箱',     price: 2500, image: 'images/chests/chest_7.png', desc: '未来科技，有极小概率出绝版坦克。' },
+    { id: 8, name: '狂怒战车箱',         price: 3000, image: 'images/chests/chest_8.png', desc: '专为狂战士打造，必出好东西。' },
+    { id: 9, name: '传奇指挥官宝箱',     price: 5000, image: 'images/chests/chest_9.png', desc: '传奇级别，概率获得稀有指挥官坦克。' }
+];
+
+const normalPool = [
+    { name: '银币 x500',       weight: 30 },
+    { name: '银币强化剂 x1',   weight: 20 },
+    { name: '战斗经验强化剂 x1', weight: 20 },
+    { name: '全局经验强化剂 x1', weight: 15 },
+    { name: '金币 x50',        weight: 10 }
+];
+const normalTotalWeight = normalPool.reduce((s, i) => s + i.weight, 0);
+
+const rarePool = [
+    { name: 'T-54 原型',       weight: 5 },
+    { name: '狮式',            weight: 4 },
+    { name: 'AMX 50 100',      weight: 3 },
+    { name: 'IS-6 无畏',       weight: 2 },
+    { name: '黑豹 88',         weight: 2 },
+    { name: 'M46 巴顿 KR',     weight: 2 },
+    { name: 'Strv 81',         weight: 1 },
+    { name: 'FV4202',          weight: 1 }
+];
+const rareTotalWeight = rarePool.reduce((s, i) => s + i.weight, 0);
+
+let currentChestId = null;
+
+function getTickets() {
+    return parseInt(localStorage.getItem('tickets') || '0');
+}
+function setTickets(num) {
+    localStorage.setItem('tickets', num);
+    updateTicketDisplay();
+}
+function updateTicketDisplay() {
+    const el = document.getElementById('ticketBalance');
+    if (el) el.textContent = getTickets();
+}
+
+function getTodayStr() {
+    return new Date().toISOString().slice(0, 10);
+}
+function getLastCheckin() {
+    return localStorage.getItem('lastCheckinDate');
+}
+function doCheckin() {
+    const today = getTodayStr();
+    if (getLastCheckin() === today) {
+        showToast('⏰ 今日已签到，明天再来吧');
+        return;
+    }
+    const newBalance = getTickets() + 1000;
+    setTickets(newBalance);
+    localStorage.setItem('lastCheckinDate', today);
+    showToast('✅ 签到成功！获得1000军需券');
+}
+
+function doRecharge() {
+    const newBalance = getTickets() + 1000;
+    setTickets(newBalance);
+    showToast('💰 充值成功！获得1000军需券（模拟）');
+}
+
+function renderChests() {
+    const grid = document.getElementById('chestGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    chestsConfig.forEach(chest => {
+        const div = document.createElement('div');
+        div.className = 'chest-item';
+        div.innerHTML = `
+            <img src="${chest.image}" alt="${chest.name}" onerror="this.src='images/chests/placeholder.png';">
+            <div class="chest-name">${chest.name}</div>
+            <div class="chest-price">🪙 ${chest.price} <span class="chest-currency">军需券</span></div>
+        `;
+        div.addEventListener('click', () => openChestDetail(chest));
+        grid.appendChild(div);
+    });
+}
+
+function openChestDetail(chest) {
+    currentChestId = chest.id;
+    document.getElementById('chestDetailTitle').textContent = chest.name;
+    document.getElementById('chestDetailImg').src = chest.image;
+    document.getElementById('chestDetailDesc').textContent = chest.desc;
+    document.getElementById('chestPriceDisplay').textContent = chest.price;
+
+    const probContainer = document.getElementById('chestDetailProb');
+    let html = '<div class="prob-list"><div><strong>类别</strong><strong>概率</strong></div>';
+    normalPool.forEach(item => {
+        const itemProb = (item.weight / normalTotalWeight * 95).toFixed(2);
+        html += `<div><span class="prob-label">${item.name}</span><span class="prob-value">${itemProb}%</span></div>`;
+    });
+    rarePool.forEach(item => {
+        const itemProb = (item.weight / rareTotalWeight * 5).toFixed(2);
+        html += `<div><span class="prob-label">${item.name}</span><span class="prob-value">${itemProb}%</span></div>`;
+    });
+    html += '</div>';
+    probContainer.innerHTML = html;
+
+    document.getElementById('chestBuyMsg').style.display = 'none';
+    document.getElementById('chestDetailModal').style.display = 'flex';
+}
+
+document.getElementById('closeChestDetailBtn').addEventListener('click', () => {
+    document.getElementById('chestDetailModal').style.display = 'none';
+});
+document.getElementById('chestDetailModal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('chestDetailModal')) {
+        document.getElementById('chestDetailModal').style.display = 'none';
+    }
+});
+
+document.getElementById('buyChestBtn').addEventListener('click', () => {
+    if (!currentChestId) return;
+    const chest = chestsConfig.find(c => c.id === currentChestId);
+    if (!chest) return;
+    const balance = getTickets();
+    if (balance < chest.price) {
+        document.getElementById('chestBuyMsg').textContent = '❌ 军需券不足，请签到或充值';
+        document.getElementById('chestBuyMsg').style.display = 'block';
+        return;
+    }
+    setTickets(balance - chest.price);
+    const rand = Math.random() * 100;
+    let reward;
+    if (rand < 5) {
+        reward = drawFromPool(rarePool, rareTotalWeight);
+    } else {
+        reward = drawFromPool(normalPool, normalTotalWeight);
+    }
+    showToast(`🎉 打开 ${chest.name} 获得：${reward.name}`);
+    document.getElementById('chestDetailModal').style.display = 'none';
+});
+
+function drawFromPool(pool, totalWeight) {
+    let r = Math.random() * totalWeight;
+    for (let item of pool) {
+        r -= item.weight;
+        if (r <= 0) return item;
+    }
+    return pool[0];
+}
+
+document.getElementById('checkinBtn').addEventListener('click', doCheckin);
+document.getElementById('rechargeBtn').addEventListener('click', doRecharge);
+
+function initChestSimulator() {
+    updateTicketDisplay();
+    renderChests();
+}
+
+// ==================== 独立工具子菜单 ====================
+function initToolSubMenu() {
+    const tabs = document.querySelectorAll('.tool-tab');
+    const panels = {
+        calculator: document.getElementById('toolCalculator'),
+        chestsim: document.getElementById('toolChestSim')
+    };
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            const tool = tab.dataset.tool;
+            Object.values(panels).forEach(p => p.style.display = 'none');
+            if (panels[tool]) panels[tool].style.display = 'block';
+        });
+    });
+}
+
+// 启动
 init();

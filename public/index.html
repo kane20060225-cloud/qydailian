@@ -42,7 +42,7 @@
             <div class="menu-card" data-target="tools">
                 <span class="menu-icon">🧮</span>
                 <h3>独立工具</h3>
-                <p>自助场均/胜率计算器</p>
+                <p>自助计算器 / 开箱模拟器</p>
             </div>
             <div class="menu-card" data-target="news">
                 <span class="menu-icon">📰</span>
@@ -172,25 +172,60 @@
         </div>
     </div>
 
-    <!-- 板块二：独立工具 -->
+    <!-- 板块二：独立工具（内部子菜单） -->
     <div id="sectionTools" class="content-section" style="display: none;">
-        <div class="section-top"><button class="back-btn" data-back="mainMenu">← 返回主菜单</button><h2 class="section-heading">🧮 自助场均/胜率计算器</h2></div>
+        <div class="section-top">
+            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+            <h2 class="section-heading">🧮 独立工具</h2>
+        </div>
         <div class="container">
-            <section class="card">
-                <div class="calc-type">
-                    <label class="calc-type-option"><input type="radio" name="calcType" value="winrate" checked><span class="calc-type-btn">📈 胜率</span></label>
-                    <label class="calc-type-option"><input type="radio" name="calcType" value="average"><span class="calc-type-btn">🎯 场均伤害</span></label>
-                </div>
-                <div class="calc-grid">
-                    <div class="calc-field"><label>当前<span id="calcLabelUnit">胜率</span> (%)</label><input type="number" id="currentValue" placeholder="例如 55" step="0.01" min="0" max="100"></div>
-                    <div class="calc-field"><label>当前场次</label><input type="number" id="currentBattles" placeholder="例如 5000" step="1" min="1"></div>
-                    <div class="calc-field"><label>目标<span id="calcTargetLabel">胜率</span> (%)</label><input type="number" id="targetValue" placeholder="例如 60" step="0.01" min="0" max="100"></div>
-                    <div class="calc-field"><label>预期每场<span id="calcExpectedLabel">胜率</span> (%)</label><input type="number" id="expectedValue" placeholder="例如 70" step="0.01" min="0" max="100"></div>
-                </div>
-                <button class="calc-btn" id="calcBtn">🔍 计算所需场次</button>
-                <div class="calc-result" id="calcResult" style="display: none;"><div id="calcResultText"></div><button class="copy-calc-btn" id="copyCalcResultBtn" style="display:none;">📋 复制结果</button></div>
-            </section>
-            <p class="tool-hint">该工具独立计算，不影响代练板块的价格。</p>
+            <!-- 工具子菜单 -->
+            <div class="tools-submenu">
+                <button class="tool-tab active" data-tool="calculator">📊 胜率/场均计算器</button>
+                <button class="tool-tab" data-tool="chestsim">🎁 开箱模拟器</button>
+            </div>
+
+            <!-- 工具内容区 -->
+            <div id="toolCalculator" class="tool-panel">
+                <section class="card">
+                    <div class="calc-type">
+                        <label class="calc-type-option"><input type="radio" name="calcType" value="winrate" checked><span class="calc-type-btn">📈 胜率</span></label>
+                        <label class="calc-type-option"><input type="radio" name="calcType" value="average"><span class="calc-type-btn">🎯 场均伤害</span></label>
+                    </div>
+                    <div class="calc-grid">
+                        <div class="calc-field"><label>当前<span id="calcLabelUnit">胜率</span> (%)</label><input type="number" id="currentValue" placeholder="例如 55" step="0.01" min="0" max="100"></div>
+                        <div class="calc-field"><label>当前场次</label><input type="number" id="currentBattles" placeholder="例如 5000" step="1" min="1"></div>
+                        <div class="calc-field"><label>目标<span id="calcTargetLabel">胜率</span> (%)</label><input type="number" id="targetValue" placeholder="例如 60" step="0.01" min="0" max="100"></div>
+                        <div class="calc-field"><label>预期每场<span id="calcExpectedLabel">胜率</span> (%)</label><input type="number" id="expectedValue" placeholder="例如 70" step="0.01" min="0" max="100"></div>
+                    </div>
+                    <button class="calc-btn" id="calcBtn">🔍 计算所需场次</button>
+                    <div class="calc-result" id="calcResult" style="display: none;"><div id="calcResultText"></div><button class="copy-calc-btn" id="copyCalcResultBtn" style="display:none;">📋 复制结果</button></div>
+                </section>
+                <p class="tool-hint">该工具独立计算，不影响代练板块的价格。</p>
+            </div>
+
+            <div id="toolChestSim" class="tool-panel" style="display: none;">
+                <!-- 开箱模拟器 -->
+                <section class="card">
+                    <div class="card-header">
+                        <span class="card-num">🎁</span>
+                        <h3>开箱模拟器</h3>
+                        <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size:0.9rem; color: var(--text-secondary);">军需券：</span>
+                            <span id="ticketBalance" style="font-weight:700; color: #f0c060; font-family: var(--font-mono);">0</span>
+                        </div>
+                    </div>
+
+                    <!-- 签到与充值 -->
+                    <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
+                        <button id="checkinBtn" class="checkin-btn">📅 每日签到 (+1000券)</button>
+                        <button id="rechargeBtn" class="recharge-btn">💰 充值 (6元=1000券)</button>
+                    </div>
+
+                    <!-- 箱子网格 -->
+                    <div class="chest-grid" id="chestGrid"></div>
+                </section>
+            </div>
         </div>
     </div>
 
@@ -199,28 +234,26 @@
         <div class="section-top"><button class="back-btn" data-back="mainMenu">← 返回主菜单</button><h2 class="section-heading">📰 游戏新闻</h2></div>
         <div class="container"><section class="card"><div id="newsContainer" class="news-list"></div></section></div>
     </div>
+
     <!-- 板块四：站内公告 -->
     <div id="sectionAnnouncement" class="content-section" style="display: none;">
-        <div class="section-top">
-        <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
-        <h2 class="section-heading">📢 站内公告</h2>
-        </div>
+        <div class="section-top"><button class="back-btn" data-back="mainMenu">← 返回主菜单</button><h2 class="section-heading">📢 站内公告</h2></div>
         <div class="container">
-        <section class="card">
-            <div class="announcement-content">
-                <h3>⚠️ 代练须知</h3>
-                <p>1. 下单前请先联系客服确认排期。</p>
-                <p>2. 代练过程中请不要登录游戏，以免顶号导致进度丢失。</p>
-                <p>3. 所有价格均为人民币，付款后开始代练。</p>
-                <p>4. 如遇特殊情况需要暂停，请提前告知客服。</p>
-                <p>5. 完成后请及时修改密码，保障账号安全。</p>
-                <hr style="border-color: var(--border); margin: 20px 0;">
-                <h3>💳 收款码</h3>
-                <p style="color: var(--text-secondary); margin-bottom: 16px;">请使用微信或支付宝扫描下方二维码付款</p>
-                <img src="payment-qr.png" alt="收款码" style="max-width: 260px; border-radius: 12px; border: 2px solid var(--border);">
-                <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 8px;">付款后请截图并联系客服确认</p>
-            </div>
-        </section>
+            <section class="card">
+                <div class="announcement-content">
+                    <h3>⚠️ 代练须知</h3>
+                    <p>1. 下单前请先联系客服确认排期。</p>
+                    <p>2. 代练过程中请不要登录游戏，以免顶号导致进度丢失。</p>
+                    <p>3. 所有价格均为人民币，付款后开始代练。</p>
+                    <p>4. 如遇特殊情况需要暂停，请提前告知客服。</p>
+                    <p>5. 完成后请及时修改密码，保障账号安全。</p>
+                    <hr style="border-color: var(--border); margin: 20px 0;">
+                    <h3>💳 收款码</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 16px;">请使用微信或支付宝扫描下方二维码付款</p>
+                    <img src="payment-qr.png" alt="收款码" style="max-width: 260px; border-radius: 12px; border: 2px solid var(--border);">
+                    <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 8px;">付款后请截图并联系客服确认</p>
+                </div>
+            </section>
         </div>
     </div>
 
@@ -344,6 +377,23 @@
                     <div id="earningsDisplay">加载中...</div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- 箱子详情弹窗 -->
+    <div class="modal-overlay" id="chestDetailModal" style="display: none;">
+        <div class="modal-card" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 id="chestDetailTitle">箱子详情</h3>
+                <button class="modal-close" id="closeChestDetailBtn">&times;</button>
+            </div>
+            <div style="text-align: center;">
+                <img id="chestDetailImg" src="" alt="" style="max-width: 200px; border-radius: 12px; margin-bottom: 16px;">
+            </div>
+            <p id="chestDetailDesc" style="margin-bottom: 12px; color: var(--text-secondary);"></p>
+            <div id="chestDetailProb" style="margin-bottom: 16px;"></div>
+            <button id="buyChestBtn" class="submit-btn" style="margin-top: 0;">🎁 购买 (价格: <span id="chestPriceDisplay">0</span>券)</button>
+            <p id="chestBuyMsg" style="margin-top: 8px; font-size: 0.85rem; color: var(--red); display: none;"></p>
         </div>
     </div>
 
