@@ -33,6 +33,67 @@ const playerData = [
     { key:'gui', name:'小黑子', title:'特惠打手', rate:0.9 }
 ];
 
+// ==================== 开箱模拟器配置 ====================
+const chestsConfig = [
+    { id: 1, name: '钢铁先锋补给箱',   price: 500,  image: 'images/chests/chest_1.png', desc: '经典战斗资源补给，开出强力道具。' },
+    { id: 2, name: '烈焰风暴军需箱',     price: 800,  image: 'images/chests/chest_2.png', desc: '火焰主题，内含稀有坦克碎片。' },
+    { id: 3, name: '暗夜猎手神秘箱',     price: 1000, image: 'images/chests/chest_3.png', desc: '夜战专属，高概率出全局经验。' },
+    { id: 4, name: '雷霆万钧箱',        price: 1200, image: 'images/chests/chest_4.png', desc: '雷电系列，有机会获得高级坦克。' },
+    { id: 5, name: '冰霜之赐补给箱',     price: 1500, image: 'images/chests/chest_5.png', desc: '冰雪奇缘，内含稀有银币加成。' },
+    { id: 6, name: '黄金时代宝箱',       price: 2000, image: 'images/chests/chest_6.png', desc: '经典怀旧，出金币概率较高。' },
+    { id: 7, name: '未来先锋科技箱',     price: 2500, image: 'images/chests/chest_7.png', desc: '未来科技，有极小概率出绝版坦克。' },
+    { id: 8, name: '狂怒战车箱',         price: 3000, image: 'images/chests/chest_8.png', desc: '专为狂战士打造，必出好东西。' },
+    { id: 9, name: '传奇指挥官宝箱',     price: 5000, image: 'images/chests/chest_9.png', desc: '传奇级别，概率获得稀有指挥官坦克。' }
+];
+
+const normalPool = [
+    { name: '银币 x500',       weight: 30 },
+    { name: '银币强化剂 x1',   weight: 20 },
+    { name: '战斗经验强化剂 x1', weight: 20 },
+    { name: '全局经验强化剂 x1', weight: 15 },
+    { name: '金币 x50',        weight: 10 }
+];
+const normalTotalWeight = normalPool.reduce((s, i) => s + i.weight, 0);
+
+const rarePool = [
+    { name: 'T-54 原型',       weight: 5 },
+    { name: '狮式',            weight: 4 },
+    { name: 'AMX 50 100',      weight: 3 },
+    { name: 'IS-6 无畏',       weight: 2 },
+    { name: '黑豹 88',         weight: 2 },
+    { name: 'M46 巴顿 KR',     weight: 2 },
+    { name: 'Strv 81',         weight: 1 },
+    { name: 'FV4202',          weight: 1 }
+];
+const rareTotalWeight = rarePool.reduce((s, i) => s + i.weight, 0);
+
+// ==================== 这把玩什么 - 坦克库 ====================
+const tankList = [
+    "T-54", "狮式", "IS-7", "AMX 50B", "M48 Patton",
+    "E-100", "T110E5", "FV215b", "T-62A", "Leopard 1",
+    "Bat.-Chat. 25t", "STB-1", "Object 140", "60TP", "Kranvagn",
+    "Progetto M40", "TVP T50/51", "AMX 13 105", "WZ-132-1", "T-100 LT",
+    "Sheridan", "Rhm. Pzw.", "Grille 15", "FV4005", "Strv 103B",
+    "BC 155 58", "G.W. E 100", "T92", "Conqueror GC", "M53/55",
+    "Obj. 261", "FV3805", "Maus", "Type 5 Heavy", "E3",
+    "Jagdpanzer E 100", "T110E4", "Badger", "Object 268", "WZ-113G FT",
+    "T57 Heavy", "AMX 50 120", "VK 72.01(K)", "Chieftain", "Super Conqueror",
+    "Carro da Combattimento", "Rinoceronte", "Vz.55", "Minotauro", "Ho-Ri III",
+    "Object 705A", "ST-II", "BZ-75", "M-V-Y", "T95/FV4201",
+    "Emil II", "Udes 15/16", "CS-63", "Object 430U", "K-91",
+    "T-22 medium", "E 50 M", "Panzer 58", "121B", "122 TM",
+    "Manticore", "WZ-132-1", "T-100", "AMX 13 105", "Rheinmetall Pzw.",
+    "JPanther II", "T25/2", "Charioteer", "Smasher", "Gorynych",
+    "T-34-85 Rudy", "Bretagne Panther", "Pudel", "Turán III", "T26E3 Eagle",
+    "Thunder", "Sexton I", "AMX Canon d'assaut", "ISU-130", "T-34-3",
+    "T-44-100", "Lowe", "M6A2E1", "T34", "AMX CDC",
+    "FCM 50 t", "Strv 81", "Primo Victoria", "Dicker Max", "Rheinmetall Skorpion",
+    "SU-130PM", "TS-5", "WZ-120-1G FT", "IS-6", "Object 252U"
+];
+while (tankList.length < 100) {
+    tankList.push("随机坦克" + (tankList.length + 1));
+}
+
 // ==================== DOM元素引用 ====================
 // 板块切换
 const mainMenu = document.getElementById('mainMenu');
@@ -193,17 +254,13 @@ function refreshPrice() {
 // 监听变化
 projectRadios.forEach(r => r.addEventListener('change', () => { updateDetailCards(); refreshPrice(); }));
 detailRadios.forEach(r => r.addEventListener('change', refreshPrice));
-qtyMinus.addEventListener('click', () => {
-    if (getQty() > 1) { qtyInput.value = getQty() - 1; refreshPrice(); }
-});
-qtyPlus.addEventListener('click', () => {
-    if (getQty() < 99) { qtyInput.value = getQty() + 1; refreshPrice(); }
-});
+qtyMinus.addEventListener('click', () => { if (getQty() > 1) { qtyInput.value = getQty() - 1; refreshPrice(); } });
+qtyPlus.addEventListener('click', () => { if (getQty() < 99) { qtyInput.value = getQty() + 1; refreshPrice(); } });
 qtyInput.addEventListener('input', () => { qtyInput.value = getQty(); refreshPrice(); });
 urgentCheck.addEventListener('change', refreshPrice);
 document.addEventListener('change', e => { if (e.target.name === 'player') refreshPrice(); });
 
-// 复制订单（降级方案）
+// 复制订单
 copyBtn.addEventListener('click', async () => {
     const p = projectDetails[getSelectedProject()];
     const detailKey = getSelectedDetail();
@@ -389,9 +446,7 @@ userMenuBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     userDropdown.style.display = userDropdown.style.display === 'block' ? 'none' : 'block';
 });
-document.addEventListener('click', () => {
-    userDropdown.style.display = 'none';
-});
+document.addEventListener('click', () => { userDropdown.style.display = 'none'; });
 
 // ==================== 注册弹窗 ====================
 openRegisterBtn.addEventListener('click', () => { registerModal.style.display = 'flex'; });
@@ -482,24 +537,14 @@ profileBtn.addEventListener('click', async () => {
     await loadProfile();
     await loadOrders();
 });
-
-closeProfileBtn.addEventListener('click', () => {
-    profileModal.style.display = 'none';
-});
-profileModal.addEventListener('click', (e) => {
-    if (e.target === profileModal) profileModal.style.display = 'none';
-});
+closeProfileBtn.addEventListener('click', () => { profileModal.style.display = 'none'; });
+profileModal.addEventListener('click', (e) => { if (e.target === profileModal) profileModal.style.display = 'none'; });
 
 async function loadProfile() {
     const token = localStorage.getItem('token');
-    if (!token) {
-        profileInfo.innerHTML = '<p style="color:var(--red)">请先登录</p>';
-        return;
-    }
+    if (!token) { profileInfo.innerHTML = '<p style="color:var(--red)">请先登录</p>'; return; }
     try {
-        const res = await fetch(`${API_BASE}/user/profile`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await fetch(`${API_BASE}/user/profile`, { headers: { 'Authorization': `Bearer ${token}` } });
         if (!res.ok) throw new Error('获取失败');
         const user = await res.json();
         profileInfo.innerHTML = `
@@ -516,30 +561,22 @@ async function loadProfile() {
     }
 }
 
-// 订单加载
 async function loadOrders() {
     const list = document.getElementById('orderList');
     if (!list) return;
     const token = localStorage.getItem('token');
-    if (!token) {
-        list.innerHTML = '<p style="color:var(--red)">请先登录</p>';
-        return;
-    }
+    if (!token) { list.innerHTML = '<p style="color:var(--red)">请先登录</p>'; return; }
     try {
-        const res = await fetch(`${API_BASE}/user/orders`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await fetch(`${API_BASE}/user/orders`, { headers: { 'Authorization': `Bearer ${token}` } });
         if (!res.ok) throw new Error('获取失败');
         const orders = await res.json();
         if (!Array.isArray(orders) || orders.length === 0) {
             list.innerHTML = '<p style="color:var(--text-muted)">暂无订单</p>';
             return;
         }
-
         const statusMap = { pending: '待接单', playing: '代练中', done: '已完成' };
         const paymentStatusMap = { unpaid: '未支付', pending: '待确认', paid: '已支付' };
         let html = '<table class="order-table"><tr><th>订单号</th><th>项目</th><th>金额</th><th>状态</th><th>支付</th><th>操作</th><th>时间</th></tr>';
-
         orders.forEach(o => {
             let actionHtml = '';
             if (o.payment_status === 'unpaid') {
@@ -549,7 +586,6 @@ async function loadOrders() {
             } else {
                 actionHtml = '审核中';
             }
-
             html += `<tr>
                 <td>${o.order_no}</td>
                 <td>${o.project} - ${o.detail}</td>
@@ -572,10 +608,7 @@ async function loadOrders() {
 const submitOrderBtn = document.getElementById('submitOrderBtn');
 submitOrderBtn.addEventListener('click', async () => {
     const token = localStorage.getItem('token');
-    if (!token) {
-        showToast('❌ 请先登录后再提交订单');
-        return;
-    }
+    if (!token) { showToast('❌ 请先登录后再提交订单'); return; }
     const project = getSelectedProject();
     const detail = getSelectedDetail();
     const qty = getQty();
@@ -602,10 +635,7 @@ submitOrderBtn.addEventListener('click', async () => {
     try {
         const res = await fetch(`${API_BASE}/orders`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify(body)
         });
         const data = await res.json();
@@ -640,9 +670,7 @@ async function loadAdminOrders() {
     if (!token) return;
     const status = statusFilter.value;
     try {
-        const res = await fetch(`${API_BASE}/admin/orders`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await fetch(`${API_BASE}/admin/orders`, { headers: { 'Authorization': `Bearer ${token}` } });
         const orders = await res.json();
         if (!Array.isArray(orders)) throw new Error('数据错误');
         const filtered = status ? orders.filter(o => o.status === status) : orders;
@@ -656,11 +684,7 @@ function renderAdminOrders(orders) {
     const statusOptions = ['pending', 'playing', 'done'];
     const statusText = { pending: '待接单', playing: '代练中', done: '已完成' };
     const paymentStatusMap = { unpaid: '未支付', pending: '待确认', paid: '已支付' };
-
-    if (orders.length === 0) {
-        adminOrderList.innerHTML = '<p>暂无订单</p>';
-        return;
-    }
+    if (orders.length === 0) { adminOrderList.innerHTML = '<p>暂无订单</p>'; return; }
 
     let html = '<table><tr><th>订单号</th><th>用户</th><th>项目</th><th>打手</th><th>金额</th><th>状态</th><th>支付</th><th>操作</th><th>时间</th></tr>';
     orders.forEach(o => {
@@ -695,86 +719,41 @@ window.updateOrderStatus = async function(selectEl) {
     try {
         const res = await fetch(`${API_BASE}/admin/orders/${orderNo}`, {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ status: newStatus })
         });
         const data = await res.json();
-        if (res.ok) {
-            showToast('✅ 状态更新成功');
-        } else {
-            showToast('❌ ' + (data.error || '更新失败'));
-            loadAdminOrders();
-        }
-    } catch (err) {
-        showToast('❌ 网络错误');
-        loadAdminOrders();
-    }
+        if (res.ok) { showToast('✅ 状态更新成功'); } else { showToast('❌ ' + (data.error || '更新失败')); loadAdminOrders(); }
+    } catch (err) { showToast('❌ 网络错误'); loadAdminOrders(); }
 };
 
-// 管理面板事件委托
 document.addEventListener('click', async (e) => {
     const token = localStorage.getItem('token');
     if (!token) return;
-
     if (e.target.classList.contains('confirm-payment-btn')) {
         const orderNo = e.target.dataset.order;
         try {
-            const res = await fetch(`${API_BASE}/admin/orders/${orderNo}/confirm-payment`, {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await fetch(`${API_BASE}/admin/orders/${orderNo}/confirm-payment`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
             const data = await res.json();
-            if (res.ok) {
-                showToast('✅ 已确认支付，订单转为代练中');
-                loadAdminOrders();
-            } else {
-                showToast('❌ ' + (data.error || '操作失败'));
-            }
-        } catch (err) {
-            showToast('❌ 网络错误');
-        }
+            if (res.ok) { showToast('✅ 已确认支付'); loadAdminOrders(); } else { showToast('❌ ' + (data.error || '操作失败')); }
+        } catch (err) { showToast('❌ 网络错误'); }
     }
-
     if (e.target.classList.contains('hall-btn')) {
         const orderNo = e.target.dataset.order;
         try {
-            const res = await fetch(`${API_BASE}/admin/orders/${orderNo}/hall`, {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await fetch(`${API_BASE}/admin/orders/${orderNo}/hall`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
             const data = await res.json();
-            if (res.ok) {
-                showToast('✅ 订单已放入接单大厅');
-                loadAdminOrders();
-            } else {
-                showToast('❌ ' + (data.error || '操作失败'));
-            }
-        } catch (err) {
-            showToast('❌ 网络错误');
-        }
+            if (res.ok) { showToast('✅ 已放入接单大厅'); loadAdminOrders(); } else { showToast('❌ ' + (data.error || '操作失败')); }
+        } catch (err) { showToast('❌ 网络错误'); }
     }
-
     if (e.target.classList.contains('delete-order-btn')) {
         const orderNo = e.target.dataset.order;
         if (!confirm(`确定要删除订单 ${orderNo} 吗？`)) return;
         try {
-            const res = await fetch(`${API_BASE}/admin/orders/${orderNo}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await fetch(`${API_BASE}/admin/orders/${orderNo}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
             const data = await res.json();
-            if (res.ok) {
-                showToast('🗑️ 订单已删除');
-                loadAdminOrders();
-            } else {
-                showToast('❌ ' + (data.error || '删除失败'));
-            }
-        } catch (err) {
-            showToast('❌ 网络错误');
-        }
+            if (res.ok) { showToast('🗑️ 订单已删除'); loadAdminOrders(); } else { showToast('❌ ' + (data.error || '删除失败')); }
+        } catch (err) { showToast('❌ 网络错误'); }
     }
 });
 
@@ -787,16 +766,12 @@ async function loadUserList() {
     const select = document.getElementById('userSelect');
     if (!select) return;
     try {
-        const res = await fetch(`${API_BASE}/admin/users`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await fetch(`${API_BASE}/admin/users`, { headers: { 'Authorization': `Bearer ${token}` } });
         if (!res.ok) throw new Error('获取失败');
         const users = await res.json();
         select.innerHTML = '<option value="">-- 选择用户 --</option>' +
             users.map(u => `<option value="${u.id}">${u.username} (${u.role})</option>`).join('');
-    } catch (err) {
-        select.innerHTML = '<option value="">加载失败</option>';
-    }
+    } catch (err) { select.innerHTML = '<option value="">加载失败</option>'; }
 }
 
 function bindUpdateRole() {
@@ -807,29 +782,17 @@ function bindUpdateRole() {
         const userId = document.getElementById('userSelect').value;
         const role = document.getElementById('roleSelect').value;
         const msgEl = document.getElementById('roleUpdateMsg');
-        if (!userId) {
-            msgEl.textContent = '请先选择一个用户';
-            return;
-        }
+        if (!userId) { msgEl.textContent = '请先选择一个用户'; return; }
         try {
             const res = await fetch(`${API_BASE}/admin/users/${userId}/role`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ role })
             });
             const data = await res.json();
-            if (res.ok) {
-                msgEl.textContent = '✅ ' + data.message;
-                loadUserList();
-            } else {
-                msgEl.textContent = '❌ ' + (data.error || '操作失败');
-            }
-        } catch (err) {
-            msgEl.textContent = '❌ 网络错误';
-        }
+            if (res.ok) { msgEl.textContent = '✅ ' + data.message; loadUserList(); }
+            else { msgEl.textContent = '❌ ' + (data.error || '操作失败'); }
+        } catch (err) { msgEl.textContent = '❌ 网络错误'; }
     });
 }
 
@@ -853,7 +816,6 @@ document.addEventListener('click', (e) => {
         pasteArea.innerText = '';
     }
 });
-
 closePaymentBtn.addEventListener('click', () => paymentModal.style.display = 'none');
 paymentModal.addEventListener('click', (e) => { if (e.target === paymentModal) paymentModal.style.display = 'none'; });
 
@@ -861,62 +823,40 @@ paymentFile.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
-        previewImage.src = ev.target.result;
-        previewImage.style.display = 'block';
-    };
+    reader.onload = (ev) => { previewImage.src = ev.target.result; previewImage.style.display = 'block'; };
     reader.readAsDataURL(file);
 });
-
 pasteArea.addEventListener('paste', (e) => {
     const items = e.clipboardData.items;
     for (let item of items) {
         if (item.type.indexOf('image') !== -1) {
             const blob = item.getAsFile();
             const reader = new FileReader();
-            reader.onload = (ev) => {
-                previewImage.src = ev.target.result;
-                previewImage.style.display = 'block';
-            };
+            reader.onload = (ev) => { previewImage.src = ev.target.result; previewImage.style.display = 'block'; };
             reader.readAsDataURL(blob);
             e.preventDefault();
         }
     }
 });
-
 submitPaymentBtn.addEventListener('click', async () => {
     const token = localStorage.getItem('token');
     if (!token) { paymentError.textContent = '请先登录'; return; }
     if (!currentOrderNo) { paymentError.textContent = '订单号异常'; return; }
-    
     const screenshot = previewImage.src;
-    if (!screenshot || screenshot === window.location.href) {
-        paymentError.textContent = '请先选择或粘贴截图';
-        return;
-    }
-
+    if (!screenshot || screenshot === window.location.href) { paymentError.textContent = '请先选择或粘贴截图'; return; }
     try {
         const res = await fetch(`${API_BASE}/orders/${currentOrderNo}/payment`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ screenshot })
         });
         const data = await res.json();
         if (res.ok) {
-            showToast('✅ 支付凭证已提交，等待确认');
+            showToast('✅ 支付凭证已提交');
             paymentModal.style.display = 'none';
-            if (profileModal.style.display === 'flex') {
-                await loadOrders();
-            }
-        } else {
-            paymentError.textContent = data.error || '提交失败';
-        }
-    } catch (err) {
-        paymentError.textContent = '网络错误';
-    }
+            if (profileModal.style.display === 'flex') await loadOrders();
+        } else { paymentError.textContent = data.error || '提交失败'; }
+    } catch (err) { paymentError.textContent = '网络错误'; }
 });
 
 // ==================== 打手面板 ====================
@@ -924,10 +864,7 @@ const boosterPanelBtn = document.getElementById('boosterPanelBtn');
 const boosterModal = document.getElementById('boosterModal');
 const closeBoosterBtn = document.getElementById('closeBoosterBtn');
 
-boosterPanelBtn.addEventListener('click', () => {
-    boosterModal.style.display = 'flex';
-    loadHallOrders();
-});
+boosterPanelBtn.addEventListener('click', () => { boosterModal.style.display = 'flex'; loadHallOrders(); });
 closeBoosterBtn.addEventListener('click', () => boosterModal.style.display = 'none');
 boosterModal.addEventListener('click', (e) => { if (e.target === boosterModal) boosterModal.style.display = 'none'; });
 
@@ -938,7 +875,6 @@ document.querySelectorAll('.booster-tab').forEach(tab => {
         const target = tab.dataset.tab;
         document.querySelectorAll('.booster-tab-content').forEach(c => c.style.display = 'none');
         document.getElementById(target).style.display = 'block';
-        
         if (target === 'booster-hall') loadHallOrders();
         else if (target === 'booster-my') loadMyBoosterOrders();
         else if (target === 'booster-earnings') loadEarnings();
@@ -949,189 +885,88 @@ async function loadHallOrders() {
     const token = localStorage.getItem('token');
     const list = document.getElementById('hallOrderList');
     try {
-        const res = await fetch(`${API_BASE}/booster/hall`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await fetch(`${API_BASE}/booster/hall`, { headers: { 'Authorization': `Bearer ${token}` } });
         const orders = await res.json();
-        if (!orders.length) {
-            list.innerHTML = '<p>暂无待接订单</p>';
-            return;
-        }
+        if (!orders.length) { list.innerHTML = '<p>暂无待接订单</p>'; return; }
         let html = '<table><tr><th>订单号</th><th>项目</th><th>打手</th><th>预估收益</th><th>操作</th></tr>';
         orders.forEach(o => {
-            html += `<tr>
-                <td>${o.order_no}</td>
-                <td>${o.project} - ${o.detail}</td>
-                <td>${o.player_name}</td>
-                <td>¥${Number(o.earnings).toFixed(2)}</td>
-                <td><button class="take-order-btn" data-order="${o.order_no}">接单</button></td>
-            </tr>`;
+            html += `<tr><td>${o.order_no}</td><td>${o.project} - ${o.detail}</td><td>${o.player_name}</td><td>¥${Number(o.earnings).toFixed(2)}</td><td><button class="take-order-btn" data-order="${o.order_no}">接单</button></td></tr>`;
         });
         html += '</table>';
         list.innerHTML = html;
-    } catch (err) {
-        list.innerHTML = '<p style="color:var(--red)">加载失败</p>';
-    }
+    } catch (err) { list.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
 
 async function loadMyBoosterOrders() {
     const token = localStorage.getItem('token');
     const list = document.getElementById('myBoosterOrderList');
     try {
-        const res = await fetch(`${API_BASE}/booster/my-orders`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await fetch(`${API_BASE}/booster/my-orders`, { headers: { 'Authorization': `Bearer ${token}` } });
         const orders = await res.json();
-        if (!orders.length) {
-            list.innerHTML = '<p>暂无订单</p>';
-            return;
-        }
+        if (!orders.length) { list.innerHTML = '<p>暂无订单</p>'; return; }
         const statusMap = { pending: '待接单', playing: '代练中', done: '已完成' };
         let html = '<table><tr><th>订单号</th><th>项目</th><th>预估收益</th><th>状态</th><th>操作</th></tr>';
         orders.forEach(o => {
-            html += `<tr>
-                <td>${o.order_no}</td>
-                <td>${o.project} - ${o.detail}</td>
-                <td>¥${Number(o.earnings).toFixed(2)}</td>
-                <td>${statusMap[o.status] || o.status}</td>
-                <td>${o.status === 'playing' ? `<button class="complete-order-btn" data-order="${o.order_no}">完成</button>` : ''}</td>
-            </tr>`;
+            html += `<tr><td>${o.order_no}</td><td>${o.project} - ${o.detail}</td><td>¥${Number(o.earnings).toFixed(2)}</td><td>${statusMap[o.status] || o.status}</td><td>${o.status === 'playing' ? `<button class="complete-order-btn" data-order="${o.order_no}">完成</button>` : ''}</td></tr>`;
         });
         html += '</table>';
         list.innerHTML = html;
-    } catch (err) {
-        list.innerHTML = '<p style="color:var(--red)">加载失败</p>';
-    }
+    } catch (err) { list.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
 
 async function loadEarnings() {
     const token = localStorage.getItem('token');
     const display = document.getElementById('earningsDisplay');
     try {
-        const res = await fetch(`${API_BASE}/booster/earnings`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await fetch(`${API_BASE}/booster/earnings`, { headers: { 'Authorization': `Bearer ${token}` } });
         const data = await res.json();
         display.innerHTML = `<p>累计收益：<strong>¥${data.earnings}</strong></p>`;
-    } catch (err) {
-        display.innerHTML = '<p style="color:var(--red)">加载失败</p>';
-    }
+    } catch (err) { display.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
 
 document.addEventListener('click', async (e) => {
     const token = localStorage.getItem('token');
     if (!token) return;
-
     if (e.target.classList.contains('take-order-btn')) {
         const orderNo = e.target.dataset.order;
         try {
-            const res = await fetch(`${API_BASE}/booster/take/${orderNo}`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await fetch(`${API_BASE}/booster/take/${orderNo}`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
             const data = await res.json();
-            if (res.ok) {
-                showToast('✅ 接单成功');
-                loadHallOrders();
-            } else {
-                showToast('❌ ' + (data.error || '接单失败'));
-            }
-        } catch (err) {
-            showToast('❌ 网络错误');
-        }
+            if (res.ok) { showToast('✅ 接单成功'); loadHallOrders(); } else { showToast('❌ ' + (data.error || '接单失败')); }
+        } catch (err) { showToast('❌ 网络错误'); }
     }
-
     if (e.target.classList.contains('complete-order-btn')) {
         const orderNo = e.target.dataset.order;
         try {
-            const res = await fetch(`${API_BASE}/booster/complete/${orderNo}`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await fetch(`${API_BASE}/booster/complete/${orderNo}`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
             const data = await res.json();
-            if (res.ok) {
-                showToast(`✅ 订单已完成，收益 ¥${data.earnings}`);
-                loadMyBoosterOrders();
-            } else {
-                showToast('❌ ' + (data.error || '操作失败'));
-            }
-        } catch (err) {
-            showToast('❌ 网络错误');
-        }
+            if (res.ok) { showToast(`✅ 订单已完成，收益 ¥${data.earnings}`); loadMyBoosterOrders(); } else { showToast('❌ ' + (data.error || '操作失败')); }
+        } catch (err) { showToast('❌ 网络错误'); }
     }
 });
 
-// ==================== 开箱模拟器 ====================
-// 配置数据
-const chestsConfig = [
-    { id: 1, name: '美国集装箱',   price: 500,  image: 'images/chests/chest_1.png', desc: '经典战斗资源补给，开出强力道具。' },
-    { id: 2, name: '苏联集装箱',     price: 800,  image: 'images/chests/chest_2.png', desc: '火焰主题，内含稀有坦克碎片。' },
-    { id: 3, name: '顶尖捕食者集装箱',     price: 1000, image: 'images/chests/chest_3.png', desc: '夜战专属，高概率出全局经验。' },
-    { id: 4, name: '超赞集装箱',        price: 1200, image: 'images/chests/chest_4.png', desc: '雷电系列，有机会获得高级坦克。' },
-    { id: 5, name: '全收集集装箱',     price: 1500, image: 'images/chests/chest_5.png', desc: '冰雪奇缘，内含稀有银币加成。' },
-    { id: 6, name: '超大集装箱',       price: 2000, image: 'images/chests/chest_6.png', desc: '经典怀旧，出金币概率较高。' },
-    { id: 7, name: '重坦集装箱',     price: 2500, image: 'images/chests/chest_7.png', desc: '未来科技，有极小概率出绝版坦克。' },
-    { id: 8, name: '泰坦集装箱',         price: 3000, image: 'images/chests/chest_8.png', desc: '专为狂战士打造，必出好东西。' },
-    { id: 9, name: '赛季集装箱',     price: 5000, image: 'images/chests/chest_9.png', desc: '传奇级别，概率获得稀有指挥官坦克。' }
-];
-
-const normalPool = [
-    { name: '银币 x50000',       weight: 30 },
-    { name: '银币强化剂 x10',   weight: 20 },
-    { name: '战斗经验强化剂 x10', weight: 20 },
-    { name: '全局经验强化剂 x10', weight: 15 },
-    { name: '金币 x500',        weight: 10 }
-];
-const normalTotalWeight = normalPool.reduce((s, i) => s + i.weight, 0);
-
-const rarePool = [
-    { name: 'T-54 原型',       weight: 5 },
-    { name: '狮式',            weight: 4 },
-    { name: 'AMX 30B',         weight: 3 },
-    { name: 'IS-6 无畏',       weight: 2 },
-    { name: '黑豹 88',         weight: 2 },
-    { name: 'M60',             weight: 2 },
-    { name: 'Strv 81',         weight: 1 },
-    { name: 'Strv K',          weight: 1 }
-];
-const rareTotalWeight = rarePool.reduce((s, i) => s + i.weight, 0);
-
+// ==================== 开箱模拟器逻辑 ====================
 let currentChestId = null;
 
-function getTickets() {
-    return parseInt(localStorage.getItem('tickets') || '0');
-}
-function setTickets(num) {
-    localStorage.setItem('tickets', num);
-    updateTicketDisplay();
-}
+function getTickets() { return parseInt(localStorage.getItem('tickets') || '0'); }
+function setTickets(num) { localStorage.setItem('tickets', num); updateTicketDisplay(); }
 function updateTicketDisplay() {
     const el = document.getElementById('ticketBalance');
     if (el) el.textContent = getTickets();
 }
 
-function getTodayStr() {
-    return new Date().toISOString().slice(0, 10);
-}
-function getLastCheckin() {
-    return localStorage.getItem('lastCheckinDate');
-}
+function getTodayStr() { return new Date().toISOString().slice(0, 10); }
+function getLastCheckin() { return localStorage.getItem('lastCheckinDate'); }
 function doCheckin() {
     const today = getTodayStr();
-    if (getLastCheckin() === today) {
-        showToast('⏰ 今日已签到，明天再来吧');
-        return;
-    }
-    const newBalance = getTickets() + 1000;
-    setTickets(newBalance);
+    if (getLastCheckin() === today) { showToast('⏰ 今日已签到，明天再来吧'); return; }
+    setTickets(getTickets() + 1000);
     localStorage.setItem('lastCheckinDate', today);
     showToast('✅ 签到成功！获得1000军需券');
 }
-
 function doRecharge() {
-    const newBalance = getTickets() + 1000;
-    setTickets(newBalance);
-    showToast('💰 充值成功！获得1000军需券');
+    setTickets(getTickets() + 1000);
+    showToast('💰 充值成功！获得1000军需券（模拟）');
 }
 
 function renderChests() {
@@ -1141,11 +976,8 @@ function renderChests() {
     chestsConfig.forEach(chest => {
         const div = document.createElement('div');
         div.className = 'chest-item';
-        div.innerHTML = `
-            <img src="${chest.image}" alt="${chest.name}" onerror="this.src='images/chests/placeholder.png';">
-            <div class="chest-name">${chest.name}</div>
-            <div class="chest-price">🪙 ${chest.price} <span class="chest-currency">军需券</span></div>
-        `;
+        div.innerHTML = `<img src="${chest.image}" alt="${chest.name}" onerror="this.src='images/chests/placeholder.png';">
+            <div class="chest-name">${chest.name}</div><div class="chest-price">🪙 ${chest.price} <span class="chest-currency">军需券</span></div>`;
         div.addEventListener('click', () => openChestDetail(chest));
         grid.appendChild(div);
     });
@@ -1161,16 +993,15 @@ function openChestDetail(chest) {
     const probContainer = document.getElementById('chestDetailProb');
     let html = '<div class="prob-list"><div><strong>类别</strong><strong>概率</strong></div>';
     normalPool.forEach(item => {
-        const itemProb = (item.weight / normalTotalWeight * 95).toFixed(2);
-        html += `<div><span class="prob-label">${item.name}</span><span class="prob-value">${itemProb}%</span></div>`;
+        const p = (item.weight / normalTotalWeight * 95).toFixed(2);
+        html += `<div><span class="prob-label">${item.name}</span><span class="prob-value">${p}%</span></div>`;
     });
     rarePool.forEach(item => {
-        const itemProb = (item.weight / rareTotalWeight * 5).toFixed(2);
-        html += `<div><span class="prob-label">${item.name}</span><span class="prob-value">${itemProb}%</span></div>`;
+        const p = (item.weight / rareTotalWeight * 5).toFixed(2);
+        html += `<div><span class="prob-label">${item.name}</span><span class="prob-value">${p}%</span></div>`;
     });
     html += '</div>';
     probContainer.innerHTML = html;
-
     document.getElementById('chestBuyMsg').style.display = 'none';
     document.getElementById('chestDetailModal').style.display = 'flex';
 }
@@ -1179,80 +1010,35 @@ document.getElementById('closeChestDetailBtn').addEventListener('click', () => {
     document.getElementById('chestDetailModal').style.display = 'none';
 });
 document.getElementById('chestDetailModal').addEventListener('click', (e) => {
-    if (e.target === document.getElementById('chestDetailModal')) {
-        document.getElementById('chestDetailModal').style.display = 'none';
-    }
+    if (e.target === document.getElementById('chestDetailModal')) document.getElementById('chestDetailModal').style.display = 'none';
 });
 
 document.getElementById('buyChestBtn').addEventListener('click', () => {
     if (!currentChestId) return;
     const chest = chestsConfig.find(c => c.id === currentChestId);
     if (!chest) return;
-    const balance = getTickets();
-    if (balance < chest.price) {
-        document.getElementById('chestBuyMsg').textContent = '❌ 军需券不足，请签到或充值';
+    if (getTickets() < chest.price) {
+        document.getElementById('chestBuyMsg').textContent = '❌ 军需券不足';
         document.getElementById('chestBuyMsg').style.display = 'block';
         return;
     }
-    setTickets(balance - chest.price);
+    setTickets(getTickets() - chest.price);
     const rand = Math.random() * 100;
-    let reward;
-    if (rand < 5) {
-        reward = drawFromPool(rarePool, rareTotalWeight);
-    } else {
-        reward = drawFromPool(normalPool, normalTotalWeight);
-    }
+    const reward = rand < 5 ? drawFromPool(rarePool, rareTotalWeight) : drawFromPool(normalPool, normalTotalWeight);
     showToast(`🎉 打开 ${chest.name} 获得：${reward.name}`);
     document.getElementById('chestDetailModal').style.display = 'none';
 });
 
 function drawFromPool(pool, totalWeight) {
     let r = Math.random() * totalWeight;
-    for (let item of pool) {
-        r -= item.weight;
-        if (r <= 0) return item;
-    }
+    for (let item of pool) { r -= item.weight; if (r <= 0) return item; }
     return pool[0];
 }
 
 document.getElementById('checkinBtn').addEventListener('click', doCheckin);
 document.getElementById('rechargeBtn').addEventListener('click', doRecharge);
 
-function initChestSimulator() {
-    updateTicketDisplay();
-    renderChests();
-}
-
-const tankList = [
-    "T-54", "狮式", "IS-7", "AMX 50B", "M48 Patton",
-    "E-100", "T110E5", "FV215b", "T-62A", "Leopard 1",
-    "Bat.-Chat. 25t", "STB-1", "Object 140", "60TP", "Kranvagn",
-    "Progetto M40", "TVP T50/51", "AMX 13 105", "WZ-132-1", "T-100 LT",
-    "Sheridan", "Rhm. Pzw.", "Grille 15", "FV4005", "Strv 103B",
-    "BC 155 58", "G.W. E 100", "T92", "Conqueror GC", "M53/55",
-    "Obj. 261", "FV3805", "Maus", "Type 5 Heavy", "E3",
-    "Jagdpanzer E 100", "T110E4", "Badger", "Object 268", "WZ-113G FT",
-    "T57 Heavy", "AMX 50 120", "VK 72.01(K)", "Chieftain", "Super Conqueror",
-    "Carro da Combattimento", "Rinoceronte", "Vz.55", "Minotauro", "Ho-Ri III",
-    "Object 705A", "ST-II", "BZ-75", "M-V-Y", "T95/FV4201",
-    "Emil II", "Udes 15/16", "CS-63", "Object 430U", "K-91",
-    "T-22 medium", "E 50 M", "Panzer 58", "121B", "122 TM",
-    "Manticore", "WZ-132-1", "T-100", "AMX 13 105", "Rheinmetall Pzw.",
-    "JPanther II", "T25/2", "Charioteer", "Smasher", "Gorynych",
-    "T-34-85 Rudy", "Bretagne Panther", "Pudel", "Turán III", "T26E3 Eagle",
-    "Thunder", "Sexton I", "AMX Canon d'assaut", "ISU-130", "T-34-3",
-    "T-44-100", "Lowe", "M6A2E1", "T34", "AMX CDC",
-    "FCM 50 t", "Strv 81", "Primo Victoria", "Dicker Max", "Rheinmetall Skorpion",
-    "SU-130PM", "TS-5", "WZ-120-1G FT", "IS-6", "Object 252U"
-];
-// 如果不够 100 个可以复制一些补充，但建议凑满 100 个
-while (tankList.length < 100) {
-    tankList.push("随机坦克" + tankList.length);
-}
-
-
-
-
+function initChestSimulator() { updateTicketDisplay(); renderChests(); }
 
 // ==================== 独立工具子菜单 ====================
 function initToolSubMenu() {
@@ -1260,9 +1046,8 @@ function initToolSubMenu() {
     const panels = {
         calculator: document.getElementById('toolCalculator'),
         chestsim: document.getElementById('toolChestSim'),
-        randomtank: document.getElementById('toolRandomTank')   // 新增转盘面板
+        randomtank: document.getElementById('toolRandomTank')
     };
-
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
             tabs.forEach(t => t.classList.remove('active'));
@@ -1274,7 +1059,8 @@ function initToolSubMenu() {
     });
 }
 
-let wheelAngle = 0;            // 当前旋转角度（弧度）
+// ==================== 这把玩什么转盘 ====================
+let wheelAngle = 0;
 let spinning = false;
 let wheelCanvas, wheelCtx;
 
@@ -1286,85 +1072,78 @@ function initWheel() {
 }
 
 function drawWheel(rotation = 0) {
-    const ctx = wheelCtx;
+    if (!wheelCtx) return;
     const w = wheelCanvas.width;
     const h = wheelCanvas.height;
     const cx = w / 2, cy = h / 2;
     const radius = Math.min(cx, cy) - 5;
     const sliceAngle = (2 * Math.PI) / tankList.length;
 
-    ctx.clearRect(0, 0, w, h);
-
-    // 绘制扇形
+    wheelCtx.clearRect(0, 0, w, h);
     for (let i = 0; i < tankList.length; i++) {
         const startAngle = i * sliceAngle + rotation;
         const endAngle = startAngle + sliceAngle;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.arc(cx, cy, radius, startAngle, endAngle);
-        ctx.closePath();
-        ctx.fillStyle = i % 2 === 0 ? '#2a3a50' : '#1e2a3a';
-        ctx.fill();
-        ctx.strokeStyle = '#0a0f1a';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        wheelCtx.beginPath();
+        wheelCtx.moveTo(cx, cy);
+        wheelCtx.arc(cx, cy, radius, startAngle, endAngle);
+        wheelCtx.closePath();
+        wheelCtx.fillStyle = i % 2 === 0 ? '#2a3a50' : '#1e2a3a';
+        wheelCtx.fill();
+        wheelCtx.strokeStyle = '#0a0f1a';
+        wheelCtx.lineWidth = 1;
+        wheelCtx.stroke();
 
-        // 文字（缩略编号）
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(startAngle + sliceAngle / 2);
-        ctx.textAlign = "right";
-        ctx.fillStyle = "#e2e8f0";
-        ctx.font = "8px sans-serif";
-        ctx.fillText(i + 1, radius - 10, 3);
-        ctx.restore();
+        wheelCtx.save();
+        wheelCtx.translate(cx, cy);
+        wheelCtx.rotate(startAngle + sliceAngle / 2);
+        wheelCtx.textAlign = "right";
+        wheelCtx.fillStyle = "#e2e8f0";
+        wheelCtx.font = "8px sans-serif";
+        wheelCtx.fillText(i + 1, radius - 10, 3);
+        wheelCtx.restore();
     }
 
     // 中心圆
-    ctx.beginPath();
-    ctx.arc(cx, cy, 30, 0, 2 * Math.PI);
-    ctx.fillStyle = '#f0a050';
-    ctx.fill();
-    ctx.strokeStyle = '#0a0f1a';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.fillStyle = '#fff';
-    ctx.font = "bold 14px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("GO", cx, cy);
+    wheelCtx.beginPath();
+    wheelCtx.arc(cx, cy, 30, 0, 2 * Math.PI);
+    wheelCtx.fillStyle = '#f0a050';
+    wheelCtx.fill();
+    wheelCtx.strokeStyle = '#0a0f1a';
+    wheelCtx.lineWidth = 3;
+    wheelCtx.stroke();
+    wheelCtx.fillStyle = '#fff';
+    wheelCtx.font = "bold 14px sans-serif";
+    wheelCtx.textAlign = "center";
+    wheelCtx.textBaseline = "middle";
+    wheelCtx.fillText("GO", cx, cy);
 
-    // 固定指针（三角形）
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - radius + 8);
-    ctx.lineTo(cx - 8, cy - radius - 8);
-    ctx.lineTo(cx + 8, cy - radius - 8);
-    ctx.closePath();
-    ctx.fillStyle = '#e74c3c';
-    ctx.fill();
+    // 指针
+    wheelCtx.beginPath();
+    wheelCtx.moveTo(cx, cy - radius + 8);
+    wheelCtx.lineTo(cx - 8, cy - radius - 8);
+    wheelCtx.lineTo(cx + 8, cy - radius - 8);
+    wheelCtx.closePath();
+    wheelCtx.fillStyle = '#e74c3c';
+    wheelCtx.fill();
 }
 
-// 开始旋转
 function spinWheel() {
     if (spinning) return;
     spinning = true;
 
     const targetSlice = Math.floor(Math.random() * tankList.length);
     const sliceAngle = (2 * Math.PI) / tankList.length;
-    // 目标角度：让指针（上方）对齐扇形中心，指针方向为 -PI/2 (270°)
     const targetMiddleAngle = targetSlice * sliceAngle + sliceAngle / 2;
-    // 需要转到的最终角度 = 2*PI*n - targetMiddleAngle + PI/2（使指针指向上方）
-    const fullSpins = 5 + Math.floor(Math.random() * 5); // 5~9圈
+    const fullSpins = 5 + Math.floor(Math.random() * 5);
     const targetAngle = fullSpins * 2 * Math.PI + (2 * Math.PI - targetMiddleAngle) + Math.PI / 2;
 
     const startAngle = wheelAngle;
-    const duration = 4000; // 4秒
+    const duration = 4000;
     const startTime = performance.now();
 
     function animate(now) {
         const elapsed = now - startTime;
         const progress = Math.min(elapsed / duration, 1);
-        // easeOutCubic
         const ease = 1 - Math.pow(1 - progress, 3);
         wheelAngle = startAngle + targetAngle * ease;
         drawWheel(wheelAngle);
@@ -1372,26 +1151,19 @@ function spinWheel() {
         if (progress < 1) {
             requestAnimationFrame(animate);
         } else {
-            // 停止
             wheelAngle = wheelAngle % (2 * Math.PI);
             const normalizedAngle = (wheelAngle + Math.PI * 2) % (Math.PI * 2);
             const pointerAngle = (2 * Math.PI - normalizedAngle + Math.PI / 2) % (2 * Math.PI);
             const finalSlice = Math.floor(pointerAngle / sliceAngle) % tankList.length;
-            const result = tankList[finalSlice];
-            document.getElementById('wheelResult').textContent = `🎉 抽中：${result}`;
+            document.getElementById('wheelResult').textContent = `🎉 抽中：${tankList[finalSlice]}`;
             spinning = false;
         }
     }
-
     requestAnimationFrame(animate);
 }
 
 document.getElementById('spinWheelBtn')?.addEventListener('click', spinWheel);
-// 点击转盘也能触发
 document.getElementById('wheelCanvas')?.addEventListener('click', spinWheel);
-
-
-
 
 // 启动
 init();
