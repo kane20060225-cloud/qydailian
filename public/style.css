@@ -750,16 +750,16 @@ body {
     word-break: break-word;
 }
 
-/* ====== 联赛管理面板样式 ====== */
-.league-admin-menu {
+/* ====== 联赛相关板块（整合所有样式） ====== */
+
+/* 联赛标签切换（积分榜/新闻） */
+.league-tabs {
     display: flex;
     gap: 10px;
-    margin-bottom: 20px;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 12px;
+    margin-bottom: 16px;
 }
-.league-admin-btn {
-    padding: 8px 20px;
+.league-tab {
+    padding: 6px 20px;
     border-radius: 20px;
     border: 1px solid var(--border);
     background: transparent;
@@ -768,96 +768,18 @@ body {
     cursor: pointer;
     transition: all var(--transition);
 }
-.league-admin-btn.active {
+.league-tab.active {
     border-color: var(--accent);
     background: rgba(240,160,80,0.1);
     color: var(--accent);
-    box-shadow: 0 0 8px var(--accent-glow);
-}
-.league-admin-btn:hover {
-    border-color: var(--accent);
-    background: rgba(240,160,80,0.08);
 }
 
-/* 联赛面板通用 */
-.league-panel {
-    margin-top: 16px;
+/* 联赛新闻卡片网格 */
+.league-news-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 18px;
 }
-.league-panel h4 {
-    color: var(--accent);
-    margin-bottom: 12px;
-}
-.league-panel ul {
-    list-style: none;
-    padding: 0;
-}
-.league-panel ul li {
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-.league-panel ul li button {
-    margin-left: auto;
-}
-
-/* 联赛配置中的输入框 */
-#seasonName,
-#rulesSection input[type="number"] {
-    padding: 6px 10px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: #111927;
-    color: var(--text);
-    font-size: 0.85rem;
-    margin-right: 8px;
-}
-#rulesSection input[type="number"] {
-    width: 60px;
-}
-
-/* 联赛面板中的保存/编辑按钮 */
-.league-panel button {
-    padding: 6px 14px;
-    border-radius: 6px;
-    border: 1px solid var(--accent);
-    background: rgba(240,160,80,0.1);
-    color: var(--accent);
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: all var(--transition);
-}
-.league-panel button:hover {
-    background: rgba(240,160,80,0.2);
-    box-shadow: 0 0 8px var(--accent-glow);
-}
-
-/* 积分榜表格已经包含在之前的样式中 */
-#leagueStandingsContainer table {
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 800px;
-    margin-top: 10px;
-}
-#leagueStandingsContainer th,
-#leagueStandingsContainer td {
-    padding: 8px 6px;
-    border: 1px solid var(--border);
-    text-align: center;
-    font-size: 0.85rem;
-}
-#leagueStandingsContainer th {
-    background: rgba(240,160,80,0.15);
-    color: var(--accent);
-    font-weight: 600;
-}
-#leagueStandingsContainer tr:hover td {
-    background: rgba(240,160,80,0.05);
-}
-
-/* 联赛新闻卡片（已有） */
 .league-news-card {
     background: #0f172a;
     border: 1px solid var(--border);
@@ -892,4 +814,117 @@ body {
     white-space: pre-wrap;
     word-break: break-word;
     line-height: 1.8;
+    color: var(--text-secondary);
+}
+
+/* 积分榜容器 */
+#leagueStandingsContainer {
+    overflow-x: auto;
+}
+#leagueStandingsContainer table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 800px;
+    margin-top: 10px;
+}
+#leagueStandingsContainer th,
+#leagueStandingsContainer td {
+    padding: 8px 6px;
+    border: 1px solid var(--border);
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text);
+}
+#leagueStandingsContainer th {
+    background: rgba(240,160,80,0.15);
+    color: var(--accent);
+    font-weight: 600;
+}
+#leagueStandingsContainer tr:hover td {
+    background: rgba(240,160,80,0.05);
+}
+
+/* ====== 联赛管理弹窗 ====== */
+.league-admin-menu {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 12px;
+}
+.league-admin-btn {
+    padding: 8px 20px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+.league-admin-btn.active {
+    border-color: var(--accent);
+    background: rgba(240,160,80,0.1);
+    color: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+.league-admin-btn:hover {
+    border-color: var(--accent);
+    background: rgba(240,160,80,0.08);
+}
+
+/* 联赛面板通用容器 */
+.league-panel {
+    margin-top: 16px;
+}
+.league-panel h4 {
+    color: var(--accent);
+    margin-bottom: 12px;
+}
+.league-panel ul {
+    list-style: none;
+    padding: 0;
+}
+.league-panel ul li {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    color: var(--text);
+}
+.league-panel ul li button {
+    margin-left: auto;
+}
+
+/* 联赛配置中的输入框（赛季名称、分数） */
+#seasonName,
+#rulesSection input[type="number"] {
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #111927;
+    color: var(--text);
+    font-size: 0.85rem;
+    margin-right: 8px;
+}
+#rulesSection input[type="number"] {
+    width: 60px;
+}
+
+/* 联赛面板中的通用按钮（创建赛季、保存规则等） */
+.league-panel button {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--accent);
+    background: rgba(240,160,80,0.1);
+    color: var(--accent);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+.league-panel button:hover {
+    background: rgba(240,160,80,0.2);
+    box-shadow: 0 0 8px var(--accent-glow);
 }
