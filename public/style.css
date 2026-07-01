@@ -1033,3 +1033,31 @@ body {
     display: block;
     margin: 0 auto;
 }
+
+/* 客户端选择 */
+.client-select {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+}
+.client-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+}
+.client-option input {
+    accent-color: var(--accent);
+    width: 18px;
+    height: 18px;
+}
+
+/* 详情复制按钮 */
+.copy-order-detail-btn,
+.detail-btn {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    margin: 2px;
+}

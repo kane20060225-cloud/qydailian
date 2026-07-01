@@ -9,7 +9,7 @@ const fs = require('fs');
 
 const app = express();
 
-// 静态文件（假设 server.js 与 public 目录同级）
+// 静态文件
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(cors());
 app.use(express.json());
@@ -27,7 +27,7 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
-// 自动建表（包含所有字段）
+// 自动建表
 async function initDB() {
   try {
     await pool.execute(`
@@ -72,10 +72,17 @@ async function initDB() {
         game_uid VARCHAR(50),
         game_account VARCHAR(50),
         game_password VARCHAR(50),
+        client_type VARCHAR(10) DEFAULT 'Android',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+    // 兼容旧表：如果没有 client_type 列则添加
+    try {
+      await pool.execute(`ALTER TABLE orders ADD COLUMN client_type VARCHAR(10) DEFAULT 'Android'`);
+    } catch (e) {
+      // 字段已存在则忽略
+    }
     console.log('✅ 数据库表已就绪');
   } catch (err) {
     console.error('❌ 建表失败:', err.message);
@@ -196,9 +203,9 @@ function boosterMiddleware(req, res, next) {
   });
 }
 
-// ==================== 订单创建（含游戏信息） ====================
+// ==================== 订单创建（含客户端字段） ====================
 app.post('/api/orders', authMiddleware, async (req, res) => {
-  const { project, detail, quantity, player_name, price, urgent, total_price, remark, game_uid, game_account, game_password } = req.body;
+  const { project, detail, quantity, player_name, price, urgent, total_price, remark, game_uid, game_account, game_password, client_type } = req.body;
   if (!project || !detail || !quantity || !player_name || !price || !total_price) {
     return res.status(400).json({ error: '缺少订单必要信息' });
   }
@@ -207,9 +214,9 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
   try {
     connection = await pool.getConnection();
     const [result] = await connection.execute(
-      `INSERT INTO orders (order_no, user_id, project, detail, quantity, player_name, price, urgent, total_price, remark, game_uid, game_account, game_password, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
-      [order_no, req.userId, project, detail, quantity, player_name, price, urgent ? 1 : 0, total_price, remark || null, game_uid || null, game_account || null, game_password || null]
+      `INSERT INTO orders (order_no, user_id, project, detail, quantity, player_name, price, urgent, total_price, remark, game_uid, game_account, game_password, client_type, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      [order_no, req.userId, project, detail, quantity, player_name, price, urgent ? 1 : 0, total_price, remark || null, game_uid || null, game_account || null, game_password || null, client_type || 'Android']
     );
     res.status(201).json({ success: true, order_no, order_id: result.insertId });
   } catch (err) {
@@ -236,13 +243,41 @@ app.get('/api/user/orders', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT order_no, project, detail, quantity, player_name, total_price, status, 
-              remark, payment_status, payment_screenshot, created_at 
+              remark, payment_status, payment_screenshot, created_at, client_type
        FROM orders WHERE user_id = ? ORDER BY created_at DESC`,
       [req.userId]
     );
     res.json(rows);
   } catch (err) {
     console.error('获取订单失败:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// ==================== 订单详情接口（管理员、用户、打手可用） ====================
+app.get('/api/orders/:orderNo/detail', authMiddleware, async (req, res) => {
+  const { orderNo } = req.params;
+  try {
+    const [rows] = await pool.execute(
+      `SELECT o.*, u.username AS customer_name FROM orders o JOIN users u ON o.user_id = u.id WHERE o.order_no = ?`,
+      [orderNo]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: '订单不存在' });
+
+    const order = rows[0];
+    // 权限检查
+    const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
+    const role = userRows[0]?.role;
+    if (role !== 'admin' && req.userId !== order.user_id && req.userId !== order.booster_id) {
+      return res.status(403).json({ error: '无权查看该订单详情' });
+    }
+    // 非下单用户且非管理员，隐藏游戏密码
+    if (role !== 'admin' && req.userId !== order.user_id) {
+      order.game_password = '******';
+    }
+    res.json(order);
+  } catch (err) {
+    console.error('获取订单详情失败:', err);
     res.status(500).json({ error: '服务器错误' });
   }
 });
@@ -369,11 +404,11 @@ app.put('/api/admin/users/:userId/role', adminMiddleware, async (req, res) => {
   }
 });
 
-// ==================== 打手接口 ====================
+// ==================== 打手接口（增加 client_type 字段） ====================
 app.get('/api/booster/hall', boosterMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, created_at,
+      `SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, client_type, created_at,
        (total_price * 0.75) AS earnings
        FROM orders WHERE hall_status = 'open' AND booster_id IS NULL AND status = 'pending'
        ORDER BY created_at DESC`
@@ -418,7 +453,7 @@ app.post('/api/booster/take/:orderNo', boosterMiddleware, async (req, res) => {
 app.get('/api/booster/my-orders', boosterMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, created_at,
+      `SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, client_type, created_at,
        (total_price * 0.75) AS earnings
        FROM orders WHERE booster_id = ? ORDER BY created_at DESC`,
       [req.userId]
