@@ -203,7 +203,7 @@ function boosterMiddleware(req, res, next) {
   });
 }
 
-// ==================== 订单创建（含客户端字段） ====================
+// ==================== 订单创建（含游戏信息及客户端） ====================
 app.post('/api/orders', authMiddleware, async (req, res) => {
   const { project, detail, quantity, player_name, price, urgent, total_price, remark, game_uid, game_account, game_password, client_type } = req.body;
   if (!project || !detail || !quantity || !player_name || !price || !total_price) {
@@ -254,34 +254,6 @@ app.get('/api/user/orders', authMiddleware, async (req, res) => {
   }
 });
 
-// ==================== 订单详情接口（管理员、用户、打手可用） ====================
-app.get('/api/orders/:orderNo/detail', authMiddleware, async (req, res) => {
-  const { orderNo } = req.params;
-  try {
-    const [rows] = await pool.execute(
-      `SELECT o.*, u.username AS customer_name FROM orders o JOIN users u ON o.user_id = u.id WHERE o.order_no = ?`,
-      [orderNo]
-    );
-    if (rows.length === 0) return res.status(404).json({ error: '订单不存在' });
-
-    const order = rows[0];
-    // 权限检查
-    const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
-    const role = userRows[0]?.role;
-    if (role !== 'admin' && req.userId !== order.user_id && req.userId !== order.booster_id) {
-      return res.status(403).json({ error: '无权查看该订单详情' });
-    }
-    // 非下单用户且非管理员，隐藏游戏密码
-    if (role !== 'admin' && req.userId !== order.user_id) {
-      order.game_password = '******';
-    }
-    res.json(order);
-  } catch (err) {
-    console.error('获取订单详情失败:', err);
-    res.status(500).json({ error: '服务器错误' });
-  }
-});
-
 // ==================== 支付上传 ====================
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -325,6 +297,14 @@ app.put('/api/admin/orders/:orderNo', adminMiddleware, async (req, res) => {
   const { orderNo } = req.params;
   if (!['pending', 'playing', 'done'].includes(status)) return res.status(400).json({ error: '无效的状态值' });
   try {
+    // 如果要改为 done，必须确保支付状态为 paid
+    if (status === 'done') {
+      const [orderRows] = await pool.execute('SELECT payment_status FROM orders WHERE order_no = ?', [orderNo]);
+      if (orderRows.length === 0) return res.status(404).json({ error: '订单不存在' });
+      if (orderRows[0].payment_status !== 'paid') {
+        return res.status(400).json({ error: '请先确认收款后才能标记为已完成' });
+      }
+    }
     const [result] = await pool.execute('UPDATE orders SET status = ? WHERE order_no = ?', [status, orderNo]);
     if (result.affectedRows === 0) return res.status(404).json({ error: '订单不存在' });
     res.json({ success: true });
@@ -404,7 +384,32 @@ app.put('/api/admin/users/:userId/role', adminMiddleware, async (req, res) => {
   }
 });
 
-// ==================== 打手接口（增加 client_type 字段） ====================
+// ==================== 订单详情接口 ====================
+app.get('/api/orders/:orderNo/detail', authMiddleware, async (req, res) => {
+  const { orderNo } = req.params;
+  try {
+    const [rows] = await pool.execute(
+      `SELECT o.*, u.username AS customer_name FROM orders o JOIN users u ON o.user_id = u.id WHERE o.order_no = ?`,
+      [orderNo]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: '订单不存在' });
+    const order = rows[0];
+    const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
+    const role = userRows[0]?.role;
+    if (role !== 'admin' && req.userId !== order.user_id && req.userId !== order.booster_id) {
+      return res.status(403).json({ error: '无权查看该订单详情' });
+    }
+    if (role !== 'admin' && req.userId !== order.user_id) {
+      order.game_password = '******';
+    }
+    res.json(order);
+  } catch (err) {
+    console.error('获取订单详情失败:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// ==================== 打手接口 ====================
 app.get('/api/booster/hall', boosterMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
@@ -481,6 +486,11 @@ app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) =
       return res.status(400).json({ error: '订单无法完成' });
     }
     const order = rows[0];
+    // 检查支付状态
+    if (order.payment_status !== 'paid') {
+      await connection.rollback();
+      return res.status(400).json({ error: '该订单尚未确认支付，无法完成' });
+    }
     const earnings = order.total_price * 0.75;
     await connection.execute('UPDATE orders SET status = ? WHERE order_no = ?', ['done', orderNo]);
     await connection.execute('UPDATE users SET earnings = earnings + ? WHERE id = ?', [earnings, boosterId]);

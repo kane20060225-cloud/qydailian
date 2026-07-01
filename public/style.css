@@ -665,6 +665,7 @@ body {
 .payment-pending { background: rgba(240,160,80,0.2); color: var(--accent); }
 .payment-paid { background: rgba(72,187,120,0.2); color: var(--green); }
 
+/* 上传/确认按钮 */
 .upload-payment-btn, .confirm-payment-btn {
     padding: 6px 12px;
     border-radius: 4px;
@@ -676,6 +677,7 @@ body {
     margin: 2px;
     white-space: nowrap;
     display: inline-block;
+    transition: all var(--transition);
 }
 .upload-payment-btn:hover, .confirm-payment-btn:hover {
     background: rgba(240,160,80,0.2);
@@ -709,6 +711,8 @@ body {
     .modal-card { padding: 20px 16px; width: 95%; }
     .admin-modal, .profile-modal { max-width: 95%; }
 }
+
+/* ========== 以下为所有补充/新增样式（已整合） ========== */
 
 /* 管理员删除订单按钮 */
 .delete-order-btn {
@@ -760,7 +764,7 @@ body {
 .booster-tab-content { display: none; }
 .booster-tab-content.active { display: block; }
 
-/* ====== 补充：管理面板角色管理 ====== */
+/* 管理面板角色管理 */
 .admin-role-section {
     margin-top: 30px;
     border-top: 1px solid var(--border);
@@ -803,7 +807,7 @@ body {
     color: var(--green);
 }
 
-/* ====== 补充：打手面板按钮 ====== */
+/* 打手面板接单/完成按钮 */
 .take-order-btn, .complete-order-btn {
     padding: 6px 12px;
     border-radius: 4px;
@@ -831,7 +835,7 @@ body {
     box-shadow: 0 0 8px rgba(72,187,120,0.4);
 }
 
-/* ====== 补充：打手面板表格 ====== */
+/* 打手面板表格 */
 .booster-tab-content table {
     width: 100%;
     border-collapse: collapse;
@@ -852,7 +856,7 @@ body {
     overflow-x: auto;
 }
 
-/* ====== 补充：收益展示 ====== */
+/* 收益展示 */
 #earningsDisplay {
     padding: 20px;
     font-size: 1.1rem;
@@ -861,6 +865,7 @@ body {
     border-radius: var(--radius-sm);
 }
 
+/* 放入大厅按钮 */
 .hall-btn {
     padding: 6px 12px;
     border-radius: 4px;
@@ -879,7 +884,7 @@ body {
     box-shadow: 0 0 8px var(--accent-glow);
 }
 
-/* ====== 追加：独立工具子菜单 ====== */
+/* 独立工具子菜单 */
 .tools-submenu {
     display: flex;
     gap: 10px;
@@ -902,7 +907,7 @@ body {
     box-shadow: 0 0 10px var(--accent-glow);
 }
 
-/* ====== 追加：开箱模拟器 ====== */
+/* 开箱模拟器 */
 .checkin-btn, .recharge-btn {
     padding: 8px 18px;
     border-radius: 20px;
@@ -988,7 +993,7 @@ body {
     font-weight: 600;
 }
 
-/* ====== 站内公告样式（可选，若没有的话） ====== */
+/* 站内公告 */
 .announcement-content h3 {
     color: var(--accent);
     margin: 16px 0 12px;
@@ -1009,26 +1014,7 @@ body {
     margin: 0 auto;
 }
 
-/* 原有的 .hall-btn 样式已在之前的补充中，若无则添加 */
-.hall-btn {
-    padding: 6px 12px;
-    border-radius: 4px;
-    border: 1px solid var(--accent);
-    background: rgba(240,160,80,0.1);
-    color: var(--accent);
-    font-size: 0.8rem;
-    cursor: pointer;
-    margin: 2px;
-    white-space: nowrap;
-    display: inline-block;
-    transition: all var(--transition);
-}
-.hall-btn:hover {
-    background: rgba(240,160,80,0.2);
-    box-shadow: 0 0 8px var(--accent-glow);
-}
-
-/* ====== 这把玩什么转盘 ====== */
+/* 转盘画布 */
 #wheelCanvas {
     display: block;
     margin: 0 auto;
@@ -1043,21 +1029,62 @@ body {
 .client-option {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     cursor: pointer;
     font-size: 1rem;
     font-weight: 600;
+    color: var(--text);
+    background: #111927;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 24px;
+    transition: all var(--transition);
 }
-.client-option input {
+.client-option:hover {
+    border-color: var(--accent);
+    background: rgba(240,160,80,0.08);
+}
+.client-option input[type="radio"] {
     accent-color: var(--accent);
     width: 18px;
     height: 18px;
+    margin: 0;
+}
+.client-option:has(input:checked) {
+    border-color: var(--accent);
+    background: rgba(240,160,80,0.1);
+    box-shadow: 0 0 10px var(--accent-glow);
 }
 
-/* 详情复制按钮 */
-.copy-order-detail-btn,
-.detail-btn {
+/* 订单详情按钮（详情、复制信息） */
+.detail-btn,
+.copy-order-detail-btn {
     padding: 4px 10px;
     font-size: 0.75rem;
     margin: 2px;
+    border-radius: 4px;
+    border: 1px solid var(--accent);
+    background: rgba(240,160,80,0.1);
+    color: var(--accent);
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+    display: inline-block;
+    font-weight: 500;
+}
+.detail-btn:hover,
+.copy-order-detail-btn:hover {
+    background: rgba(240,160,80,0.2);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* 订单详情弹窗内容 */
+#orderDetailContent p {
+    margin-bottom: 8px;
+    line-height: 1.6;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    padding-bottom: 6px;
+}
+#orderDetailContent strong {
+    color: var(--accent);
 }

@@ -625,6 +625,10 @@ submitOrderBtn.addEventListener('click', async () => {
     const clientTypeEl = document.querySelector('input[name="clientType"]:checked');
     const clientType = clientTypeEl ? clientTypeEl.value : 'Android';
 
+    const gameUid = document.getElementById('gameUid').value.trim();
+const gameAccount = document.getElementById('gameAccount').value.trim();
+const gamePassword = document.getElementById('gamePassword').value.trim();
+
     const body = {
         project: projectDetails[project].name,
         detail: `${detail.toUpperCase()} - ${projectDetails[project][detail].desc}`,
@@ -634,8 +638,11 @@ submitOrderBtn.addEventListener('click', async () => {
         urgent,
         total_price: total,
         remark,
+        game_uid: gameUid || null,
+        game_account: gameAccount || null,
+        game_password: gamePassword || null,
         client_type: clientType
-    };
+};
 
     try {
         const res = await fetch(`${API_BASE}/orders`, {
