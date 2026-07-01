@@ -54,6 +54,11 @@
                 <h3>站内公告</h3>
                 <p>注意事项 & 收款码</p>
             </div>
+            <div class="menu-card" data-target="league">
+            <span class="menu-icon">🏆</span>
+            <h3>联赛相关</h3>
+            <p>赛事资讯 & 战队动态</p>
+            </div>
         </div>
     </main>
 
@@ -75,6 +80,14 @@
                     <label class="project-card" data-project="mmedal"><input type="radio" name="project" value="mmedal"><div class="card-inner"><span class="card-icon">🏅</span><span class="card-name">M章</span><span class="card-desc">获取M级勋章</span></div></label>
                     <label class="project-card" data-project="rings"><input type="radio" name="project" value="rings"><div class="card-inner"><span class="card-icon">💍</span><span class="card-name">三环</span><span class="card-desc">炮管环数提升</span></div></label>
                     <label class="project-card" data-project="rating"><input type="radio" name="project" value="rating"><div class="card-inner"><span class="card-icon">🏆</span><span class="card-name">评级</span><span class="card-desc">账号评级提升</span></div></label>
+                    <!-- 定制化需求卡片（第8个格子，不可选） -->
+                    <div class="project-card custom-project-card" id="customRequestCard">
+                        <div class="card-inner">
+                            <span class="card-icon">✏️</span>
+                            <span class="card-name">定制化需求</span>
+                            <span class="card-desc">发布你自己的代练需求</span>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -106,7 +119,7 @@
                 <div class="player-grid" id="playerGrid"></div>
             </section>
 
-            <!-- 客户端选择（新增） -->
+            <!-- 客户端选择 -->
             <section class="card">
                 <div class="card-header"><span class="card-num">📱</span><h3>客户端系统</h3><span class="badge-required">必选</span></div>
                 <div class="client-select">
@@ -274,6 +287,32 @@
             </section>
         </div>
     </div>
+<!-- 板块五：联赛相关 -->
+<div id="sectionLeague" class="content-section" style="display: none;">
+    <div class="section-top">
+        <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+        <h2 class="section-heading">🏆 联赛相关</h2>
+    </div>
+    <div class="container">
+        <div class="league-news-grid" id="leagueNewsGrid">
+            <!-- 由JS动态生成6个联赛新闻卡片 -->
+        </div>
+    </div>
+</div>
+
+<!-- 联赛详情弹窗 -->
+<div class="modal-overlay" id="leagueDetailModal" style="display: none;">
+    <div class="modal-card" style="max-width: 600px;">
+        <div class="modal-header">
+            <h3 id="leagueDetailTitle">联赛详情</h3>
+            <button class="modal-close" id="closeLeagueDetailBtn">&times;</button>
+        </div>
+        <p id="leagueDetailTime" style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 12px;"></p>
+        <div id="leagueDetailContent" style="line-height: 1.8; font-size: 0.95rem;"></div>
+    </div>
+</div>
+
+
 
     <!-- 注册弹窗 -->
     <div class="modal-overlay" id="registerModal" style="display: none;">
@@ -317,7 +356,7 @@
         </div>
     </div>
 
-    <!-- 管理面板弹窗 -->
+    <!-- 管理面板弹窗（含标签切换） -->
     <div class="modal-overlay" id="adminModal" style="display: none;">
         <div class="modal-card admin-modal">
             <div class="modal-header">
@@ -325,19 +364,33 @@
                 <button class="modal-close" id="closeAdminBtn">&times;</button>
             </div>
             <div class="admin-content">
-                <div class="admin-filter">
-                    <label>筛选状态：</label>
-                    <select id="statusFilter">
-                        <option value="">全部</option>
-                        <option value="pending">待接单</option>
-                        <option value="playing">代练中</option>
-                        <option value="done">已完成</option>
-                    </select>
-                    <button id="refreshOrdersBtn">刷新</button>
+                <!-- 管理面板标签 -->
+                <div class="admin-tabs" style="display:flex; gap:10px; margin-bottom:15px;">
+                    <button class="admin-tab active" data-admintab="orders">📋 订单管理</button>
+                    <button class="admin-tab" data-admintab="custom">✏️ 定制需求</button>
                 </div>
-                <div id="adminOrderList" class="admin-order-list">加载中...</div>
-                
-                <!-- 用户角色管理 -->
+
+                <!-- 订单管理区域 -->
+                <div id="adminOrdersSection">
+                    <div class="admin-filter">
+                        <label>筛选状态：</label>
+                        <select id="statusFilter">
+                            <option value="">全部</option>
+                            <option value="pending">待接单</option>
+                            <option value="playing">代练中</option>
+                            <option value="done">已完成</option>
+                        </select>
+                        <button id="refreshOrdersBtn">刷新</button>
+                    </div>
+                    <div id="adminOrderList" class="admin-order-list">加载中...</div>
+                </div>
+
+                <!-- 定制需求区域 -->
+                <div id="adminCustomSection" style="display:none;">
+                    <div id="adminCustomList">加载中...</div>
+                </div>
+
+                <!-- 用户角色管理（放在订单管理下方） -->
                 <div class="admin-role-section" style="margin-top:30px; border-top:1px solid var(--border); padding-top:20px;">
                     <h4 style="margin-bottom:12px;">👥 修改用户角色</h4>
                     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
@@ -415,7 +468,7 @@
         </div>
     </div>
 
-    <!-- 订单详情弹窗（新增） -->
+    <!-- 订单详情弹窗 -->
     <div class="modal-overlay" id="orderDetailModal" style="display: none;">
         <div class="modal-card" style="max-width: 550px;">
             <div class="modal-header">
@@ -423,6 +476,51 @@
                 <button class="modal-close" id="closeOrderDetailBtn">&times;</button>
             </div>
             <div id="orderDetailContent" style="line-height: 1.8; font-size: 0.95rem;"></div>
+        </div>
+    </div>
+
+    <!-- 定制化需求弹窗 -->
+    <div class="modal-overlay" id="customRequestModal" style="display: none;">
+        <div class="modal-card" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>✏️ 发布定制需求</h3>
+                <button class="modal-close" id="closeCustomRequestBtn">&times;</button>
+            </div>
+            <form id="customRequestForm">
+                <div class="form-group">
+                    <label>客户端 <span style="color:var(--red)">*</span></label>
+                    <select id="customClientType" required>
+                        <option value="Android">🤖 安卓</option>
+                        <option value="iOS">🍎 iOS</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>需求类型 <span style="color:var(--red)">*</span></label>
+                    <input type="text" id="customRequestType" placeholder="例如：代练、陪玩、教学 等" required>
+                </div>
+                <div class="form-group">
+                    <label>需求详情描述 <span style="color:var(--red)">*</span></label>
+                    <textarea id="customDescription" rows="3" placeholder="详细描述您的需求..." required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>联系方式（QQ/微信） <span style="color:var(--red)">*</span></label>
+                    <input type="text" id="customContact" placeholder="QQ号或微信号" required>
+                </div>
+                <div class="form-group">
+                    <label>预算范围</label>
+                    <input type="text" id="customBudget" placeholder="例如：100-200元">
+                </div>
+                <div class="form-group">
+                    <label>可联系时间</label>
+                    <input type="text" id="customAvailableTime" placeholder="例如：晚上8点-10点">
+                </div>
+                <div class="form-group">
+                    <label>备注</label>
+                    <textarea id="customRemark" rows="2" placeholder="其他补充..."></textarea>
+                </div>
+                <div class="form-error" id="customRequestError"></div>
+                <button type="submit" class="submit-btn">🚀 提交需求</button>
+            </form>
         </div>
     </div>
 

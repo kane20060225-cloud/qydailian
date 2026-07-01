@@ -1088,3 +1088,75 @@ body {
 #orderDetailContent strong {
     color: var(--accent);
 }
+
+
+/* 定制化需求卡片 */
+.custom-project-card { cursor: pointer; }
+.custom-project-card .card-inner {
+    border-style: dashed;
+    border-color: var(--accent);
+    opacity: 0.9;
+}
+.custom-project-card .card-inner:hover {
+    opacity: 1;
+    background: rgba(240,160,80,0.08);
+}
+
+/* 管理面板标签 */
+.admin-tab {
+    padding: 6px 16px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+.admin-tab.active {
+    border-color: var(--accent);
+    background: rgba(240,160,80,0.15);
+    color: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* ====== 联赛相关卡片 ====== */
+.league-news-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 18px;
+}
+.league-news-card {
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+.league-news-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 14px var(--accent-glow);
+    transform: translateY(-2px);
+}
+.league-news-card h4 {
+    color: var(--accent);
+    margin-bottom: 8px;
+    font-size: 1rem;
+}
+.league-card-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+}
+.league-card-summary {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+/* 联赛详情弹窗内容 */
+#leagueDetailContent {
+    white-space: pre-wrap;
+    word-break: break-word;
+}

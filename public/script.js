@@ -101,7 +101,8 @@ const sections = {
     boost: document.getElementById('sectionBoost'),
     tools: document.getElementById('sectionTools'),
     news: document.getElementById('sectionNews'),
-    announcement: document.getElementById('sectionAnnouncement')
+    announcement: document.getElementById('sectionAnnouncement'),
+    league: document.getElementById('sectionLeague')   // 新增联赛板块
 };
 
 // 代练相关
@@ -153,6 +154,13 @@ const userDropdown = document.getElementById('userDropdown');
 const displayUsername = document.getElementById('displayUsername');
 const logoutBtn = document.getElementById('logoutBtn');
 
+// 定制需求相关
+const customRequestCard = document.getElementById('customRequestCard');
+const customRequestModal = document.getElementById('customRequestModal');
+const closeCustomRequestBtn = document.getElementById('closeCustomRequestBtn');
+const customRequestForm = document.getElementById('customRequestForm');
+const customRequestError = document.getElementById('customRequestError');
+
 // ==================== 初始化 ====================
 function init() {
     updateDetailCards();
@@ -163,6 +171,7 @@ function init() {
     initChestSimulator();
     initToolSubMenu();
     initWheel();
+    renderLeagueCards();
 }
 
 // ==================== 板块切换 ====================
@@ -405,6 +414,98 @@ document.getElementById('newsContainer').innerHTML = newsData.map(n => `
     </div>
 `).join('');
 
+// ==================== 联赛相关 ====================
+const leagueData = [
+    {
+        id: 1,
+        title: '🏆 2026夏季联赛报名开启',
+        time: '2026-07-01',
+        summary: '夏季联赛正式启动，报名截止7月15日。',
+        content: '2026夏季联赛现已开放报名。本次联赛分为小组赛、淘汰赛两个阶段，总奖金100万金币。请各战队在7月15日前提交参赛名单。详细赛程和规则请见游戏内公告。报名链接：https://wotb.qq.com/league/2026summer。'
+    },
+    {
+        id: 2,
+        title: '⚔️ 上周精彩比赛回顾',
+        time: '2026-06-28',
+        summary: 'TOP战队3:2险胜黑马队伍，回顾关键局。',
+        content: '上周末的焦点战中，TOP战队在先失两局的情况下连扳三局，以3:2逆转战胜新锐黑马“雷霆”。第五局地图“荒漠小镇”中，TOP战队的重型坦克配合堪称教科书级。视频回放已上传至赛事频道。'
+    },
+    {
+        id: 3,
+        title: '📊 战队积分榜更新',
+        time: '2026-06-25',
+        summary: '最新积分排名：情谊战队暂居榜首。',
+        content: '经过五轮比赛，情谊战队以全胜战绩领跑积分榜，大飞战队紧随其后。完整积分榜及个人数据统计请查看附件。下一轮比赛将于7月3日进行。'
+    },
+    {
+        id: 4,
+        title: '🎙️ 选手专访：Hansza的坦克心得',
+        time: '2026-06-20',
+        summary: '银牌打手Hansza分享IS-7使用技巧。',
+        content: '我们采访了银牌打手Hansza，他就IS-7的走位、摆角度、以及当前版本的弹药选择给出了独到见解。他说：“IS-7的炮塔装甲依然是十级房最可靠的，但需要活用俯角。” 完整采访内容请在详情中查看。'
+    },
+    {
+        id: 5,
+        title: '📢 赛事规则调整通知',
+        time: '2026-06-15',
+        summary: '本赛季起禁止使用某型号坦克参赛。',
+        content: '根据玩家反馈和平衡性考虑，赛事组委会决定从本赛季起禁止使用“Smasher”和“Annihilator”参赛。所有已报名战队需在7月1日前调整阵容。详见官方论坛公告。'
+    },
+    {
+        id: 6,
+        title: '🎉 联赛竞猜活动上线',
+        time: '2026-06-10',
+        summary: '参与竞猜赢取专属头像和金币奖励。',
+        content: '为增加赛事互动，竞猜活动现已上线。您可以在每场比赛前预测胜负，猜中即可获得积分，累积积分可兑换联赛专属头像、金币、银币等奖励。竞猜入口：游戏内-赛事中心。'
+    }
+];
+
+// 渲染联赛卡片网格
+function renderLeagueCards() {
+    const grid = document.getElementById('leagueNewsGrid');
+    if (!grid) return;
+    grid.innerHTML = leagueData.map(item => `
+        <div class="league-news-card" data-league-id="${item.id}">
+            <h4>${item.title}</h4>
+            <p class="league-card-time">${item.time}</p>
+            <p class="league-card-summary">${item.summary}</p>
+        </div>
+    `).join('');
+
+    // 绑定点击事件
+    document.querySelectorAll('.league-news-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const id = parseInt(card.dataset.leagueId);
+            const data = leagueData.find(d => d.id === id);
+            if (data) showLeagueDetail(data);
+        });
+    });
+}
+
+// 显示联赛详情弹窗
+function showLeagueDetail(item) {
+    document.getElementById('leagueDetailTitle').textContent = item.title;
+    document.getElementById('leagueDetailTime').textContent = `发布时间：${item.time}`;
+    document.getElementById('leagueDetailContent').textContent = item.content; // 纯文本，如需HTML可用 innerHTML
+    document.getElementById('leagueDetailModal').style.display = 'flex';
+}
+
+// 关闭详情弹窗事件
+document.getElementById('closeLeagueDetailBtn').addEventListener('click', () => {
+    document.getElementById('leagueDetailModal').style.display = 'none';
+});
+document.getElementById('leagueDetailModal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('leagueDetailModal')) {
+        document.getElementById('leagueDetailModal').style.display = 'none';
+    }
+});
+
+// 在初始化函数中调用渲染（找到 init 函数，添加一行）
+// 我们将在下一步中修改 init 函数
+
+
+
+
 // ==================== 用户登录状态管理 ====================
 function checkLoginStatus() {
     const token = localStorage.getItem('token');
@@ -604,7 +705,7 @@ async function loadOrders() {
     }
 }
 
-// ==================== 提交订单（新增客户端字段） ====================
+// ==================== 提交订单（含客户端、游戏信息） ====================
 const submitOrderBtn = document.getElementById('submitOrderBtn');
 submitOrderBtn.addEventListener('click', async () => {
     const token = localStorage.getItem('token');
@@ -621,13 +722,12 @@ submitOrderBtn.addEventListener('click', async () => {
     const base = projectDetails[project][detail].price;
     const remark = document.getElementById('remarkInput')?.value.trim() || '';
 
-    // 获取客户端类型
+    const gameUid = document.getElementById('gameUid').value.trim();
+    const gameAccount = document.getElementById('gameAccount').value.trim();
+    const gamePassword = document.getElementById('gamePassword').value.trim();
+
     const clientTypeEl = document.querySelector('input[name="clientType"]:checked');
     const clientType = clientTypeEl ? clientTypeEl.value : 'Android';
-
-    const gameUid = document.getElementById('gameUid').value.trim();
-const gameAccount = document.getElementById('gameAccount').value.trim();
-const gamePassword = document.getElementById('gamePassword').value.trim();
 
     const body = {
         project: projectDetails[project].name,
@@ -642,7 +742,7 @@ const gamePassword = document.getElementById('gamePassword').value.trim();
         game_account: gameAccount || null,
         game_password: gamePassword || null,
         client_type: clientType
-};
+    };
 
     try {
         const res = await fetch(`${API_BASE}/orders`, {
@@ -661,7 +761,7 @@ const gamePassword = document.getElementById('gamePassword').value.trim();
     }
 });
 
-// ==================== 管理面板（修改列：数量、客户端，去除打手；增加详情/复制按钮） ====================
+// ==================== 管理面板（含定制需求标签） ====================
 const adminPanelBtn = document.getElementById('adminPanelBtn');
 const adminModal = document.getElementById('adminModal');
 const closeAdminBtn = document.getElementById('closeAdminBtn');
@@ -742,12 +842,11 @@ window.updateOrderStatus = async function(selectEl) {
     } catch (err) { showToast('❌ 网络错误'); loadAdminOrders(); }
 };
 
-// ==================== 管理面板与打手面板通用事件委托（详情、复制信息） ====================
+// 管理面板事件委托（确认收款、放入大厅、删除、详情、复制信息、打手接单/完成）
 document.addEventListener('click', async (e) => {
     const token = localStorage.getItem('token');
     if (!token) return;
 
-    // 管理员确认收款
     if (e.target.classList.contains('confirm-payment-btn')) {
         const orderNo = e.target.dataset.order;
         try {
@@ -756,7 +855,6 @@ document.addEventListener('click', async (e) => {
             if (res.ok) { showToast('✅ 已确认支付'); loadAdminOrders(); } else { showToast('❌ ' + (data.error || '操作失败')); }
         } catch (err) { showToast('❌ 网络错误'); }
     }
-    // 放入大厅
     if (e.target.classList.contains('hall-btn')) {
         const orderNo = e.target.dataset.order;
         try {
@@ -765,7 +863,6 @@ document.addEventListener('click', async (e) => {
             if (res.ok) { showToast('✅ 已放入接单大厅'); loadAdminOrders(); } else { showToast('❌ ' + (data.error || '操作失败')); }
         } catch (err) { showToast('❌ 网络错误'); }
     }
-    // 删除订单
     if (e.target.classList.contains('delete-order-btn')) {
         const orderNo = e.target.dataset.order;
         if (!confirm(`确定要删除订单 ${orderNo} 吗？`)) return;
@@ -775,17 +872,14 @@ document.addEventListener('click', async (e) => {
             if (res.ok) { showToast('🗑️ 订单已删除'); loadAdminOrders(); } else { showToast('❌ ' + (data.error || '删除失败')); }
         } catch (err) { showToast('❌ 网络错误'); }
     }
-    // 订单详情按钮（管理员、打手通用）
     if (e.target.classList.contains('detail-btn')) {
         const orderNo = e.target.dataset.order;
         showOrderDetail(orderNo);
     }
-    // 一键复制订单信息（管理员专用）
     if (e.target.classList.contains('copy-order-detail-btn')) {
         const orderNo = e.target.dataset.order;
         copyOrderDetail(orderNo);
     }
-    // 打手接单
     if (e.target.classList.contains('take-order-btn')) {
         const orderNo = e.target.dataset.order;
         try {
@@ -794,7 +888,6 @@ document.addEventListener('click', async (e) => {
             if (res.ok) { showToast('✅ 接单成功'); loadHallOrders(); } else { showToast('❌ ' + (data.error || '接单失败')); }
         } catch (err) { showToast('❌ 网络错误'); }
     }
-    // 打手完成订单
     if (e.target.classList.contains('complete-order-btn')) {
         const orderNo = e.target.dataset.order;
         try {
@@ -844,13 +937,49 @@ function bindUpdateRole() {
     });
 }
 
-// ==================== 订单详情弹窗与复制 ====================
+// ==================== 管理面板标签切换与定制需求 ====================
+document.querySelectorAll('.admin-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.dataset.admintab;
+        document.getElementById('adminOrdersSection').style.display = target === 'orders' ? 'block' : 'none';
+        document.getElementById('adminCustomSection').style.display = target === 'custom' ? 'block' : 'none';
+        if (target === 'custom') loadAdminCustomRequests();
+    });
+});
+
+async function loadAdminCustomRequests() {
+    const token = localStorage.getItem('token');
+    const list = document.getElementById('adminCustomList');
+    try {
+        const res = await fetch(`${API_BASE}/admin/custom-requests`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const requests = await res.json();
+        if (!requests.length) { list.innerHTML = '<p>暂无定制需求</p>'; return; }
+        let html = '<table><tr><th>时间</th><th>用户</th><th>客户端</th><th>类型</th><th>详情</th><th>联系方式</th><th>预算</th><th>可联系时间</th><th>备注</th></tr>';
+        requests.forEach(r => {
+            html += `<tr>
+                <td>${new Date(r.created_at).toLocaleString()}</td>
+                <td>${r.username}</td>
+                <td>${r.client_type}</td>
+                <td>${r.request_type}</td>
+                <td>${r.description}</td>
+                <td>${r.contact}</td>
+                <td>${r.budget || '-'}</td>
+                <td>${r.available_time || '-'}</td>
+                <td>${r.remark || '-'}</td>
+            </tr>`;
+        });
+        html += '</table>';
+        list.innerHTML = html;
+    } catch (err) { list.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+}
+
+// ==================== 订单详情与复制 ====================
 async function showOrderDetail(orderNo) {
     const token = localStorage.getItem('token');
     try {
-        const res = await fetch(`${API_BASE}/orders/${orderNo}/detail`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await fetch(`${API_BASE}/orders/${orderNo}/detail`, { headers: { 'Authorization': `Bearer ${token}` } });
         if (!res.ok) throw new Error('无权或加载失败');
         const order = await res.json();
         const html = `
@@ -870,17 +999,13 @@ async function showOrderDetail(orderNo) {
         `;
         document.getElementById('orderDetailContent').innerHTML = html;
         document.getElementById('orderDetailModal').style.display = 'flex';
-    } catch (err) {
-        showToast('❌ ' + (err.message || '加载详情失败'));
-    }
+    } catch (err) { showToast('❌ ' + (err.message || '加载详情失败')); }
 }
 
 async function copyOrderDetail(orderNo) {
     const token = localStorage.getItem('token');
     try {
-        const res = await fetch(`${API_BASE}/orders/${orderNo}/detail`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await fetch(`${API_BASE}/orders/${orderNo}/detail`, { headers: { 'Authorization': `Bearer ${token}` } });
         if (!res.ok) throw new Error('获取失败');
         const order = await res.json();
         const text = `【订单详情】
@@ -897,7 +1022,6 @@ async function copyOrderDetail(orderNo) {
 游戏UID：${order.game_uid || '无'}
 状态：${order.status}
 支付状态：${order.payment_status}`;
-
         if (navigator.clipboard) {
             await navigator.clipboard.writeText(text);
         } else {
@@ -909,12 +1033,9 @@ async function copyOrderDetail(orderNo) {
             document.body.removeChild(textarea);
         }
         showToast('✅ 订单信息已复制');
-    } catch (err) {
-        showToast('❌ 复制失败');
-    }
+    } catch (err) { showToast('❌ 复制失败'); }
 }
 
-// 关闭订单详情弹窗
 document.getElementById('closeOrderDetailBtn').addEventListener('click', () => {
     document.getElementById('orderDetailModal').style.display = 'none';
 });
@@ -987,7 +1108,7 @@ submitPaymentBtn.addEventListener('click', async () => {
     } catch (err) { paymentError.textContent = '网络错误'; }
 });
 
-// ==================== 打手面板（修改列：数量、客户端，去除打手列，我的订单增加详情按钮） ====================
+// ==================== 打手面板 ====================
 const boosterPanelBtn = document.getElementById('boosterPanelBtn');
 const boosterModal = document.getElementById('boosterModal');
 const closeBoosterBtn = document.getElementById('closeBoosterBtn');
@@ -1018,14 +1139,7 @@ async function loadHallOrders() {
         if (!orders.length) { list.innerHTML = '<p>暂无待接订单</p>'; return; }
         let html = '<table><tr><th>订单号</th><th>项目</th><th>数量</th><th>客户端</th><th>预估收益</th><th>操作</th></tr>';
         orders.forEach(o => {
-            html += `<tr>
-                <td>${o.order_no}</td>
-                <td>${o.project} - ${o.detail}</td>
-                <td>${o.quantity}</td>
-                <td>${o.client_type || '未知'}</td>
-                <td>¥${Number(o.earnings).toFixed(2)}</td>
-                <td><button class="take-order-btn" data-order="${o.order_no}">接单</button></td>
-            </tr>`;
+            html += `<tr><td>${o.order_no}</td><td>${o.project} - ${o.detail}</td><td>${o.quantity}</td><td>${o.client_type || '未知'}</td><td>¥${Number(o.earnings).toFixed(2)}</td><td><button class="take-order-btn" data-order="${o.order_no}">接单</button></td></tr>`;
         });
         html += '</table>';
         list.innerHTML = html;
@@ -1042,18 +1156,7 @@ async function loadMyBoosterOrders() {
         const statusMap = { pending: '待接单', playing: '代练中', done: '已完成' };
         let html = '<table><tr><th>订单号</th><th>项目</th><th>数量</th><th>客户端</th><th>预估收益</th><th>状态</th><th>操作</th></tr>';
         orders.forEach(o => {
-            html += `<tr>
-                <td>${o.order_no}</td>
-                <td>${o.project} - ${o.detail}</td>
-                <td>${o.quantity}</td>
-                <td>${o.client_type || '未知'}</td>
-                <td>¥${Number(o.earnings).toFixed(2)}</td>
-                <td>${statusMap[o.status] || o.status}</td>
-                <td>
-                    ${o.status === 'playing' ? `<button class="complete-order-btn" data-order="${o.order_no}">完成</button>` : ''}
-                    ${o.status !== 'pending' ? `<button class="detail-btn" data-order="${o.order_no}">详情</button>` : ''}
-                </td>
-            </tr>`;
+            html += `<tr><td>${o.order_no}</td><td>${o.project} - ${o.detail}</td><td>${o.quantity}</td><td>${o.client_type || '未知'}</td><td>¥${Number(o.earnings).toFixed(2)}</td><td>${statusMap[o.status] || o.status}</td><td>${o.status === 'playing' ? `<button class="complete-order-btn" data-order="${o.order_no}">完成</button>` : ''}${o.status !== 'pending' ? `<button class="detail-btn" data-order="${o.order_no}">详情</button>` : ''}</td></tr>`;
         });
         html += '</table>';
         list.innerHTML = html;
@@ -1070,16 +1173,11 @@ async function loadEarnings() {
     } catch (err) { display.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
 
-// ==================== 开箱模拟器逻辑 ====================
+// ==================== 开箱模拟器 ====================
 let currentChestId = null;
-
 function getTickets() { return parseInt(localStorage.getItem('tickets') || '0'); }
 function setTickets(num) { localStorage.setItem('tickets', num); updateTicketDisplay(); }
-function updateTicketDisplay() {
-    const el = document.getElementById('ticketBalance');
-    if (el) el.textContent = getTickets();
-}
-
+function updateTicketDisplay() { const el = document.getElementById('ticketBalance'); if (el) el.textContent = getTickets(); }
 function getTodayStr() { return new Date().toISOString().slice(0, 10); }
 function getLastCheckin() { return localStorage.getItem('lastCheckinDate'); }
 function doCheckin() {
@@ -1089,102 +1187,55 @@ function doCheckin() {
     localStorage.setItem('lastCheckinDate', today);
     showToast('✅ 签到成功！获得1000军需券');
 }
-function doRecharge() {
-    setTickets(getTickets() + 1000);
-    showToast('💰 充值成功！获得1000军需券');
-}
-
+function doRecharge() { setTickets(getTickets() + 1000); showToast('💰 充值成功！获得1000军需券'); }
 function renderChests() {
-    const grid = document.getElementById('chestGrid');
-    if (!grid) return;
+    const grid = document.getElementById('chestGrid'); if (!grid) return;
     grid.innerHTML = '';
     chestsConfig.forEach(chest => {
-        const div = document.createElement('div');
-        div.className = 'chest-item';
-        div.innerHTML = `<img src="${chest.image}" alt="${chest.name}" onerror="this.src='images/chests/placeholder.png';">
-            <div class="chest-name">${chest.name}</div><div class="chest-price">🪙 ${chest.price} <span class="chest-currency">军需券</span></div>`;
-        div.addEventListener('click', () => openChestDetail(chest));
-        grid.appendChild(div);
+        const div = document.createElement('div'); div.className = 'chest-item';
+        div.innerHTML = `<img src="${chest.image}" alt="${chest.name}" onerror="this.src='images/chests/placeholder.png';"><div class="chest-name">${chest.name}</div><div class="chest-price">🪙 ${chest.price} <span class="chest-currency">军需券</span></div>`;
+        div.addEventListener('click', () => openChestDetail(chest)); grid.appendChild(div);
     });
 }
-
 function openChestDetail(chest) {
     currentChestId = chest.id;
     document.getElementById('chestDetailTitle').textContent = chest.name;
     document.getElementById('chestDetailImg').src = chest.image;
     document.getElementById('chestDetailDesc').textContent = chest.desc;
     document.getElementById('chestPriceDisplay').textContent = chest.price;
-
     const probContainer = document.getElementById('chestDetailProb');
     let html = '<div class="prob-list"><div><strong>类别</strong><strong>概率</strong></div>';
-    normalPool.forEach(item => {
-        const p = (item.weight / normalTotalWeight * 95).toFixed(2);
-        html += `<div><span class="prob-label">${item.name}</span><span class="prob-value">${p}%</span></div>`;
-    });
-    rarePool.forEach(item => {
-        const p = (item.weight / rareTotalWeight * 5).toFixed(2);
-        html += `<div><span class="prob-label">${item.name}</span><span class="prob-value">${p}%</span></div>`;
-    });
-    html += '</div>';
-    probContainer.innerHTML = html;
+    normalPool.forEach(item => { const p = (item.weight / normalTotalWeight * 95).toFixed(2); html += `<div><span class="prob-label">${item.name}</span><span class="prob-value">${p}%</span></div>`; });
+    rarePool.forEach(item => { const p = (item.weight / rareTotalWeight * 5).toFixed(2); html += `<div><span class="prob-label">${item.name}</span><span class="prob-value">${p}%</span></div>`; });
+    html += '</div>'; probContainer.innerHTML = html;
     document.getElementById('chestBuyMsg').style.display = 'none';
     document.getElementById('chestDetailModal').style.display = 'flex';
 }
-
-document.getElementById('closeChestDetailBtn').addEventListener('click', () => {
-    document.getElementById('chestDetailModal').style.display = 'none';
-});
-document.getElementById('chestDetailModal').addEventListener('click', (e) => {
-    if (e.target === document.getElementById('chestDetailModal')) document.getElementById('chestDetailModal').style.display = 'none';
-});
-
+document.getElementById('closeChestDetailBtn').addEventListener('click', () => { document.getElementById('chestDetailModal').style.display = 'none'; });
+document.getElementById('chestDetailModal').addEventListener('click', (e) => { if (e.target === document.getElementById('chestDetailModal')) document.getElementById('chestDetailModal').style.display = 'none'; });
 document.getElementById('buyChestBtn').addEventListener('click', () => {
     if (!currentChestId) return;
-    const chest = chestsConfig.find(c => c.id === currentChestId);
-    if (!chest) return;
-    if (getTickets() < chest.price) {
-        document.getElementById('chestBuyMsg').textContent = '❌ 军需券不足';
-        document.getElementById('chestBuyMsg').style.display = 'block';
-        return;
-    }
+    const chest = chestsConfig.find(c => c.id === currentChestId); if (!chest) return;
+    if (getTickets() < chest.price) { document.getElementById('chestBuyMsg').textContent = '❌ 军需券不足'; document.getElementById('chestBuyMsg').style.display = 'block'; return; }
     setTickets(getTickets() - chest.price);
     const rand = Math.random() * 100;
     const reward = rand < 5 ? drawFromPool(rarePool, rareTotalWeight) : drawFromPool(normalPool, normalTotalWeight);
     showToast(`🎉 打开 ${chest.name} 获得：${reward.name}`);
     document.getElementById('chestDetailModal').style.display = 'none';
 });
-
-function drawFromPool(pool, totalWeight) {
-    let r = Math.random() * totalWeight;
-    for (let item of pool) { r -= item.weight; if (r <= 0) return item; }
-    return pool[0];
-}
-
+function drawFromPool(pool, totalWeight) { let r = Math.random() * totalWeight; for (let item of pool) { r -= item.weight; if (r <= 0) return item; } return pool[0]; }
 document.getElementById('checkinBtn').addEventListener('click', doCheckin);
 document.getElementById('rechargeBtn').addEventListener('click', doRecharge);
-
 function initChestSimulator() { updateTicketDisplay(); renderChests(); }
 
 // ==================== 独立工具子菜单 ====================
 function initToolSubMenu() {
     const tabs = document.querySelectorAll('.tool-tab');
-    const panels = {
-        calculator: document.getElementById('toolCalculator'),
-        chestsim: document.getElementById('toolChestSim'),
-        randomtank: document.getElementById('toolRandomTank')
-    };
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            tabs.forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-            const tool = tab.dataset.tool;
-            Object.values(panels).forEach(p => p.style.display = 'none');
-            if (panels[tool]) panels[tool].style.display = 'block';
-        });
-    });
+    const panels = { calculator: document.getElementById('toolCalculator'), chestsim: document.getElementById('toolChestSim'), randomtank: document.getElementById('toolRandomTank') };
+    tabs.forEach(tab => { tab.addEventListener('click', () => { tabs.forEach(t => t.classList.remove('active')); tab.classList.add('active'); const tool = tab.dataset.tool; Object.values(panels).forEach(p => p.style.display = 'none'); if (panels[tool]) panels[tool].style.display = 'block'; }); });
 }
 
-// ==================== 这把玩什么转盘 ====================
+// ==================== 转盘完整实现 ====================
 let wheelAngle = 0;
 let spinning = false;
 let wheelCanvas, wheelCtx;
@@ -1289,6 +1340,34 @@ function spinWheel() {
 
 document.getElementById('spinWheelBtn')?.addEventListener('click', spinWheel);
 document.getElementById('wheelCanvas')?.addEventListener('click', spinWheel);
+
+// ==================== 定制化需求 ====================
+customRequestCard.addEventListener('click', () => { customRequestModal.style.display = 'flex'; });
+closeCustomRequestBtn.addEventListener('click', () => customRequestModal.style.display = 'none');
+customRequestModal.addEventListener('click', (e) => { if (e.target === customRequestModal) customRequestModal.style.display = 'none'; });
+customRequestForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    if (!token) { customRequestError.textContent = '请先登录'; return; }
+    const client_type = document.getElementById('customClientType').value;
+    const request_type = document.getElementById('customRequestType').value.trim();
+    const description = document.getElementById('customDescription').value.trim();
+    const contact = document.getElementById('customContact').value.trim();
+    const budget = document.getElementById('customBudget').value.trim();
+    const available_time = document.getElementById('customAvailableTime').value.trim();
+    const remark = document.getElementById('customRemark').value.trim();
+    if (!client_type || !request_type || !description || !contact) { customRequestError.textContent = '请填写所有必填项'; return; }
+    try {
+        const res = await fetch(`${API_BASE}/custom-request`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ client_type, request_type, description, contact, budget, available_time, remark })
+        });
+        const data = await res.json();
+        if (res.ok) { showToast('✅ 定制需求已提交'); customRequestModal.style.display = 'none'; customRequestForm.reset(); customRequestError.textContent = ''; }
+        else { customRequestError.textContent = data.error || '提交失败'; }
+    } catch (err) { customRequestError.textContent = '网络错误'; }
+});
 
 // 启动
 init();

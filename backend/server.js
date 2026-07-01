@@ -9,7 +9,6 @@ const fs = require('fs');
 
 const app = express();
 
-// 静态文件
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(cors());
 app.use(express.json());
@@ -27,7 +26,6 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
-// 自动建表
 async function initDB() {
   try {
     await pool.execute(`
@@ -77,12 +75,25 @@ async function initDB() {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
-    // 兼容旧表：如果没有 client_type 列则添加
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS custom_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        client_type VARCHAR(10) NOT NULL DEFAULT 'Android',
+        request_type VARCHAR(100) NOT NULL,
+        description TEXT NOT NULL,
+        contact VARCHAR(100) NOT NULL,
+        budget VARCHAR(50) DEFAULT '',
+        available_time VARCHAR(100) DEFAULT '',
+        remark VARCHAR(255) DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    // 兼容旧订单表字段
     try {
       await pool.execute(`ALTER TABLE orders ADD COLUMN client_type VARCHAR(10) DEFAULT 'Android'`);
-    } catch (e) {
-      // 字段已存在则忽略
-    }
+    } catch (e) {}
     console.log('✅ 数据库表已就绪');
   } catch (err) {
     console.error('❌ 建表失败:', err.message);
@@ -90,7 +101,7 @@ async function initDB() {
 }
 initDB();
 
-// ==================== 注册 ====================
+// ==================== 注册/登录（保持不变） ====================
 app.post('/api/auth/register', async (req, res) => {
   const { username, password, email, phone, referralCode } = req.body;
   if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
@@ -129,7 +140,6 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// ==================== 登录 ====================
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
@@ -178,32 +188,26 @@ function authMiddleware(req, res, next) {
     return res.status(401).json({ error: '令牌无效或已过期' });
   }
 }
-
 function adminMiddleware(req, res, next) {
   authMiddleware(req, res, async () => {
     try {
       const [rows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
       if (rows.length === 0 || rows[0].role !== 'admin') return res.status(403).json({ error: '无管理员权限' });
       next();
-    } catch (err) {
-      res.status(500).json({ error: '服务器错误' });
-    }
+    } catch (err) { res.status(500).json({ error: '服务器错误' }); }
   });
 }
-
 function boosterMiddleware(req, res, next) {
   authMiddleware(req, res, async () => {
     try {
       const [rows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
       if (rows.length === 0 || (rows[0].role !== 'booster' && rows[0].role !== 'admin')) return res.status(403).json({ error: '需要打手或管理员权限' });
       next();
-    } catch (err) {
-      res.status(500).json({ error: '服务器错误' });
-    }
+    } catch (err) { res.status(500).json({ error: '服务器错误' }); }
   });
 }
 
-// ==================== 订单创建（含游戏信息及客户端） ====================
+// ==================== 订单接口（保持不变，已含客户端字段） ====================
 app.post('/api/orders', authMiddleware, async (req, res) => {
   const { project, detail, quantity, player_name, price, urgent, total_price, remark, game_uid, game_account, game_password, client_type } = req.body;
   if (!project || !detail || !quantity || !player_name || !price || !total_price) {
@@ -222,41 +226,28 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('创建订单失败:', err);
     res.status(500).json({ error: '服务器内部错误' });
-  } finally {
-    if (connection) connection.release();
-  }
+  } finally { if (connection) connection.release(); }
 });
 
-// ==================== 用户接口 ====================
 app.get('/api/user/profile', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT id, username, email, phone, balance, reputation, referral_code, created_at FROM users WHERE id = ?', [req.userId]);
     if (rows.length === 0) return res.status(404).json({ error: '用户不存在' });
     res.json(rows[0]);
-  } catch (err) {
-    console.error('获取用户信息失败:', err);
-    res.status(500).json({ error: '服务器错误' });
-  }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
 app.get('/api/user/orders', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT order_no, project, detail, quantity, player_name, total_price, status, 
-              remark, payment_status, payment_screenshot, created_at, client_type
-       FROM orders WHERE user_id = ? ORDER BY created_at DESC`,
+      `SELECT order_no, project, detail, quantity, player_name, total_price, status, remark, payment_status, payment_screenshot, created_at, client_type FROM orders WHERE user_id = ? ORDER BY created_at DESC`,
       [req.userId]
     );
     res.json(rows);
-  } catch (err) {
-    console.error('获取订单失败:', err);
-    res.status(500).json({ error: '服务器错误' });
-  }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-// ==================== 支付上传 ====================
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
 app.post('/api/orders/:orderNo/payment', authMiddleware, async (req, res) => {
   const { orderNo } = req.params;
   const { screenshot } = req.body;
@@ -268,163 +259,96 @@ app.post('/api/orders/:orderNo/payment', authMiddleware, async (req, res) => {
   try {
     const base64Data = screenshot.replace(/^data:image\/\w+;base64,/, "");
     fs.writeFileSync(filepath, base64Data, 'base64');
-    await pool.execute(
-      'UPDATE orders SET payment_screenshot = ?, payment_status = ? WHERE order_no = ? AND user_id = ?',
-      [filename, 'pending', orderNo, req.userId]
-    );
-    res.json({ success: true, message: '支付凭证已上传，等待管理员确认' });
-  } catch (err) {
-    console.error('上传截图失败:', err);
-    res.status(500).json({ error: '服务器错误' });
-  }
+    await pool.execute('UPDATE orders SET payment_screenshot = ?, payment_status = ? WHERE order_no = ? AND user_id = ?', [filename, 'pending', orderNo, req.userId]);
+    res.json({ success: true, message: '支付凭证已上传' });
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-// ==================== 管理端接口 ====================
+// ==================== 管理端订单（保持不变） ====================
 app.get('/api/admin/orders', adminMiddleware, async (req, res) => {
   try {
-    const [rows] = await pool.execute(
-      `SELECT o.*, u.username FROM orders o JOIN users u ON o.user_id = u.id ORDER BY o.created_at DESC`
-    );
+    const [rows] = await pool.execute(`SELECT o.*, u.username FROM orders o JOIN users u ON o.user_id = u.id ORDER BY o.created_at DESC`);
     res.json(rows);
-  } catch (err) {
-    console.error('获取订单失败:', err);
-    res.status(500).json({ error: '服务器错误' });
-  }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
-
 app.put('/api/admin/orders/:orderNo', adminMiddleware, async (req, res) => {
   const { status } = req.body;
   const { orderNo } = req.params;
   if (!['pending', 'playing', 'done'].includes(status)) return res.status(400).json({ error: '无效的状态值' });
   try {
-    // 如果要改为 done，必须确保支付状态为 paid
     if (status === 'done') {
       const [orderRows] = await pool.execute('SELECT payment_status FROM orders WHERE order_no = ?', [orderNo]);
       if (orderRows.length === 0) return res.status(404).json({ error: '订单不存在' });
-      if (orderRows[0].payment_status !== 'paid') {
-        return res.status(400).json({ error: '请先确认收款后才能标记为已完成' });
-      }
+      if (orderRows[0].payment_status !== 'paid') return res.status(400).json({ error: '请先确认收款后才能标记为已完成' });
     }
     const [result] = await pool.execute('UPDATE orders SET status = ? WHERE order_no = ?', [status, orderNo]);
     if (result.affectedRows === 0) return res.status(404).json({ error: '订单不存在' });
     res.json({ success: true });
-  } catch (err) {
-    console.error('更新订单失败:', err);
-    res.status(500).json({ error: '服务器错误' });
-  }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
-
 app.delete('/api/admin/orders/:orderNo', adminMiddleware, async (req, res) => {
   const { orderNo } = req.params;
   try {
     const [result] = await pool.execute('DELETE FROM orders WHERE order_no = ?', [orderNo]);
     if (result.affectedRows === 0) return res.status(404).json({ error: '订单不存在' });
     res.json({ success: true, message: '订单已删除' });
-  } catch (err) {
-    console.error('删除订单失败:', err);
-    res.status(500).json({ error: '服务器错误' });
-  }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
-
 app.put('/api/admin/orders/:orderNo/confirm-payment', adminMiddleware, async (req, res) => {
   const { orderNo } = req.params;
   try {
-    const [result] = await pool.execute(
-      'UPDATE orders SET payment_status = ?, status = ? WHERE order_no = ?',
-      ['paid', 'playing', orderNo]
-    );
+    const [result] = await pool.execute('UPDATE orders SET payment_status = ?, status = ? WHERE order_no = ?', ['paid', 'playing', orderNo]);
     if (result.affectedRows === 0) return res.status(404).json({ error: '订单不存在' });
     res.json({ success: true, message: '已确认支付' });
-  } catch (err) {
-    console.error('确认支付失败:', err);
-    res.status(500).json({ error: '服务器错误' });
-  }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
-
-// 管理员放入接单大厅
 app.put('/api/admin/orders/:orderNo/hall', adminMiddleware, async (req, res) => {
   const { orderNo } = req.params;
   try {
-    const [result] = await pool.execute(
-      'UPDATE orders SET hall_status = ? WHERE order_no = ?',
-      ['open', orderNo]
-    );
+    const [result] = await pool.execute('UPDATE orders SET hall_status = ? WHERE order_no = ?', ['open', orderNo]);
     if (result.affectedRows === 0) return res.status(404).json({ error: '订单不存在' });
     res.json({ success: true, message: '已放入接单大厅' });
-  } catch (err) {
-    console.error('放入大厅失败:', err);
-    res.status(500).json({ error: '服务器错误' });
-  }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
-
-// ==================== 用户角色管理（管理员专用） ====================
 app.get('/api/admin/users', adminMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT id, username, role FROM users ORDER BY id');
     res.json(rows);
-  } catch (err) {
-    console.error('获取用户列表失败:', err);
-    res.status(500).json({ error: '服务器错误' });
-  }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
-
 app.put('/api/admin/users/:userId/role', adminMiddleware, async (req, res) => {
   const { userId } = req.params;
   const { role } = req.body;
-  if (!['user', 'booster', 'admin'].includes(role)) {
-    return res.status(400).json({ error: '无效的角色值，可选：user, booster, admin' });
-  }
+  if (!['user', 'booster', 'admin'].includes(role)) return res.status(400).json({ error: '无效的角色值' });
   try {
     const [result] = await pool.execute('UPDATE users SET role = ? WHERE id = ?', [role, userId]);
     if (result.affectedRows === 0) return res.status(404).json({ error: '用户不存在' });
-    res.json({ success: true, message: `用户角色已更新为 ${role}` });
-  } catch (err) {
-    console.error('更新角色失败:', err);
-    res.status(500).json({ error: '服务器错误' });
-  }
+    res.json({ success: true, message: `角色已更新为 ${role}` });
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-// ==================== 订单详情接口 ====================
+// ==================== 订单详情 ====================
 app.get('/api/orders/:orderNo/detail', authMiddleware, async (req, res) => {
   const { orderNo } = req.params;
   try {
-    const [rows] = await pool.execute(
-      `SELECT o.*, u.username AS customer_name FROM orders o JOIN users u ON o.user_id = u.id WHERE o.order_no = ?`,
-      [orderNo]
-    );
+    const [rows] = await pool.execute(`SELECT o.*, u.username AS customer_name FROM orders o JOIN users u ON o.user_id = u.id WHERE o.order_no = ?`, [orderNo]);
     if (rows.length === 0) return res.status(404).json({ error: '订单不存在' });
     const order = rows[0];
     const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
     const role = userRows[0]?.role;
-    if (role !== 'admin' && req.userId !== order.user_id && req.userId !== order.booster_id) {
-      return res.status(403).json({ error: '无权查看该订单详情' });
-    }
-    if (role !== 'admin' && req.userId !== order.user_id) {
-      order.game_password = '******';
-    }
+    if (role !== 'admin' && req.userId !== order.user_id && req.userId !== order.booster_id) return res.status(403).json({ error: '无权查看' });
+    if (role !== 'admin' && req.userId !== order.user_id) order.game_password = '******';
     res.json(order);
-  } catch (err) {
-    console.error('获取订单详情失败:', err);
-    res.status(500).json({ error: '服务器错误' });
-  }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
 // ==================== 打手接口 ====================
 app.get('/api/booster/hall', boosterMiddleware, async (req, res) => {
   try {
-    const [rows] = await pool.execute(
-      `SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, client_type, created_at,
-       (total_price * 0.75) AS earnings
-       FROM orders WHERE hall_status = 'open' AND booster_id IS NULL AND status = 'pending'
-       ORDER BY created_at DESC`
-    );
+    const [rows] = await pool.execute(`SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, client_type, created_at, (total_price * 0.75) AS earnings FROM orders WHERE hall_status = 'open' AND booster_id IS NULL AND status = 'pending' ORDER BY created_at DESC`);
     res.json(rows);
-  } catch (err) {
-    console.error('大厅获取失败:', err);
-    res.status(500).json({ error: '服务器错误' });
-  }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
-
 app.post('/api/booster/take/:orderNo', boosterMiddleware, async (req, res) => {
   const { orderNo } = req.params;
   const boosterId = req.userId;
@@ -432,44 +356,20 @@ app.post('/api/booster/take/:orderNo', boosterMiddleware, async (req, res) => {
   try {
     connection = await pool.getConnection();
     await connection.beginTransaction();
-    const [rows] = await connection.execute(
-      'SELECT * FROM orders WHERE order_no = ? AND hall_status = ? AND booster_id IS NULL',
-      [orderNo, 'open']
-    );
-    if (rows.length === 0) {
-      await connection.rollback();
-      return res.status(400).json({ error: '订单不可接' });
-    }
-    await connection.execute(
-      'UPDATE orders SET booster_id = ?, hall_status = ?, status = ? WHERE order_no = ?',
-      [boosterId, 'taken', 'playing', orderNo]
-    );
+    const [rows] = await connection.execute('SELECT * FROM orders WHERE order_no = ? AND hall_status = ? AND booster_id IS NULL', [orderNo, 'open']);
+    if (rows.length === 0) { await connection.rollback(); return res.status(400).json({ error: '订单不可接' }); }
+    await connection.execute('UPDATE orders SET booster_id = ?, hall_status = ?, status = ? WHERE order_no = ?', [boosterId, 'taken', 'playing', orderNo]);
     await connection.commit();
     res.json({ success: true, message: '接单成功' });
-  } catch (err) {
-    if (connection) await connection.rollback();
-    console.error('接单失败:', err);
-    res.status(500).json({ error: '服务器错误' });
-  } finally {
-    if (connection) connection.release();
-  }
+  } catch (err) { if (connection) await connection.rollback(); res.status(500).json({ error: '服务器错误' }); }
+  finally { if (connection) connection.release(); }
 });
-
 app.get('/api/booster/my-orders', boosterMiddleware, async (req, res) => {
   try {
-    const [rows] = await pool.execute(
-      `SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, client_type, created_at,
-       (total_price * 0.75) AS earnings
-       FROM orders WHERE booster_id = ? ORDER BY created_at DESC`,
-      [req.userId]
-    );
+    const [rows] = await pool.execute(`SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, client_type, created_at, (total_price * 0.75) AS earnings FROM orders WHERE booster_id = ? ORDER BY created_at DESC`, [req.userId]);
     res.json(rows);
-  } catch (err) {
-    console.error('我的订单获取失败:', err);
-    res.status(500).json({ error: '服务器错误' });
-  }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
-
 app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) => {
   const { orderNo } = req.params;
   const boosterId = req.userId;
@@ -477,40 +377,54 @@ app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) =
   try {
     connection = await pool.getConnection();
     await connection.beginTransaction();
-    const [rows] = await connection.execute(
-      'SELECT * FROM orders WHERE order_no = ? AND booster_id = ? AND status = ?',
-      [orderNo, boosterId, 'playing']
-    );
-    if (rows.length === 0) {
-      await connection.rollback();
-      return res.status(400).json({ error: '订单无法完成' });
-    }
+    const [rows] = await connection.execute('SELECT * FROM orders WHERE order_no = ? AND booster_id = ? AND status = ?', [orderNo, boosterId, 'playing']);
+    if (rows.length === 0) { await connection.rollback(); return res.status(400).json({ error: '订单无法完成' }); }
     const order = rows[0];
-    // 检查支付状态
-    if (order.payment_status !== 'paid') {
-      await connection.rollback();
-      return res.status(400).json({ error: '该订单尚未确认支付，无法完成' });
-    }
+    if (order.payment_status !== 'paid') { await connection.rollback(); return res.status(400).json({ error: '该订单尚未确认支付，无法完成' }); }
     const earnings = order.total_price * 0.75;
     await connection.execute('UPDATE orders SET status = ? WHERE order_no = ?', ['done', orderNo]);
     await connection.execute('UPDATE users SET earnings = earnings + ? WHERE id = ?', [earnings, boosterId]);
     await connection.commit();
     res.json({ success: true, message: '订单已完成', earnings });
-  } catch (err) {
-    if (connection) await connection.rollback();
-    console.error('完成订单失败:', err);
-    res.status(500).json({ error: '服务器错误' });
-  } finally {
-    if (connection) connection.release();
-  }
+  } catch (err) { if (connection) await connection.rollback(); res.status(500).json({ error: '服务器错误' }); }
+  finally { if (connection) connection.release(); }
 });
-
 app.get('/api/booster/earnings', boosterMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT earnings FROM users WHERE id = ?', [req.userId]);
     res.json({ earnings: rows[0]?.earnings || 0 });
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+// ==================== 定制化需求接口 ====================
+// 用户提交定制需求
+app.post('/api/custom-request', authMiddleware, async (req, res) => {
+  const { client_type, request_type, description, contact, budget, available_time, remark } = req.body;
+  if (!client_type || !request_type || !description || !contact) {
+    return res.status(400).json({ error: '客户端、需求类型、描述和联系方式为必填' });
+  }
+  try {
+    const [result] = await pool.execute(
+      `INSERT INTO custom_requests (user_id, client_type, request_type, description, contact, budget, available_time, remark)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.userId, client_type, request_type, description, contact, budget || '', available_time || '', remark || '']
+    );
+    res.status(201).json({ success: true, message: '定制需求已提交' });
   } catch (err) {
-    console.error('收益获取失败:', err);
+    console.error('提交定制需求失败:', err);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+// 管理员查看定制需求列表
+app.get('/api/admin/custom-requests', adminMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT cr.*, u.username FROM custom_requests cr JOIN users u ON cr.user_id = u.id ORDER BY cr.created_at DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('获取定制需求失败:', err);
     res.status(500).json({ error: '服务器错误' });
   }
 });
