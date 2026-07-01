@@ -749,3 +749,28 @@ body {
     white-space: pre-wrap;
     word-break: break-word;
 }
+
+/* 联赛管理 */
+.league-admin-menu { display: flex; gap: 10px; margin-bottom: 16px; }
+.league-admin-btn {
+    padding: 6px 16px; border-radius: 20px; border: 1px solid var(--border);
+    background: transparent; color: var(--text-secondary); font-weight: 600; cursor: pointer;
+    transition: all var(--transition);
+}
+.league-admin-btn.active { border-color: var(--accent); background: rgba(240,160,80,0.1); color: var(--accent); }
+
+/* 联赛面板 */
+.league-panel { margin-top: 16px; }
+
+/* 联赛板块切换 */
+.league-tabs { display: flex; gap: 10px; margin-bottom: 16px; }
+.league-tab {
+    padding: 6px 20px; border-radius: 20px; border: 1px solid var(--border);
+    background: transparent; color: var(--text-secondary); font-weight: 600; cursor: pointer;
+}
+.league-tab.active { border-color: var(--accent); background: rgba(240,160,80,0.1); color: var(--accent); }
+
+/* 积分榜表格 */
+#leagueStandingsContainer table { width: 100%; border-collapse: collapse; min-width: 800px; }
+#leagueStandingsContainer th, #leagueStandingsContainer td { padding: 8px; border: 1px solid var(--border); text-align: center; }
+#leagueStandingsContainer th { background: rgba(240,160,80,0.1); color: var(--accent); }
