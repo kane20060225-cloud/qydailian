@@ -611,11 +611,24 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
         document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         const target = tab.dataset.admintab;
-        document.getElementById('adminOrdersSection').style.display = target === 'orders' ? 'block' : 'none';
-        document.getElementById('adminCustomSection').style.display = target === 'custom' ? 'block' : 'none';
-        document.getElementById('adminBoostersSection').style.display = target === 'boosters' ? 'block' : 'none';
-        if (target === 'custom') loadAdminCustomRequests();
-        else if (target === 'boosters') loadAdminBoosters();
+        // 隐藏所有面板
+        document.getElementById('adminOrdersSection').style.display = 'none';
+        document.getElementById('adminCustomSection').style.display = 'none';
+        document.getElementById('adminBoostersSection').style.display = 'none';
+        document.getElementById('adminRolesSection').style.display = 'none';
+        // 显示目标面板
+        if (target === 'orders') {
+            document.getElementById('adminOrdersSection').style.display = 'block';
+        } else if (target === 'custom') {
+            document.getElementById('adminCustomSection').style.display = 'block';
+            loadAdminCustomRequests();
+        } else if (target === 'boosters') {
+            document.getElementById('adminBoostersSection').style.display = 'block';
+            loadAdminBoosters();
+        } else if (target === 'roles') {
+            document.getElementById('adminRolesSection').style.display = 'block';
+            loadUserList(); // 加载用户列表
+        }
     });
 });
 

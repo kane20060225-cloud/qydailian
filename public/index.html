@@ -355,39 +355,41 @@
         </div>
     </div>
 
-    <!-- 管理面板弹窗（含订单/定制需求/打手管理标签） -->
-    <div class="modal-overlay" id="adminModal" style="display: none;">
-        <div class="modal-card admin-modal">
-            <div class="modal-header">
-                <h3>🛠️ 管理面板</h3>
-                <button class="modal-close" id="closeAdminBtn">&times;</button>
+<!-- 管理面板弹窗（含订单/定制需求/打手管理/角色管理标签） -->
+<div class="modal-overlay" id="adminModal" style="display: none;">
+    <div class="modal-card admin-modal">
+        <div class="modal-header">
+            <h3>🛠️ 管理面板</h3>
+            <button class="modal-close" id="closeAdminBtn">&times;</button>
+        </div>
+        <div class="admin-content">
+            <div class="admin-tabs" style="display:flex; gap:10px; margin-bottom:15px;">
+                <button class="admin-tab active" data-admintab="orders">📋 订单管理</button>
+                <button class="admin-tab" data-admintab="custom">✏️ 定制需求</button>
+                <button class="admin-tab" data-admintab="boosters">👥 打手管理</button>
+                <button class="admin-tab" data-admintab="roles">👑 角色管理</button>
             </div>
-            <div class="admin-content">
-                <div class="admin-tabs" style="display:flex; gap:10px; margin-bottom:15px;">
-                    <button class="admin-tab active" data-admintab="orders">📋 订单管理</button>
-                    <button class="admin-tab" data-admintab="custom">✏️ 定制需求</button>
-                    <button class="admin-tab" data-admintab="boosters">👥 打手管理</button>
+            <div id="adminOrdersSection">
+                <div class="admin-filter">
+                    <label>筛选状态：</label>
+                    <select id="statusFilter">
+                        <option value="">全部</option>
+                        <option value="pending">待接单</option>
+                        <option value="playing">代练中</option>
+                        <option value="done">已完成</option>
+                    </select>
+                    <button id="refreshOrdersBtn">刷新</button>
                 </div>
-                <div id="adminOrdersSection">
-                    <div class="admin-filter">
-                        <label>筛选状态：</label>
-                        <select id="statusFilter">
-                            <option value="">全部</option>
-                            <option value="pending">待接单</option>
-                            <option value="playing">代练中</option>
-                            <option value="done">已完成</option>
-                        </select>
-                        <button id="refreshOrdersBtn">刷新</button>
-                    </div>
-                    <div id="adminOrderList" class="admin-order-list">加载中...</div>
-                </div>
-                <div id="adminCustomSection" style="display:none;">
-                    <div id="adminCustomList">加载中...</div>
-                </div>
-                <div id="adminBoostersSection" style="display:none;">
-                    <div id="adminBoostersList">加载中...</div>
-                </div>
-                <div class="admin-role-section" style="margin-top:30px; border-top:1px solid var(--border); padding-top:20px;">
+                <div id="adminOrderList" class="admin-order-list">加载中...</div>
+            </div>
+            <div id="adminCustomSection" style="display:none;">
+                <div id="adminCustomList">加载中...</div>
+            </div>
+            <div id="adminBoostersSection" style="display:none;">
+                <div id="adminBoostersList">加载中...</div>
+            </div>
+            <div id="adminRolesSection" style="display:none;">
+                <div class="admin-role-section">
                     <h4 style="margin-bottom:12px;">👥 修改用户角色</h4>
                     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                         <select id="userSelect" style="flex:1; min-width:150px;">
@@ -405,6 +407,7 @@
             </div>
         </div>
     </div>
+</div>
 
     <!-- 支付凭证上传弹窗 -->
     <div class="modal-overlay" id="paymentModal" style="display: none;">
