@@ -11,8 +11,8 @@ function showToast(msg) {
 const API_BASE = '/api';
 
 const projectDetails = {
-    silver: { name:'银币', a:{desc:'有紫狗牌有高级银币',price:8.8}, b:{desc:'无紫狗牌有高级银币/百万',price:12.8}, c:{desc:'无紫狗牌无高级银币/百万',price:14.8} },
-    exp: { name:'单车经验', a:{desc:'有紫狗牌有高级经验',price:3.8}, b:{desc:'无紫狗牌有高级经验/百万',price:5.8}, c:{desc:'无紫狗牌无高级经验/百万',price:6.8} },
+    silver: { name:'银币', a:{desc:'有紫狗牌有高级银币/百万',price:8.8}, b:{desc:'无紫狗牌有高级银币/百万',price:12.8}, c:{desc:'无紫狗牌无高级银币/百万',price:14.8} },
+    exp: { name:'单车经验', a:{desc:'有紫狗牌有高级经验/万',price:3.8}, b:{desc:'无紫狗牌有高级经验/万',price:5.8}, c:{desc:'无紫狗牌无高级经验/万',price:6.8} },
     winrate: { name:'胜率', a:{desc:'70%胜率/10场',price:19.8}, b:{desc:'75%胜率/10场',price:24.8}, c:{desc:'80%胜率/10场',price:34.8} },
     average: { name:'场均', a:{desc:'3000场均/10场',price:19.8}, b:{desc:'3300场均/10场',price:28.8}, c:{desc:'3500场均/10场',price:37.8} },
     mmedal: { name:'M章', a:{desc:'1个M章',price:29.8}, b:{desc:'3个M章',price:57.8}, c:{desc:'5个M章',price:138.8} },
@@ -20,23 +20,18 @@ const projectDetails = {
     rating: { name:'评级', a:{desc:'3千到4千/百分',price:11.8}, b:{desc:'4千到5千/百分',price:14.8}, c:{desc:'5千到6千/百分',price:29.8} }
 };
 
+const identityWeights = { gold: 4, silver: 3, standard: 2, budget: 1 };
 const playerData = [
-    { key:'jia', name:'情谊', title:'金牌打手', rate:1.2 },
-    { key:'yi', name:'大飞', title:'金牌打手', rate:1.2 },
-    { key:'bing', name:'Hansza', title:'银牌打手', rate:1.1 },
-    { key:'ding', name:'梅花糕', title:'银牌打手', rate:1.1 },
-    { key:'wu', name:'日日', title:'银牌打手', rate:1.1 },
-    { key:'ji', name:'子夜', title:'男娘打手', rate:1.2 },
-    { key:'geng', name:'灵月', title:'银牌打手', rate:1.1 },
-    { key:'xin', name:'土豆', title:'铜牌打手', rate:1.0 },
-    { key:'ren', name:'谷', title:'铜牌打手', rate:1.0 },
-    { key:'gui', name:'小黑子', title:'特惠打手', rate:0.9 }
+    { key: 'gold',     name: '金牌打手', rate: 1.2, identity: 'gold' },
+    { key: 'silver',   name: '银牌打手', rate: 1.1, identity: 'silver' },
+    { key: 'standard', name: '标准打手', rate: 1.0, identity: 'standard' },
+    { key: 'budget',   name: '特惠打手', rate: 0.9, identity: 'budget' }
 ];
 
 const chestsConfig = [
-    { id: 1, name: '美国集装箱箱',   price: 198,  image: 'images/chests/chest_1.png', desc: '美国主题集装箱，开出强力美国战车。' },
-    { id: 2, name: '苏联集装箱',     price: 198,  image: 'images/chests/chest_2.png', desc: '苏联主题集装箱，开出强力苏联战车。' },
-    { id: 3, name: '顶尖捕食者集装箱', price: 498, image: 'images/chests/chest_3.png', desc: 'X级专属集装箱，高概率出X级车。' },
+    { id: 1, name: '美国集装箱箱',   price: 198,  image: 'images/chests/chest_1.png', desc: '经典战斗资源补给，开出强力道具。' },
+    { id: 2, name: '苏联集装箱',     price: 198,  image: 'images/chests/chest_2.png', desc: '火焰主题，内含稀有坦克碎片。' },
+    { id: 3, name: '顶尖捕食者集装箱', price: 498, image: 'images/chests/chest_3.png', desc: '夜战专属，高概率出全局经验。' },
     { id: 4, name: '超赞集装箱',      price: 288, image: 'images/chests/chest_4.png', desc: '雷电系列，有机会获得高级坦克。' },
     { id: 5, name: '我全都要集装箱',   price: 98,  image: 'images/chests/chest_5.png', desc: '冰雪奇缘，内含稀有银币加成。' },
     { id: 6, name: '超大集装箱',      price: 198, image: 'images/chests/chest_6.png', desc: '经典怀旧，出金币概率较高。' },
@@ -62,31 +57,22 @@ const rarePool = [
     { name: '黑豹 88',         weight: 2 },
     { name: 'M60',             weight: 2 },
     { name: 'Strv 81',         weight: 1 },
-    { name: '菲利斯',           weight: 1 }
+    { name: '菲利斯',           weight: 10 }
 ];
 const rareTotalWeight = rarePool.reduce((s, i) => s + i.weight, 0);
 
 const tankList = [
-    "T-54", "鼠式", "IS-7", "AMX 50B", "M48 Patton",
-    "E-100", "T110E5", "FV215b", "T-62A", "Leopard 1",
-    "Bat.-Chat. 25t", "STB-1", "Object 140", "60TP", "Kranvagn",
-    "Progetto M40/65", "TVP T50/51", "AMX 30B", "WZ-132-1", "T-100 LT",
-    "Sheridan", "Rhm. Pzw.", "Grille 15", "FV4005", "Strv K",
-    "Foch 155", "斯柯达T27", "T95E6", "Super Conqueror ", "TRV",
-    "Obj. 263", "FV215b 183", "穆拉特工程", "Type 5 Heavy", "T110E3",
-    "Jagdpanzer E 100", "T110E4", "BadgerFV217", "Object 268", "WZ-113G FT",
-    "T57 Heavy", "埃里希概念车", "VK 72.01(K)", "ChieftainMK6", "752工程",
-    "Carro 45T", "Rinoceronte", "Vz.55", "Minotauro", "Ho-Ri III",
-    "GSOR", "Lion", "BZ-75", "M-VI-Y", "菲利斯",
-    "AC阿特拉斯", "野牛C45", "CS-63", "Object 430U", "K-91",
-    "T-22 medium", "E 50 M", "Panzer 58", "121B", "122 TM",
-    "56TP", "斯柯达T56", "埃米尔1951", "AMX 30原", "T77",
-    "JPanther II", "Object268/4", "德古拉", "Smasher", "Rammer",
-    "T-34-85 Rudy", "WZ-113", "WZ-121", "Type 71", "NC70B",
-    "BZT-70", "260工程", "114SP2", "ISU-130", "T-34-3",
-    "T-44-100", "XM66F", "M6A2E1", "T34", "AMX CDC",
-    "FCM 50 t", "Strv 81", "WZ-111 5A", "116F3", "KPZ70",
-    "SU-130PM", "TS-5", "WZ-120-1G FT", "IS-6", "Object 252U"
+    "T-54", "鼠式", "IS-7", "AMX 50B", "M48 Patton", "E-100", "T110E5", "FV215b", "T-62A", "Leopard 1",
+    "Bat.-Chat. 25t", "STB-1", "Object 140", "60TP", "Kranvagn", "Progetto M40/65", "TVP T50/51", "AMX 30B",
+    "WZ-132-1", "T-100 LT", "Sheridan", "Rhm. Pzw.", "Grille 15", "FV4005", "Strv K", "Foch 155", "斯柯达T27",
+    "T95E6", "Super Conqueror ", "TRV", "Obj. 263", "FV215b 183", "穆拉特工程", "Type 5 Heavy", "T110E3",
+    "Jagdpanzer E 100", "T110E4", "BadgerFV217", "Object 268", "WZ-113G FT", "T57 Heavy", "埃里希概念车",
+    "VK 72.01(K)", "ChieftainMK6", "752工程", "Carro 45T", "Rinoceronte", "Vz.55", "Minotauro", "Ho-Ri III",
+    "GSOR", "Lion", "BZ-75", "M-VI-Y", "菲利斯", "AC阿特拉斯", "野牛C45", "CS-63", "Object 430U", "K-91",
+    "T-22 medium", "E 50 M", "Panzer 58", "121B", "122 TM", "56TP", "斯柯达T56", "埃米尔1951", "AMX 30原", "T77",
+    "JPanther II", "Object268/4", "德古拉", "Smasher", "Rammer", "T-34-85 Rudy", "WZ-113", "WZ-121", "Type 71",
+    "NC70B", "BZT-70", "260工程", "114SP2", "ISU-130", "T-34-3", "T-44-100", "XM66F", "M6A2E1", "T34", "AMX CDC",
+    "FCM 50 t", "Strv 81", "WZ-111 5A", "116F3", "KPZ70", "SU-130PM", "TS-5", "WZ-120-1G FT", "IS-6", "Object 252U"
 ];
 while (tankList.length < 100) tankList.push("随机坦克" + (tankList.length + 1));
 
@@ -99,7 +85,7 @@ const leagueData = [
     { id: 6, title: '🎉 联赛竞猜活动上线', time: '2026-06-10', summary: '参与竞猜赢取专属头像和金币奖励。', content: '为增加赛事互动...' }
 ];
 
-// ==================== DOM元素引用 ====================
+// ==================== DOM 元素引用 ====================
 const mainMenu = document.getElementById('mainMenu');
 const sections = {
     boost: document.getElementById('sectionBoost'),
@@ -109,7 +95,6 @@ const sections = {
     league: document.getElementById('sectionLeague')
 };
 
-// 代练相关
 const projectRadios = document.querySelectorAll('input[name="project"]');
 const detailRadios = document.querySelectorAll('input[name="detail"]');
 const detailDescA = document.getElementById('detailDescA');
@@ -130,14 +115,12 @@ const totalPriceDisplay = document.getElementById('totalPriceDisplay');
 const copyBtn = document.getElementById('copyBtn');
 const copyFeedback = document.getElementById('copyFeedback');
 
-// 计算器
 const calcTypeRadios = document.querySelectorAll('input[name="calcType"]');
 const calcUnit = document.getElementById('calcLabelUnit');
 const calcTargetL = document.getElementById('calcTargetLabel');
 const calcExpL = document.getElementById('calcExpectedLabel');
 const calcResult = document.getElementById('calcResult');
 
-// 用户相关
 const openRegisterBtn = document.getElementById('openRegisterBtn');
 const openLoginBtn = document.getElementById('openLoginBtn');
 const registerModal = document.getElementById('registerModal');
@@ -145,25 +128,25 @@ const closeRegisterBtn = document.getElementById('closeRegisterBtn');
 const registerForm = document.getElementById('registerForm');
 const regError = document.getElementById('regError');
 const toLoginLink = document.getElementById('toLoginLink');
+
 const loginModal = document.getElementById('loginModal');
 const closeLoginBtn = document.getElementById('closeLoginBtn');
 const loginForm = document.getElementById('loginForm');
 const loginError = document.getElementById('loginError');
 const toRegisterLink = document.getElementById('toRegisterLink');
+
 const userMenu = document.getElementById('userMenu');
 const userMenuBtn = document.getElementById('userMenuBtn');
 const userDropdown = document.getElementById('userDropdown');
 const displayUsername = document.getElementById('displayUsername');
 const logoutBtn = document.getElementById('logoutBtn');
 
-// 定制需求
 const customRequestCard = document.getElementById('customRequestCard');
 const customRequestModal = document.getElementById('customRequestModal');
 const closeCustomRequestBtn = document.getElementById('closeCustomRequestBtn');
 const customRequestForm = document.getElementById('customRequestForm');
 const customRequestError = document.getElementById('customRequestError');
 
-// 联赛管理
 const leagueAdminBtn = document.getElementById('leagueAdminBtn');
 const leagueAdminModal = document.getElementById('leagueAdminModal');
 const closeLeagueAdminBtn = document.getElementById('closeLeagueAdminBtn');
@@ -197,7 +180,7 @@ document.querySelectorAll('.back-btn').forEach(btn => {
     });
 });
 
-// ==================== 打手列表生成 ====================
+// ==================== 打手卡片生成 ====================
 function generatePlayers() {
     const grid = document.getElementById('playerGrid');
     if (!grid) return;
@@ -206,10 +189,9 @@ function generatePlayers() {
         const label = document.createElement('label');
         label.className = 'player-card';
         label.innerHTML = `
-            <input type="radio" name="player" value="${p.key}" ${idx===3?'checked':''}>
+            <input type="radio" name="player" value="${p.key}" ${idx===2?'checked':''}>
             <div class="player-inner">
                 <span class="player-name">${p.name}</span>
-                <span class="player-title">${p.title}</span>
                 <span class="player-rate">${p.rate}x</span>
             </div>
         `;
@@ -221,7 +203,12 @@ function generatePlayers() {
 function getSelectedProject() { const checked = document.querySelector('input[name="project"]:checked'); return checked ? checked.value : 'silver'; }
 function getSelectedDetail() { const checked = document.querySelector('input[name="detail"]:checked'); return checked ? checked.value : 'a'; }
 function getQty() { let qty = parseInt(qtyInput.value, 10); if (isNaN(qty) || qty < 1) qty = 1; if (qty > 99) qty = 99; return qty; }
-function getPlayerRate() { const checked = document.querySelector('input[name="player"]:checked'); if (!checked) return 1.0; const found = playerData.find(p => p.key === checked.value); return found ? found.rate : 1.0; }
+function getPlayerRate() {
+    const checked = document.querySelector('input[name="player"]:checked');
+    if (!checked) return 1.0;
+    const found = playerData.find(p => p.key === checked.value);
+    return found ? found.rate : 1.0;
+}
 function isUrgent() { return urgentCheck.checked; }
 
 function updateDetailCards() {
@@ -250,7 +237,7 @@ qtyInput.addEventListener('input', () => { qtyInput.value = getQty(); refreshPri
 urgentCheck.addEventListener('change', refreshPrice);
 document.addEventListener('change', e => { if (e.target.name === 'player') refreshPrice(); });
 
-// 复制订单
+// 复制订单（兼容旧浏览器）
 copyBtn.addEventListener('click', async () => {
     const p = projectDetails[getSelectedProject()];
     const detailKey = getSelectedDetail();
@@ -381,12 +368,13 @@ loginForm.addEventListener('submit', async (e) => {
         const data = await res.json();
         if (res.ok && data.success) {
             localStorage.setItem('token', data.token); localStorage.setItem('username', data.user.username); localStorage.setItem('role', data.user.role);
+            localStorage.setItem('boosterIdentity', data.user.booster_identity || 'standard');
             checkLoginStatus(); loginModal.style.display = 'none'; loginError.textContent = ''; showToast('✅ 登录成功！');
         } else { loginError.textContent = data.error || '登录失败'; }
     } catch (err) { loginError.textContent = '网络错误'; }
 });
 
-// ==================== 个人中心 ====================
+// ==================== 个人中心（显示打手身份和积分） ====================
 const profileBtn = document.getElementById('profileBtn');
 const profileModal = document.getElementById('profileModal');
 const closeProfileBtn = document.getElementById('closeProfileBtn');
@@ -408,6 +396,8 @@ async function loadProfile() {
             <p><span>余额：</span><span>¥${user.balance}</span></p>
             <p><span>信誉分：</span><span>${user.reputation}</span></p>
             <p><span>推荐码：</span><span>${user.referral_code}</span></p>
+            <p><span>打手身份：</span><span>${user.booster_identity || 'standard'}</span></p>
+            <p><span>打手积分：</span><span>${user.booster_points || 0}</span></p>
             <p><span>注册时间：</span><span>${new Date(user.created_at).toLocaleString()}</span></p>
         `;
     } catch (err) { profileInfo.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
@@ -437,14 +427,14 @@ async function loadOrders() {
     } catch (err) { list.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
 
-// ==================== 提交订单（含游戏信息、客户端） ====================
+// ==================== 提交订单（含 player_type） ====================
 const submitOrderBtn = document.getElementById('submitOrderBtn');
 submitOrderBtn.addEventListener('click', async () => {
     const token = localStorage.getItem('token');
     if (!token) { showToast('❌ 请先登录后再提交订单'); return; }
     const project = getSelectedProject(); const detail = getSelectedDetail(); const qty = getQty();
     const playerChecked = document.querySelector('input[name="player"]:checked');
-    const playerInfo = playerData.find(p => p.key === (playerChecked?.value || 'ding')) || { name:'未选', rate:getPlayerRate() };
+    const playerInfo = playerData.find(p => p.key === (playerChecked?.value || 'standard')) || { name:'标准打手', rate:1.0, identity:'standard' };
     const urgent = isUrgent(); const total = calcTotal(); const base = projectDetails[project][detail].price;
     const remark = document.getElementById('remarkInput')?.value.trim() || '';
     const gameUid = document.getElementById('gameUid').value.trim();
@@ -452,10 +442,21 @@ submitOrderBtn.addEventListener('click', async () => {
     const gamePassword = document.getElementById('gamePassword').value.trim();
     const clientTypeEl = document.querySelector('input[name="clientType"]:checked');
     const clientType = clientTypeEl ? clientTypeEl.value : 'Android';
+    const playerType = playerChecked ? playerChecked.value : 'standard';
     const body = {
-        project: projectDetails[project].name, detail: `${detail.toUpperCase()} - ${projectDetails[project][detail].desc}`,
-        quantity: qty, player_name: playerInfo.name, price: base, urgent, total_price: total, remark,
-        game_uid: gameUid || null, game_account: gameAccount || null, game_password: gamePassword || null, client_type: clientType
+        project: projectDetails[project].name,
+        detail: `${detail.toUpperCase()} - ${projectDetails[project][detail].desc}`,
+        quantity: qty,
+        player_name: playerInfo.name,
+        price: base,
+        urgent,
+        total_price: total,
+        remark,
+        game_uid: gameUid || null,
+        game_account: gameAccount || null,
+        game_password: gamePassword || null,
+        client_type: clientType,
+        player_type: playerType
     };
     try {
         const res = await fetch(`${API_BASE}/orders`, { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify(body) });
@@ -465,16 +466,18 @@ submitOrderBtn.addEventListener('click', async () => {
     } catch (err) { showToast('❌ 网络错误'); }
 });
 
-// ==================== 管理面板 ====================
+// ==================== 管理面板（订单/定制需求/打手管理） ====================
 const adminPanelBtn = document.getElementById('adminPanelBtn');
 const adminModal = document.getElementById('adminModal');
 const closeAdminBtn = document.getElementById('closeAdminBtn');
 const statusFilter = document.getElementById('statusFilter');
 const refreshOrdersBtn = document.getElementById('refreshOrdersBtn');
 const adminOrderList = document.getElementById('adminOrderList');
+
 adminPanelBtn.addEventListener('click', () => { adminModal.style.display = 'flex'; loadAdminOrders(); loadUserList(); });
 closeAdminBtn.addEventListener('click', () => adminModal.style.display = 'none');
 adminModal.addEventListener('click', (e) => { if (e.target === adminModal) adminModal.style.display = 'none'; });
+
 async function loadAdminOrders() {
     const token = localStorage.getItem('token'); if (!token) return;
     const status = statusFilter.value;
@@ -486,15 +489,17 @@ async function loadAdminOrders() {
         renderAdminOrders(filtered);
     } catch (err) { adminOrderList.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
+
 function renderAdminOrders(orders) {
     const statusOptions = ['pending', 'playing', 'done'];
     const statusText = { pending: '待接单', playing: '代练中', done: '已完成' };
     const paymentStatusMap = { unpaid: '未支付', pending: '待确认', paid: '已支付' };
     if (orders.length === 0) { adminOrderList.innerHTML = '<p>暂无订单</p>'; return; }
-    let html = '<table><tr><th>订单号</th><th>用户</th><th>项目</th><th>数量</th><th>客户端</th><th>金额</th><th>状态</th><th>支付</th><th>操作</th><th>时间</th></tr>';
+    let html = '<table><tr><th>订单号</th><th>用户</th><th>项目</th><th>数量</th><th>客户端</th><th>要求打手</th><th>金额</th><th>状态</th><th>支付</th><th>操作</th><th>时间</th></tr>';
     orders.forEach(o => {
+        const identityMap = { gold:'金牌', silver:'银牌', standard:'标准', budget:'特惠' };
         html += `<tr>
-            <td>${o.order_no}</td><td>${o.username}</td><td>${o.project} - ${o.detail}</td><td>${o.quantity}</td><td>${o.client_type||'Android'}</td><td>¥${o.total_price}</td>
+            <td>${o.order_no}</td><td>${o.username}</td><td>${o.project} - ${o.detail}</td><td>${o.quantity}</td><td>${o.client_type||'Android'}</td><td>${identityMap[o.required_identity]||'标准'}</td><td>¥${o.total_price}</td>
             <td><span class="order-status status-${o.status}">${statusText[o.status]||o.status}</span></td>
             <td><span class="payment-status payment-${o.payment_status}">${paymentStatusMap[o.payment_status]||'未知'}</span></td>
             <td>
@@ -514,6 +519,7 @@ function renderAdminOrders(orders) {
     html += '</table>';
     adminOrderList.innerHTML = html;
 }
+
 window.updateOrderStatus = async function(selectEl) {
     const orderNo = selectEl.dataset.order; const newStatus = selectEl.value; const token = localStorage.getItem('token');
     try {
@@ -522,6 +528,7 @@ window.updateOrderStatus = async function(selectEl) {
         if (res.ok) showToast('✅ 状态更新成功'); else { showToast('❌ ' + (data.error||'更新失败')); loadAdminOrders(); }
     } catch (err) { showToast('❌ 网络错误'); loadAdminOrders(); }
 };
+
 document.addEventListener('click', async (e) => {
     const token = localStorage.getItem('token'); if (!token) return;
     if (e.target.classList.contains('confirm-payment-btn')) {
@@ -549,11 +556,26 @@ document.addEventListener('click', async (e) => {
             if (res.ok) { showToast('🗑️ 订单已删除'); loadAdminOrders(); } else showToast('❌ ' + (data.error||'删除失败'));
         } catch (err) { showToast('❌ 网络错误'); }
     }
-    if (e.target.classList.contains('detail-btn')) { const orderNo = e.target.dataset.order; showOrderDetail(orderNo); }
-    if (e.target.classList.contains('copy-order-detail-btn')) { const orderNo = e.target.dataset.order; copyOrderDetail(orderNo); }
-    if (e.target.classList.contains('take-order-btn')) { /* 打手接单逻辑在后面 */ }
-    if (e.target.classList.contains('complete-order-btn')) { /* 打手完成逻辑在后面 */ }
+    if (e.target.classList.contains('detail-btn')) { showOrderDetail(e.target.dataset.order); }
+    if (e.target.classList.contains('copy-order-detail-btn')) { copyOrderDetail(e.target.dataset.order); }
+    if (e.target.classList.contains('take-order-btn')) {
+        const orderNo = e.target.dataset.order;
+        try {
+            const res = await fetch(`${API_BASE}/booster/take/${orderNo}`, { method:'POST', headers:{'Authorization':`Bearer ${token}`} });
+            const data = await res.json();
+            if (res.ok) { showToast('✅ 接单成功'); loadHallOrders(); } else showToast('❌ ' + (data.error||'接单失败'));
+        } catch (err) { showToast('❌ 网络错误'); }
+    }
+    if (e.target.classList.contains('complete-order-btn')) {
+        const orderNo = e.target.dataset.order;
+        try {
+            const res = await fetch(`${API_BASE}/booster/complete/${orderNo}`, { method:'POST', headers:{'Authorization':`Bearer ${token}`} });
+            const data = await res.json();
+            if (res.ok) { showToast(`✅ 订单已完成，收益 ¥${data.earnings}`); loadMyBoosterOrders(); } else showToast('❌ ' + (data.error||'操作失败'));
+        } catch (err) { showToast('❌ 网络错误'); }
+    }
 });
+
 statusFilter.addEventListener('change', loadAdminOrders);
 refreshOrdersBtn.addEventListener('click', loadAdminOrders);
 
@@ -591,9 +613,12 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
         const target = tab.dataset.admintab;
         document.getElementById('adminOrdersSection').style.display = target === 'orders' ? 'block' : 'none';
         document.getElementById('adminCustomSection').style.display = target === 'custom' ? 'block' : 'none';
+        document.getElementById('adminBoostersSection').style.display = target === 'boosters' ? 'block' : 'none';
         if (target === 'custom') loadAdminCustomRequests();
+        else if (target === 'boosters') loadAdminBoosters();
     });
 });
+
 async function loadAdminCustomRequests() {
     const token = localStorage.getItem('token'); const list = document.getElementById('adminCustomList');
     try {
@@ -609,6 +634,52 @@ async function loadAdminCustomRequests() {
     } catch (err) { list.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
 
+// 打手管理
+async function loadAdminBoosters() {
+    const token = localStorage.getItem('token');
+    const list = document.getElementById('adminBoostersList');
+    try {
+        const res = await fetch(`${API_BASE}/admin/boosters`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const boosters = await res.json();
+        if (!boosters.length) { list.innerHTML = '<p>暂无打手</p>'; return; }
+        let html = '<table><tr><th>用户名</th><th>身份组</th><th>积分</th><th>操作</th></tr>';
+        boosters.forEach(b => {
+            html += `<tr>
+                <td>${b.username}</td>
+                <td>${b.booster_identity}</td>
+                <td>${b.booster_points}</td>
+                <td>
+                    <select class="booster-identity-select" data-userid="${b.id}">
+                        <option value="gold" ${b.booster_identity==='gold'?'selected':''}>金牌</option>
+                        <option value="silver" ${b.booster_identity==='silver'?'selected':''}>银牌</option>
+                        <option value="standard" ${b.booster_identity==='standard'?'selected':''}>标准</option>
+                        <option value="budget" ${b.booster_identity==='budget'?'selected':''}>特惠</option>
+                    </select>
+                    <button onclick="updateBoosterIdentity(${b.id})">更新</button>
+                </td>
+            </tr>`;
+        });
+        html += '</table>';
+        list.innerHTML = html;
+    } catch (err) { list.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+}
+window.updateBoosterIdentity = async function(userId) {
+    const select = document.querySelector(`.booster-identity-select[data-userid="${userId}"]`);
+    if (!select) return;
+    const identity = select.value;
+    const token = localStorage.getItem('token');
+    try {
+        const res = await fetch(`${API_BASE}/admin/boosters/${userId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ booster_identity: identity })
+        });
+        const data = await res.json();
+        if (res.ok) showToast('✅ 身份已更新');
+        else showToast('❌ ' + (data.error||'更新失败'));
+    } catch (err) { showToast('❌ 网络错误'); }
+};
+
 // 订单详情与复制
 async function showOrderDetail(orderNo) {
     const token = localStorage.getItem('token');
@@ -616,12 +687,14 @@ async function showOrderDetail(orderNo) {
         const res = await fetch(`${API_BASE}/orders/${orderNo}/detail`, { headers:{'Authorization':`Bearer ${token}`} });
         if (!res.ok) throw new Error('无权或加载失败');
         const order = await res.json();
+        const identityMap = { gold:'金牌', silver:'银牌', standard:'标准', budget:'特惠' };
         const html = `
             <p><strong>订单号：</strong>${order.order_no}</p>
             <p><strong>用户：</strong>${order.customer_name || order.user_id}</p>
             <p><strong>项目：</strong>${order.project} - ${order.detail}</p>
             <p><strong>数量：</strong>${order.quantity}</p>
             <p><strong>客户端：</strong>${order.client_type || 'Android'}</p>
+            <p><strong>要求打手：</strong>${identityMap[order.required_identity] || '标准'}</p>
             <p><strong>是否加急：</strong>${order.urgent ? '是' : '否'}</p>
             <p><strong>总价：</strong>¥${order.total_price}</p>
             <p><strong>备注：</strong>${order.remark || '无'}</p>
@@ -641,7 +714,8 @@ async function copyOrderDetail(orderNo) {
         const res = await fetch(`${API_BASE}/orders/${orderNo}/detail`, { headers:{'Authorization':`Bearer ${token}`} });
         if (!res.ok) throw new Error('获取失败');
         const order = await res.json();
-        const text = `【订单详情】\n订单号：${order.order_no}\n用户：${order.customer_name||order.user_id}\n项目：${order.project} - ${order.detail}\n数量：${order.quantity}\n客户端：${order.client_type||'Android'}\n加急：${order.urgent?'是':'否'}\n总价：¥${order.total_price}\n备注：${order.remark||'无'}\n游戏账号：${order.game_account||'无'}\n游戏密码：${order.game_password||'无'}\n游戏UID：${order.game_uid||'无'}\n状态：${order.status}\n支付状态：${order.payment_status}`;
+        const identityMap = { gold:'金牌', silver:'银牌', standard:'标准', budget:'特惠' };
+        const text = `【订单详情】\n订单号：${order.order_no}\n用户：${order.customer_name||order.user_id}\n项目：${order.project} - ${order.detail}\n数量：${order.quantity}\n客户端：${order.client_type||'Android'}\n要求打手：${identityMap[order.required_identity]||'标准'}\n加急：${order.urgent?'是':'否'}\n总价：¥${order.total_price}\n备注：${order.remark||'无'}\n游戏账号：${order.game_account||'无'}\n游戏密码：${order.game_password||'无'}\n游戏UID：${order.game_uid||'无'}\n状态：${order.status}\n支付状态：${order.payment_status}`;
         if (navigator.clipboard) await navigator.clipboard.writeText(text);
         else {
             const textarea = document.createElement('textarea'); textarea.value = text; document.body.appendChild(textarea);
@@ -698,7 +772,7 @@ submitPaymentBtn.addEventListener('click', async () => {
     } catch (err) { paymentError.textContent = '网络错误'; }
 });
 
-// ==================== 打手面板 ====================
+// ==================== 打手面板（大厅身份过滤） ====================
 const boosterPanelBtn = document.getElementById('boosterPanelBtn');
 const boosterModal = document.getElementById('boosterModal');
 const closeBoosterBtn = document.getElementById('closeBoosterBtn');
@@ -718,14 +792,23 @@ document.querySelectorAll('.booster-tab').forEach(tab => {
     });
 });
 async function loadHallOrders() {
-    const token = localStorage.getItem('token'); const list = document.getElementById('hallOrderList');
+    const token = localStorage.getItem('token');
+    const list = document.getElementById('hallOrderList');
     try {
+        const profileRes = await fetch(`${API_BASE}/user/profile`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const profile = await profileRes.json();
+        const myIdentity = profile.booster_identity || 'standard';
+        const myWeight = identityWeights[myIdentity] || 0;
+
         const res = await fetch(`${API_BASE}/booster/hall`, { headers:{'Authorization':`Bearer ${token}`} });
         const orders = await res.json();
-        if (!orders.length) { list.innerHTML = '<p>暂无待接订单</p>'; return; }
-        let html = '<table><tr><th>订单号</th><th>项目</th><th>数量</th><th>客户端</th><th>预估收益</th><th>操作</th></tr>';
-        orders.forEach(o => {
-            html += `<tr><td>${o.order_no}</td><td>${o.project} - ${o.detail}</td><td>${o.quantity}</td><td>${o.client_type||'未知'}</td><td>¥${Number(o.earnings).toFixed(2)}</td><td><button class="take-order-btn" data-order="${o.order_no}">接单</button></td></tr>`;
+        const filtered = orders.filter(o => (identityWeights[o.required_identity]||0) <= myWeight);
+
+        if (!filtered.length) { list.innerHTML = '<p>暂无可接订单</p>'; return; }
+        let html = '<table><tr><th>订单号</th><th>项目</th><th>数量</th><th>客户端</th><th>要求</th><th>预估收益</th><th>操作</th></tr>';
+        const identityMap = { gold:'金牌', silver:'银牌', standard:'标准', budget:'特惠' };
+        filtered.forEach(o => {
+            html += `<tr><td>${o.order_no}</td><td>${o.project} - ${o.detail}</td><td>${o.quantity}</td><td>${o.client_type||'未知'}</td><td>${identityMap[o.required_identity]||'标准'}</td><td>¥${Number(o.earnings).toFixed(2)}</td><td><button class="take-order-btn" data-order="${o.order_no}">接单</button></td></tr>`;
         });
         html += '</table>'; list.innerHTML = html;
     } catch (err) { list.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
@@ -752,26 +835,6 @@ async function loadEarnings() {
         display.innerHTML = `<p>累计收益：<strong>¥${data.earnings}</strong></p>`;
     } catch (err) { display.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
-// 接单与完成事件委托补充
-document.addEventListener('click', async (e) => {
-    const token = localStorage.getItem('token'); if (!token) return;
-    if (e.target.classList.contains('take-order-btn')) {
-        const orderNo = e.target.dataset.order;
-        try {
-            const res = await fetch(`${API_BASE}/booster/take/${orderNo}`, { method:'POST', headers:{'Authorization':`Bearer ${token}`} });
-            const data = await res.json();
-            if (res.ok) { showToast('✅ 接单成功'); loadHallOrders(); } else showToast('❌ ' + (data.error||'接单失败'));
-        } catch (err) { showToast('❌ 网络错误'); }
-    }
-    if (e.target.classList.contains('complete-order-btn')) {
-        const orderNo = e.target.dataset.order;
-        try {
-            const res = await fetch(`${API_BASE}/booster/complete/${orderNo}`, { method:'POST', headers:{'Authorization':`Bearer ${token}`} });
-            const data = await res.json();
-            if (res.ok) { showToast(`✅ 订单已完成，收益 ¥${data.earnings}`); loadMyBoosterOrders(); } else showToast('❌ ' + (data.error||'操作失败'));
-        } catch (err) { showToast('❌ 网络错误'); }
-    }
-});
 
 // ==================== 开箱模拟器 ====================
 let currentChestId = null;
@@ -832,7 +895,7 @@ function initChestSimulator() { updateTicketDisplay(); renderChests(); }
 function initToolSubMenu() {
     const tabs = document.querySelectorAll('.tool-tab');
     const panels = { calculator: document.getElementById('toolCalculator'), chestsim: document.getElementById('toolChestSim'), randomtank: document.getElementById('toolRandomTank') };
-    tabs.forEach(tab => { tab.addEventListener('click', () => { tabs.forEach(t => t.classList.remove('active')); tab.classList.add('active'); const tool = tab.dataset.tool; Object.values(panels).forEach(p => p.style.display = 'none'); if (panels[tool]) panels[tool].style.display = 'block'; }); });
+    tabs.forEach(tab => { tab.addEventListener('click', () => { tabs.forEach(t => t.classList.remove('active')); tab.classList.add('active'); const tool = tab.dataset.tab; Object.values(panels).forEach(p => p.style.display = 'none'); if (panels[tool]) panels[tool].style.display = 'block'; }); });
 }
 
 // ==================== 转盘 ====================
@@ -897,7 +960,7 @@ customRequestForm.addEventListener('submit', async (e) => {
     } catch (err) { customRequestError.textContent = '网络错误'; }
 });
 
-// ==================== 联赛相关（新闻、积分榜） ====================
+// ==================== 联赛相关 ====================
 function renderLeagueCards() {
     const grid = document.getElementById('leagueNewsGrid'); if (!grid) return;
     grid.innerHTML = leagueData.map(item => `
@@ -982,7 +1045,6 @@ document.querySelectorAll('.league-admin-btn').forEach(btn => {
 
 let selectedSeasonId = null;
 
-// ==================== 联赛配置 ====================
 async function loadLeagueConfig() {
     const panel = document.getElementById('leagueConfigPanel');
     panel.innerHTML = '加载中...';
@@ -997,10 +1059,7 @@ async function loadLeagueConfig() {
         html += '</ul><hr><h4>新建赛季</h4><input type="text" id="seasonName" placeholder="赛季名称"><button onclick="saveLeagueSeason()">创建</button>';
         html += '<div id="rulesSection" style="margin-top:16px;"></div>';
         panel.innerHTML = html;
-        if (seasons.length > 0) {
-            selectedSeasonId = seasons[0].id;
-            loadRules(selectedSeasonId);
-        }
+        if (seasons.length > 0) { selectedSeasonId = seasons[0].id; loadRules(selectedSeasonId); }
     } catch (err) { panel.innerHTML = '加载失败'; }
 }
 
@@ -1083,7 +1142,7 @@ window.saveLeagueSeason = async function() {
     } catch (err) { showToast('❌ 网络错误'); }
 };
 
-// ==================== 队伍表管理 ====================
+// 队伍表
 async function loadLeagueTeams() {
     const panel = document.getElementById('leagueTeamsPanel');
     panel.innerHTML = '加载中...';
@@ -1114,14 +1173,10 @@ window.addTeam = async function() {
     if (!name) return showToast('❌ 请输入队伍名');
     const token = localStorage.getItem('token');
     try {
-        const res = await fetch(`${API_BASE}/admin/teams`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ name })
-        });
+        const res = await fetch(`${API_BASE}/admin/teams`, { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify({ name }) });
         const data = await res.json();
         if (res.ok) { showToast('✅ 队伍已添加'); loadLeagueTeams(); }
-        else showToast('❌ ' + (data.error || '添加失败'));
+        else showToast('❌ ' + (data.error||'添加失败'));
     } catch (err) { showToast('❌ 网络错误'); }
 };
 
@@ -1130,14 +1185,10 @@ window.editTeam = async function(id, oldName) {
     if (!newName || newName === oldName) return;
     const token = localStorage.getItem('token');
     try {
-        const res = await fetch(`${API_BASE}/admin/teams`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ id, name: newName })
-        });
+        const res = await fetch(`${API_BASE}/admin/teams`, { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify({ id, name: newName }) });
         const data = await res.json();
         if (res.ok) { showToast('✅ 队伍已更新'); loadLeagueTeams(); }
-        else showToast('❌ ' + (data.error || '更新失败'));
+        else showToast('❌ ' + (data.error||'更新失败'));
     } catch (err) { showToast('❌ 网络错误'); }
 };
 
@@ -1145,14 +1196,14 @@ window.deleteTeam = async function(id) {
     if (!confirm('确定删除该队伍吗？')) return;
     const token = localStorage.getItem('token');
     try {
-        const res = await fetch(`${API_BASE}/admin/teams/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        const res = await fetch(`${API_BASE}/admin/teams/${id}`, { method:'DELETE', headers:{'Authorization':`Bearer ${token}`} });
         const data = await res.json();
         if (res.ok) { showToast('🗑️ 队伍已删除'); loadLeagueTeams(); }
-        else showToast('❌ ' + (data.error || '删除失败'));
+        else showToast('❌ ' + (data.error||'删除失败'));
     } catch (err) { showToast('❌ 网络错误'); }
 };
 
-// ==================== 成绩表管理 ====================
+// 成绩表
 async function loadLeagueScoresPanel() {
     const panel = document.getElementById('leagueScoresPanel');
     panel.innerHTML = '加载中...';
@@ -1161,11 +1212,9 @@ async function loadLeagueScoresPanel() {
         const seasonsRes = await fetch(`${API_BASE}/admin/leagues`, { headers: { 'Authorization': `Bearer ${token}` } });
         const seasons = await seasonsRes.json();
         if (!seasons.length) { panel.innerHTML = '<p>请先创建赛季</p>'; return; }
-
         const teamsRes = await fetch(`${API_BASE}/admin/teams`, { headers: { 'Authorization': `Bearer ${token}` } });
         const teams = await teamsRes.json();
         if (!teams.length) { panel.innerHTML = '<p>请先添加队伍</p>'; return; }
-
         let html = '<h4>录入成绩</h4>';
         html += '<label>赛季：</label><select id="scoreSeason">';
         seasons.forEach(s => html += `<option value="${s.id}">${s.name} (R${s.current_round}D${s.current_day})</option>`);
@@ -1189,16 +1238,13 @@ window.loadScoreForm = async function() {
     const token = localStorage.getItem('token');
     const formDiv = document.getElementById('scoreForm');
     formDiv.innerHTML = '加载队伍...';
-
     try {
         const scoresRes = await fetch(`${API_BASE}/admin/leagues/${seasonId}/scores/${round}/${day}`, { headers: { 'Authorization': `Bearer ${token}` } });
         const existingScores = await scoresRes.json();
         const scoreMap = {};
         existingScores.forEach(s => scoreMap[s.team_id] = s.rank_position);
-
         const teamsRes = await fetch(`${API_BASE}/admin/teams`, { headers: { 'Authorization': `Bearer ${token}` } });
         const teams = await teamsRes.json();
-
         let html = '<table><tr><th>队伍</th><th>名次 (1-4)</th></tr>';
         teams.forEach(t => {
             const currentRank = scoreMap[t.id] || '';
@@ -1230,7 +1276,7 @@ window.submitScores = async function(seasonId, round, day) {
         });
         const data = await res.json();
         if (res.ok) { showToast('✅ 成绩已提交'); }
-        else showToast('❌ ' + (data.error || '提交失败'));
+        else showToast('❌ ' + (data.error||'提交失败'));
     } catch (err) { showToast('❌ 网络错误'); }
 };
 

@@ -24,7 +24,7 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  decimalNumbers: true         
+  decimalNumbers: true        // 防止DECIMAL返回字符串
 });
 
 async function initDB() {
@@ -47,6 +47,8 @@ async function initDB() {
         game_account VARCHAR(50),
         game_password VARCHAR(50),
         earnings DECIMAL(10,2) DEFAULT 0.00,
+        booster_identity ENUM('gold','silver','standard','budget') DEFAULT 'standard',
+        booster_points INT DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (referrer_id) REFERENCES users(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -75,6 +77,7 @@ async function initDB() {
         game_account VARCHAR(50),
         game_password VARCHAR(50),
         client_type VARCHAR(10) DEFAULT 'Android',
+        required_identity ENUM('gold','silver','standard','budget') DEFAULT 'standard',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -108,7 +111,6 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
-
     await pool.execute(`
       CREATE TABLE IF NOT EXISTS league_points_rules (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -120,14 +122,12 @@ async function initDB() {
         FOREIGN KEY (season_id) REFERENCES league_seasons(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
-
     await pool.execute(`
       CREATE TABLE IF NOT EXISTS league_teams (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(50) NOT NULL UNIQUE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
-
     await pool.execute(`
       CREATE TABLE IF NOT EXISTS league_scores (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -144,6 +144,9 @@ async function initDB() {
     `);
 
     // 兼容旧字段
+    try { await pool.execute(`ALTER TABLE users ADD COLUMN booster_identity ENUM('gold','silver','standard','budget') DEFAULT 'standard'`); } catch(e) {}
+    try { await pool.execute(`ALTER TABLE users ADD COLUMN booster_points INT DEFAULT 0`); } catch(e) {}
+    try { await pool.execute(`ALTER TABLE orders ADD COLUMN required_identity ENUM('gold','silver','standard','budget') DEFAULT 'standard'`); } catch(e) {}
     try { await pool.execute(`ALTER TABLE orders ADD COLUMN client_type VARCHAR(10) DEFAULT 'Android'`); } catch(e) {}
 
     console.log('✅ 数据库表已就绪');
@@ -172,17 +175,14 @@ app.post('/api/auth/register', async (req, res) => {
     }
     const password_hash = await bcrypt.hash(password, 12);
     const [result] = await connection.execute(
-      `INSERT INTO users (username, password_hash, email, phone, referrer_id, referral_code) VALUES (?,?,?,?,?,?)`,
-      [username, password_hash, email||null, phone||null, referrer_id, referral_code]
+      `INSERT INTO users (username, password_hash, email, phone, referrer_id, referral_code, booster_identity) VALUES (?, ?, ?, ?, ?, ?, 'standard')`,
+      [username, password_hash, email || null, phone || null, referrer_id, referral_code]
     );
     if (referrer_id) await connection.execute('UPDATE users SET balance = balance + 5.00 WHERE id = ?', [referrer_id]);
     await connection.commit();
     res.status(201).json({ success: true, message: '注册成功', user: { id: result.insertId, username, referral_code } });
-  } catch(err) {
-    if (connection) await connection.rollback();
-    console.error('注册错误:', err);
-    res.status(500).json({ error: '服务器内部错误' });
-  } finally { if (connection) connection.release(); }
+  } catch(err) { if (connection) await connection.rollback(); console.error('注册错误:', err); res.status(500).json({ error: '服务器内部错误' }); }
+  finally { if (connection) connection.release(); }
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -200,13 +200,13 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({ success: true, token, user: {
       id: user.id, username: user.username, email: user.email, phone: user.phone,
       balance: user.balance, reputation: user.reputation, referral_code: user.referral_code,
-      role: user.role, created_at: user.created_at
+      role: user.role, created_at: user.created_at, booster_identity: user.booster_identity, booster_points: user.booster_points
     }});
   } catch(err) { console.error('登录错误:', err); res.status(500).json({ error: '服务器内部错误' }); }
   finally { if (connection) connection.release(); }
 });
 
-// ==================== 中间件 ====================
+// ==================== JWT 中间件 ====================
 function authMiddleware(req, res, next) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) return res.status(401).json({ error: '未提供认证令牌' });
@@ -224,30 +224,51 @@ function adminMiddleware(req, res, next) {
 function boosterMiddleware(req, res, next) {
   authMiddleware(req, res, async () => {
     const [rows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
-    if (rows.length === 0 || (rows[0].role !== 'booster' && rows[0].role !== 'admin'))
-      return res.status(403).json({ error: '需要打手或管理员权限' });
+    if (rows.length === 0 || (rows[0].role !== 'booster' && rows[0].role !== 'admin')) return res.status(403).json({ error: '需要打手或管理员权限' });
     next();
   });
 }
 
-// ==================== 订单接口（包含客户端、游戏信息） ====================
+// ==================== 打手身份权限工具 ====================
+const identityWeights = { gold: 4, silver: 3, standard: 2, budget: 1 };
+function canTakeOrder(boosterIdentity, requiredIdentity) {
+  return (identityWeights[boosterIdentity] || 0) >= (identityWeights[requiredIdentity] || 0);
+}
+
+// 自动升级检查
+async function checkBoosterUpgrade(conn, userId) {
+  const [rows] = await conn.execute('SELECT booster_identity, booster_points FROM users WHERE id = ?', [userId]);
+  if (!rows.length) return;
+  const { booster_identity, booster_points } = rows[0];
+  let newIdentity = booster_identity;
+  if (booster_points >= 50000 && booster_identity === 'silver') newIdentity = 'gold';
+  else if (booster_points >= 10000 && booster_identity === 'standard') newIdentity = 'silver';
+  else if (booster_points >= 5000 && booster_identity === 'budget') newIdentity = 'standard';
+  if (newIdentity !== booster_identity) {
+    await conn.execute('UPDATE users SET booster_identity = ? WHERE id = ?', [newIdentity, userId]);
+    console.log(`打手 ${userId} 升级为 ${newIdentity}`);
+  }
+}
+
+// ==================== 订单创建（含 required_identity） ====================
 app.post('/api/orders', authMiddleware, async (req, res) => {
-  const { project, detail, quantity, player_name, price, urgent, total_price, remark, game_uid, game_account, game_password, client_type } = req.body;
+  const { project, detail, quantity, player_name, price, urgent, total_price, remark, game_uid, game_account, game_password, client_type, player_type } = req.body;
   if (!project || !detail || !quantity || !player_name || !price || !total_price) return res.status(400).json({ error: '缺少订单必要信息' });
   const order_no = 'WOT' + Date.now() + Math.random().toString(36).substring(2,8).toUpperCase();
   try {
     const [result] = await pool.execute(
-      `INSERT INTO orders (order_no, user_id, project, detail, quantity, player_name, price, urgent, total_price, remark, game_uid, game_account, game_password, client_type, status)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'pending')`,
-      [order_no, req.userId, project, detail, quantity, player_name, price, urgent?1:0, total_price, remark||null, game_uid||null, game_account||null, game_password||null, client_type||'Android']
+      `INSERT INTO orders (order_no, user_id, project, detail, quantity, player_name, price, urgent, total_price, remark, game_uid, game_account, game_password, client_type, required_identity, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      [order_no, req.userId, project, detail, quantity, player_name, price, urgent?1:0, total_price, remark||null, game_uid||null, game_account||null, game_password||null, client_type||'Android', player_type||'standard']
     );
     res.status(201).json({ success: true, order_no, order_id: result.insertId });
-  } catch(err) { res.status(500).json({ error: '服务器内部错误' }); }
+  } catch(err) { console.error('创建订单失败:', err); res.status(500).json({ error: '服务器内部错误' }); }
 });
 
+// ==================== 用户接口（profile 返回身份信息） ====================
 app.get('/api/user/profile', authMiddleware, async (req, res) => {
   try {
-    const [rows] = await pool.execute('SELECT id, username, email, phone, balance, reputation, referral_code, created_at FROM users WHERE id = ?', [req.userId]);
+    const [rows] = await pool.execute('SELECT id, username, email, phone, balance, reputation, referral_code, created_at, booster_identity, booster_points FROM users WHERE id = ?', [req.userId]);
     if (rows.length === 0) return res.status(404).json({ error: '用户不存在' });
     res.json(rows[0]);
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
@@ -256,13 +277,14 @@ app.get('/api/user/profile', authMiddleware, async (req, res) => {
 app.get('/api/user/orders', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT order_no, project, detail, quantity, player_name, total_price, status, remark, payment_status, payment_screenshot, created_at, client_type FROM orders WHERE user_id = ? ORDER BY created_at DESC`,
+      `SELECT order_no, project, detail, quantity, player_name, total_price, status, remark, payment_status, payment_screenshot, created_at, client_type, required_identity FROM orders WHERE user_id = ? ORDER BY created_at DESC`,
       [req.userId]
     );
     res.json(rows);
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
+// ==================== 支付上传 ====================
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.post('/api/orders/:orderNo/payment', authMiddleware, async (req, res) => {
   const { orderNo } = req.params;
@@ -326,8 +348,7 @@ app.get('/api/orders/:orderNo/detail', authMiddleware, async (req, res) => {
     const order = rows[0];
     const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
     const role = userRows[0]?.role;
-    if (role !== 'admin' && req.userId !== order.user_id && req.userId !== order.booster_id)
-      return res.status(403).json({ error: '无权查看该订单详情' });
+    if (role !== 'admin' && req.userId !== order.user_id && req.userId !== order.booster_id) return res.status(403).json({ error: '无权查看' });
     if (role !== 'admin' && req.userId !== order.user_id) order.game_password = '******';
     res.json(order);
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
@@ -342,22 +363,21 @@ app.put('/api/admin/users/:userId/role', adminMiddleware, async (req, res) => {
   const { userId } = req.params;
   const { role } = req.body;
   if (!['user','booster','admin'].includes(role)) return res.status(400).json({ error: '无效的角色值' });
-  try {
-    await pool.execute('UPDATE users SET role = ? WHERE id = ?', [role, userId]);
-    res.json({ success: true, message: `角色已更新为 ${role}` });
-  } catch(err) { res.status(500).json({ error: '服务器错误' }); }
+  try { await pool.execute('UPDATE users SET role = ? WHERE id = ?', [role, userId]); res.json({ success: true, message: `角色已更新为 ${role}` }); }
+  catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
 // ==================== 打手接口 ====================
 app.get('/api/booster/hall', boosterMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, client_type, created_at,
+      `SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, client_type, required_identity, created_at,
        (total_price * 0.75) AS earnings FROM orders WHERE hall_status = 'open' AND booster_id IS NULL AND status = 'pending' ORDER BY created_at DESC`
     );
     res.json(rows);
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
+
 app.post('/api/booster/take/:orderNo', boosterMiddleware, async (req, res) => {
   const { orderNo } = req.params;
   const boosterId = req.userId;
@@ -365,23 +385,31 @@ app.post('/api/booster/take/:orderNo', boosterMiddleware, async (req, res) => {
   try {
     conn = await pool.getConnection();
     await conn.beginTransaction();
-    const [rows] = await conn.execute('SELECT * FROM orders WHERE order_no = ? AND hall_status = ? AND booster_id IS NULL', [orderNo, 'open']);
-    if (rows.length === 0) { await conn.rollback(); return res.status(400).json({ error: '订单不可接' }); }
+    const [orderRows] = await conn.execute('SELECT required_identity FROM orders WHERE order_no = ? AND hall_status = ? AND booster_id IS NULL', [orderNo, 'open']);
+    if (orderRows.length === 0) { await conn.rollback(); return res.status(400).json({ error: '订单不可接' }); }
+    const [boosterRows] = await conn.execute('SELECT booster_identity FROM users WHERE id = ?', [boosterId]);
+    if (!canTakeOrder(boosterRows[0].booster_identity, orderRows[0].required_identity)) {
+      await conn.rollback();
+      return res.status(400).json({ error: '您的身份组不满足该订单要求' });
+    }
     await conn.execute('UPDATE orders SET booster_id = ?, hall_status = ?, status = ? WHERE order_no = ?', [boosterId, 'taken', 'playing', orderNo]);
     await conn.commit();
     res.json({ success: true, message: '接单成功' });
   } catch(err) { if (conn) await conn.rollback(); res.status(500).json({ error: '服务器错误' }); }
   finally { if (conn) conn.release(); }
 });
+
 app.get('/api/booster/my-orders', boosterMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, client_type, created_at,
-       (total_price * 0.75) AS earnings FROM orders WHERE booster_id = ? ORDER BY created_at DESC`, [req.userId]
+      `SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, client_type, required_identity, created_at,
+       (total_price * 0.75) AS earnings FROM orders WHERE booster_id = ? ORDER BY created_at DESC`,
+      [req.userId]
     );
     res.json(rows);
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
+
 app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) => {
   const { orderNo } = req.params;
   const boosterId = req.userId;
@@ -394,13 +422,16 @@ app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) =
     const order = rows[0];
     if (order.payment_status !== 'paid') { await conn.rollback(); return res.status(400).json({ error: '该订单尚未确认支付，无法完成' }); }
     const earnings = order.total_price * 0.75;
+    const pointsEarned = Math.floor(earnings * 100);
     await conn.execute('UPDATE orders SET status = ? WHERE order_no = ?', ['done', orderNo]);
-    await conn.execute('UPDATE users SET earnings = earnings + ? WHERE id = ?', [earnings, boosterId]);
+    await conn.execute('UPDATE users SET earnings = earnings + ?, booster_points = booster_points + ? WHERE id = ?', [earnings, pointsEarned, boosterId]);
+    await checkBoosterUpgrade(conn, boosterId);
     await conn.commit();
     res.json({ success: true, message: '订单已完成', earnings });
   } catch(err) { if (conn) await conn.rollback(); res.status(500).json({ error: '服务器错误' }); }
   finally { if (conn) conn.release(); }
 });
+
 app.get('/api/booster/earnings', boosterMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT earnings FROM users WHERE id = ?', [req.userId]);
@@ -427,8 +458,7 @@ app.get('/api/admin/custom-requests', adminMiddleware, async (req, res) => {
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-// ==================== 联赛管理 ====================
-// 赛季 CRUD
+// ==================== 联赛管理（赛季、规则、队伍、成绩） ====================
 app.get('/api/admin/leagues', adminMiddleware, async (req, res) => {
   try { const [rows] = await pool.execute('SELECT * FROM league_seasons ORDER BY id DESC'); res.json(rows); }
   catch(err) { res.status(500).json({ error: '服务器错误' }); }
@@ -450,8 +480,6 @@ app.delete('/api/admin/leagues/:id', adminMiddleware, async (req, res) => {
   try { await pool.execute('DELETE FROM league_seasons WHERE id=?', [req.params.id]); res.json({ success: true }); }
   catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
-
-// 积分规则
 app.get('/api/admin/leagues/:id/rules', adminMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT * FROM league_points_rules WHERE season_id=? ORDER BY round_num, day_num, rank_position', [req.params.id]);
@@ -477,7 +505,6 @@ app.post('/api/admin/leagues/:id/rules', adminMiddleware, async (req, res) => {
   finally { if (conn) conn.release(); }
 });
 
-// 队伍管理
 app.get('/api/admin/teams', adminMiddleware, async (req, res) => {
   try { const [rows] = await pool.execute('SELECT * FROM league_teams ORDER BY id'); res.json(rows); }
   catch(err) { res.status(500).json({ error: '服务器错误' }); }
@@ -486,11 +513,8 @@ app.post('/api/admin/teams', adminMiddleware, async (req, res) => {
   const { id, name } = req.body;
   if (!name) return res.status(400).json({ error: '队伍名必填' });
   try {
-    if (id) {
-      await pool.execute('UPDATE league_teams SET name=? WHERE id=?', [name, id]);
-    } else {
-      await pool.execute('INSERT INTO league_teams (name) VALUES (?)', [name]);
-    }
+    if (id) await pool.execute('UPDATE league_teams SET name=? WHERE id=?', [name, id]);
+    else await pool.execute('INSERT INTO league_teams (name) VALUES (?)', [name]);
     res.json({ success: true });
   } catch(err) { res.status(500).json({ error: err.code === 'ER_DUP_ENTRY' ? '队伍名重复' : '服务器错误' }); }
 });
@@ -498,8 +522,6 @@ app.delete('/api/admin/teams/:id', adminMiddleware, async (req, res) => {
   try { await pool.execute('DELETE FROM league_teams WHERE id=?', [req.params.id]); res.json({ success: true }); }
   catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
-
-// 成绩录入与获取
 app.get('/api/admin/leagues/:seasonId/scores/:round/:day', adminMiddleware, async (req, res) => {
   const { seasonId, round, day } = req.params;
   try {
@@ -582,6 +604,26 @@ app.get('/api/league/:seasonId/rankings', async (req, res) => {
       t.change = oldPos ? (oldPos - t.rank) : 0;
     });
     res.json({ season: season[0], rankings: rankingArray });
+  } catch(err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+// ==================== 打手管理（管理员） ====================
+app.get('/api/admin/boosters', adminMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, username, booster_identity, booster_points FROM users WHERE role IN (\'booster\',\'admin\') ORDER BY booster_identity DESC'
+    );
+    res.json(rows);
+  } catch(err) { res.status(500).json({ error: '服务器错误' }); }
+});
+app.put('/api/admin/boosters/:userId', adminMiddleware, async (req, res) => {
+  const { booster_identity } = req.body;
+  if (!['gold','silver','standard','budget'].includes(booster_identity)) {
+    return res.status(400).json({ error: '无效身份组' });
+  }
+  try {
+    await pool.execute('UPDATE users SET booster_identity = ? WHERE id = ?', [booster_identity, req.params.userId]);
+    res.json({ success: true, message: '身份已更新' });
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
 

@@ -928,3 +928,59 @@ body {
     background: rgba(240,160,80,0.2);
     box-shadow: 0 0 8px var(--accent-glow);
 }
+
+/* ====== 移动端优化：减少顶部元素占位 ====== */
+@media (max-width: 480px) {
+    .section-top {
+        padding: 10px 14px;            /* 缩小上下左右内边距 */
+        gap: 8px;                     /* 缩小返回按钮与标题间距 */
+    }
+    .back-btn {
+        padding: 4px 10px;            /* 更紧凑的返回按钮 */
+        font-size: 0.75rem;
+        border-radius: 4px;
+        white-space: nowrap;          /* 防止文字换行 */
+    }
+    .back-btn::before {
+        content: "← ";                /* 保留箭头，但可以只显示箭头 */
+    }
+    /* 如果只想显示箭头，可改为：
+    .back-btn { font-size: 0; padding: 4px 8px; }
+    .back-btn::before { content: "←"; font-size: 1.2rem; }
+    */
+    .section-heading {
+        font-size: 1.1rem;            /* 缩小板块标题 */
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 60%;               /* 防止标题过长挤出按钮 */
+    }
+
+    /* 独立工具子菜单：紧凑排列，允许横向滚动 */
+    .tools-submenu {
+        gap: 6px;
+        margin-bottom: 12px;
+        flex-wrap: nowrap;            /* 不换行 */
+        overflow-x: auto;             /* 横向滚动 */
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 4px;          /* 留出滚动条空间 */
+    }
+    .tool-tab {
+        padding: 5px 12px;
+        font-size: 0.8rem;
+        white-space: nowrap;
+        border-radius: 14px;          /* 稍圆润的小标签 */
+    }
+    .tool-tab.active {
+        box-shadow: none;
+    }
+
+    /* 代练下单页面的卡片标题也可以收紧 */
+    .card-header h3 {
+        font-size: 0.95rem;
+    }
+    .card-num {
+        width: 28px; height: 28px;
+        font-size: 0.75rem;
+    }
+}

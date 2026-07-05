@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WOTB情谊综合工具</title>
+    <title>坦克世界闪击战 - 情谊代练服务中心</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
     <header class="top-bar">
         <div class="logo-area">
             <span class="logo-icon">🎯</span>
-            <span class="logo-text">WOTB情谊综合工具</span>
+            <span class="logo-text">WOTB情谊代练</span>
         </div>
         <div class="user-actions" id="userActions">
             <button class="register-btn" id="openRegisterBtn">📝 注册</button>
@@ -96,9 +96,9 @@
             <section class="card">
                 <div class="card-header"><span class="card-num">02</span><h3>选择代练详情</h3><span class="badge-required">必选</span></div>
                 <div class="detail-grid" id="detailGrid">
-                    <label class="detail-card" data-detail="a"><input type="radio" name="detail" value="a" checked><div class="detail-inner"><span class="detail-label">方案 A</span><span class="detail-desc" id="detailDescA">有紫狗牌有高级银币/百万</span><span class="detail-price" id="detailPriceA">¥9</span></div><div class="detail-check"></div></label>
-                    <label class="detail-card" data-detail="b"><input type="radio" name="detail" value="b"><div class="detail-inner"><span class="detail-label">方案 B</span><span class="detail-desc" id="detailDescB">无紫狗牌有高级银币/百万</span><span class="detail-price" id="detailPriceB">¥13</span></div><div class="detail-check"></div></label>
-                    <label class="detail-card" data-detail="c"><input type="radio" name="detail" value="c"><div class="detail-inner"><span class="detail-label">方案 C</span><span class="detail-desc" id="detailDescC">无紫狗牌无高级银币/百万</span><span class="detail-price" id="detailPriceC">¥15</span></div><div class="detail-check"></div></label>
+                    <label class="detail-card" data-detail="a"><input type="radio" name="detail" value="a" checked><div class="detail-inner"><span class="detail-label">方案 A</span><span class="detail-desc" id="detailDescA">有紫狗牌有高级银币</span><span class="detail-price" id="detailPriceA">¥9</span></div><div class="detail-check"></div></label>
+                    <label class="detail-card" data-detail="b"><input type="radio" name="detail" value="b"><div class="detail-inner"><span class="detail-label">方案 B</span><span class="detail-desc" id="detailDescB">无紫狗牌有高级银币</span><span class="detail-price" id="detailPriceB">¥13</span></div><div class="detail-check"></div></label>
+                    <label class="detail-card" data-detail="c"><input type="radio" name="detail" value="c"><div class="detail-inner"><span class="detail-label">方案 C</span><span class="detail-desc" id="detailDescC">无紫狗牌无高级银币</span><span class="detail-price" id="detailPriceC">¥15</span></div><div class="detail-check"></div></label>
                 </div>
             </section>
 
@@ -114,9 +114,9 @@
                 <p class="quantity-hint">请输入1到99之间的数量</p>
             </section>
 
-            <!-- 打手选择 -->
+            <!-- 打手选择（四个类别） -->
             <section class="card">
-                <div class="card-header"><span class="card-num">04</span><h3>选择打手</h3><span class="section-hint">影响价格倍率</span></div>
+                <div class="card-header"><span class="card-num">04</span><h3>选择打手类别</h3><span class="section-hint">影响价格倍率与接单资格</span></div>
                 <div class="player-grid" id="playerGrid"></div>
             </section>
 
@@ -192,7 +192,7 @@
                 <div class="contact-grid">
                     <div class="contact-item"><span class="contact-icon">💚</span><div class="contact-info"><span class="contact-label">微信客服</span><span class="contact-value">WOTB-QYDL-001</span></div><button class="contact-copy-btn" data-copy="WOTB-QYDL-001">📋 复制</button></div>
                     <div class="contact-item"><span class="contact-icon">🐧</span><div class="contact-info"><span class="contact-label">QQ客服</span><span class="contact-value">240043436</span></div><button class="contact-copy-btn" data-copy="240043436">📋 复制</button></div>
-                    <div class="contact-item"><span class="contact-icon">🕐</span><div class="contact-info"><span class="contact-label">工作时间</span><span class="contact-value">每日 11:00 - 01:00</span></div></div>
+                    <div class="contact-item"><span class="contact-icon">🕐</span><div class="contact-info"><span class="contact-label">工作时间</span><span class="contact-value">每日 10:00 - 01:00</span></div></div>
                 </div>
                 <p class="contact-note">💡 下单后请主动联系客服，发送复制的订单信息，客服将尽快为您安排打手。</p>
             </section>
@@ -281,7 +281,7 @@
                     <p>5. 完成后请及时修改密码，保障账号安全。</p>
                     <hr style="border-color: var(--border); margin: 20px 0;">
                     <h3>💳 收款码</h3>
-                    <p style="color: var(--text-secondary); margin-bottom: 16px;">请使用支付宝扫描下方二维码付款</p>
+                    <p style="color: var(--text-secondary); margin-bottom: 16px;">请使用微信或支付宝扫描下方二维码付款</p>
                     <img src="payment-qr.png" alt="收款码" style="max-width: 260px; border-radius: 12px; border: 2px solid var(--border);">
                     <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 8px;">付款后请截图并联系客服确认</p>
                 </div>
@@ -296,20 +296,17 @@
             <h2 class="section-heading">🏆 联赛相关</h2>
         </div>
         <div class="container">
-            <!-- 切换标签：积分榜在前 -->
             <div class="league-tabs">
                 <button class="league-tab active" data-league-view="standings">📊 积分榜</button>
                 <button class="league-tab" data-league-view="news">📰 新闻</button>
             </div>
 
-            <!-- 积分榜视图 -->
             <div id="leagueStandingsView">
                 <div id="leagueStandingsContainer" style="overflow-x:auto;">
                     <p style="color: var(--text-muted);">选择赛季后加载积分榜...</p>
                 </div>
             </div>
 
-            <!-- 新闻视图 -->
             <div id="leagueNewsView" style="display:none;">
                 <div class="league-news-grid" id="leagueNewsGrid"></div>
             </div>
@@ -358,7 +355,7 @@
         </div>
     </div>
 
-    <!-- 管理面板弹窗 -->
+    <!-- 管理面板弹窗（含订单/定制需求/打手管理标签） -->
     <div class="modal-overlay" id="adminModal" style="display: none;">
         <div class="modal-card admin-modal">
             <div class="modal-header">
@@ -369,6 +366,7 @@
                 <div class="admin-tabs" style="display:flex; gap:10px; margin-bottom:15px;">
                     <button class="admin-tab active" data-admintab="orders">📋 订单管理</button>
                     <button class="admin-tab" data-admintab="custom">✏️ 定制需求</button>
+                    <button class="admin-tab" data-admintab="boosters">👥 打手管理</button>
                 </div>
                 <div id="adminOrdersSection">
                     <div class="admin-filter">
@@ -385,6 +383,9 @@
                 </div>
                 <div id="adminCustomSection" style="display:none;">
                     <div id="adminCustomList">加载中...</div>
+                </div>
+                <div id="adminBoostersSection" style="display:none;">
+                    <div id="adminBoostersList">加载中...</div>
                 </div>
                 <div class="admin-role-section" style="margin-top:30px; border-top:1px solid var(--border); padding-top:20px;">
                     <h4 style="margin-bottom:12px;">👥 修改用户角色</h4>
@@ -519,7 +520,7 @@
         </div>
     </div>
 
-    <!-- 联赛详情弹窗（新闻用） -->
+    <!-- 联赛详情弹窗 -->
     <div class="modal-overlay" id="leagueDetailModal" style="display: none;">
         <div class="modal-card" style="max-width: 600px;">
             <div class="modal-header">
