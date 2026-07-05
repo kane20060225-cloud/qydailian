@@ -984,3 +984,64 @@ body {
         font-size: 0.75rem;
     }
 }
+
+
+/* ====== 打手管理面板补充样式 ====== */
+
+/* 打手管理表格（与订单表格风格统一） */
+#adminBoostersList table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+    margin-top: 10px;
+}
+#adminBoostersList th,
+#adminBoostersList td {
+    padding: 10px 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+    color: var(--text);
+}
+#adminBoostersList th {
+    background: rgba(240,160,80,0.1);
+    color: var(--accent);
+    font-weight: 600;
+}
+#adminBoostersList tr:hover td {
+    background: rgba(240,160,80,0.05);
+}
+
+/* 身份组下拉框 */
+.booster-identity-select {
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #111927;
+    color: var(--text);
+    font-size: 0.85rem;
+    cursor: pointer;
+    margin-right: 8px;
+    transition: border-color var(--transition);
+}
+.booster-identity-select:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+/* 更新按钮（沿用通用按钮风格，这里进行微调） */
+#adminBoostersList button {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--accent);
+    background: rgba(240,160,80,0.1);
+    color: var(--accent);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+}
+#adminBoostersList button:hover {
+    background: rgba(240,160,80,0.2);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
