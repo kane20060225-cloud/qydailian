@@ -81,7 +81,7 @@ body {
 
 /* 容器 - 全屏页面扩大宽度 */
 .container {
-    max-width: 1200px;          /* 原本是820px，现在扩大 */
+    max-width: 1200px;
     margin: 0 auto;
     padding: 0 16px 40px;
     display: flex;
@@ -431,11 +431,6 @@ body {
     .contact-item { flex-wrap: wrap; gap: 8px; }
     .contact-copy-btn { width: 100%; text-align: center; }
     .modal-card { padding: 20px 16px; width: 95%; }
-
-    /* 表格在手机端强制可滚动 */
-    .order-table, .admin-order-list table, .booster-tab-content table, #leagueStandingsContainer table {
-        min-width: 100%; display: block; overflow-x: auto;
-    }
 }
 
 /* ========== 以下为所有功能补充样式 ========== */
@@ -673,7 +668,7 @@ input[type="text"], input[type="password"], input[type="email"], input[type="tel
 
 /* 全屏页面特定容器宽度 */
 #sectionProfile .container, #sectionAdmin .container, #sectionBooster .container, #sectionLeagueAdmin .container {
-    max-width: 1200px; /* 和 .container 相同，确保覆盖 */
+    max-width: 1200px;
 }
 
 /* 个人中心信息 */
@@ -698,4 +693,23 @@ input[type="text"], input[type="password"], input[type="email"], input[type="tel
 .admin-filter select, .admin-filter button {
     padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border);
     background: #111927; color: var(--text); font-size: 0.85rem; cursor: pointer;
+}
+
+/* ========== 手机端表格滚动修复 ========== */
+/* 确保所有可能溢出的表格容器都能横向滑动 */
+.order-list,
+.admin-order-list,
+#adminBoostersList,
+.booster-tab-content .order-list,
+#hallOrderList,
+#myBoosterOrderList,
+#leagueStandingsContainer {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+}
+
+/* 转盘及独立工具面板 - 确保不会被意外隐藏 */
+.tool-panel {
+    /* 不设置 display，由 JS 控制 */
 }
