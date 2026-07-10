@@ -25,73 +25,41 @@ body {
 
 /* 顶部栏 */
 .top-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 24px;
-    background: rgba(20, 27, 38, 0.95);
-    border-bottom: 1px solid var(--border);
-    position: sticky;
-    top: 0;
-    z-index: 100;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 24px; background: rgba(20,27,38,0.95);
+    border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100;
     backdrop-filter: blur(8px);
 }
 .logo-area { display: flex; align-items: center; gap: 10px; }
 .logo-icon { font-size: 32px; }
 .logo-text {
-    font-size: 1.2rem;
-    font-weight: 700;
-    letter-spacing: 0.5px;
+    font-size: 1.2rem; font-weight: 700; letter-spacing: 0.5px;
     background: linear-gradient(135deg, #f0c070, #e8993d);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 .register-btn {
-    background: transparent;
-    border: 2px solid var(--accent);
-    color: var(--accent);
-    padding: 8px 20px;
-    border-radius: 20px;
-    font-weight: 600;
-    cursor: pointer;
+    background: transparent; border: 2px solid var(--accent); color: var(--accent);
+    padding: 8px 20px; border-radius: 20px; font-weight: 600; cursor: pointer;
     transition: all var(--transition);
 }
 .register-btn:hover { background: rgba(240,160,80,0.1); box-shadow: 0 0 12px var(--accent-glow); }
 
 /* 主菜单 */
 .main-menu {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: calc(100vh - 80px);
-    padding: 40px 20px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: calc(100vh - 80px); padding: 40px 20px;
     background: radial-gradient(ellipse at 50% 0%, rgba(240,160,80,0.04) 0%, transparent 60%);
 }
 .menu-title { font-size: 1.8rem; margin-bottom: 40px; color: var(--text-secondary); letter-spacing: 0.03em; }
 .menu-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 24px;
-    max-width: 1100px;
-    width: 100%;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px;
+    max-width: 1200px; width: 100%;
 }
 .menu-card {
-    background: var(--card-bg);
-    border: 2px solid var(--border);
-    border-radius: var(--radius);
-    padding: 40px 20px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.25s;
-    user-select: none;
+    background: var(--card-bg); border: 2px solid var(--border); border-radius: var(--radius);
+    padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.25s; user-select: none;
 }
-.menu-card:hover {
-    border-color: var(--accent);
-    transform: translateY(-4px);
-    box-shadow: 0 12px 28px var(--accent-glow);
-}
+.menu-card:hover { border-color: var(--accent); transform: translateY(-4px); box-shadow: 0 12px 28px var(--accent-glow); }
 .menu-icon { font-size: 48px; display: block; margin-bottom: 16px; }
 .menu-card h3 { font-size: 1.3rem; margin-bottom: 8px; letter-spacing: 0.02em; }
 .menu-card p { color: var(--text-muted); font-size: 0.9rem; }
@@ -99,58 +67,47 @@ body {
 /* 内容板块通用 */
 .content-section { padding: 20px 0; }
 .section-top {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    padding: 16px 24px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 20px;
-    background: rgba(20,27,38,0.8);
-    backdrop-filter: blur(4px);
+    display: flex; align-items: center; gap: 20px; padding: 16px 24px;
+    border-bottom: 1px solid var(--border); margin-bottom: 20px;
+    background: rgba(20,27,38,0.8); backdrop-filter: blur(4px);
 }
 .back-btn {
-    background: transparent;
-    border: 1px solid var(--text-secondary);
-    color: var(--text-secondary);
-    padding: 6px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.9rem;
+    background: transparent; border: 1px solid var(--text-secondary); color: var(--text-secondary);
+    padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 0.9rem;
     transition: all var(--transition);
 }
 .back-btn:hover { border-color: var(--accent); color: var(--accent); }
 .section-heading { font-size: 1.4rem; letter-spacing: 0.03em; }
-.container { max-width: 820px; margin: 0 auto; padding: 0 16px 40px; display: flex; flex-direction: column; gap: 20px; }
+
+/* 容器 - 全屏页面扩大宽度 */
+.container {
+    max-width: 1200px;          /* 原本是820px，现在扩大 */
+    margin: 0 auto;
+    padding: 0 16px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
 
 /* 卡片 */
 .card {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 24px;
-    transition: box-shadow var(--transition);
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 24px; transition: box-shadow var(--transition);
 }
 .card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
 .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
 .card-num {
     display: flex; align-items: center; justify-content: center;
     width: 32px; height: 32px; border-radius: 50%;
-    background: rgba(240,160,80,0.15); color: var(--accent);
-    font-weight: 700; font-size: 0.85rem; flex-shrink: 0;
+    background: rgba(240,160,80,0.15); color: var(--accent); font-weight: 700; font-size: 0.85rem; flex-shrink: 0;
 }
 .card-header h3 { font-size: 1.05rem; font-weight: 700; letter-spacing: 0.02em; }
 
 /* 红色必选标签 */
 .badge-required {
-    font-size: 0.7rem;
-    padding: 3px 10px;
-    border-radius: 12px;
-    background: rgba(248,81,73,0.15);
-    color: var(--red);
-    font-weight: 600;
-    letter-spacing: 0.04em;
+    font-size: 0.7rem; padding: 3px 10px; border-radius: 12px;
+    background: rgba(248,81,73,0.15); color: var(--red); font-weight: 600; letter-spacing: 0.04em;
 }
-
 .section-hint { font-size: 0.75rem; color: var(--text-muted); margin-left: auto; }
 
 /* 项目卡片 */
@@ -195,18 +152,11 @@ body {
 .detail-price { font-size: 1.15rem; font-weight: 800; color: #f0c060; font-family: var(--font-mono); }
 
 /* 数量居中 */
-.quantity-wrapper {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
+.quantity-wrapper { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
 .qty-btn {
     width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--border);
     background: #111927; color: var(--text); font-size: 1.4rem; font-weight: 700;
-    cursor: pointer; transition: all var(--transition);
-    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all var(--transition); display: flex; align-items: center; justify-content: center;
 }
 .qty-btn:hover { border-color: var(--accent); background: rgba(240,160,80,0.08); color: var(--accent); }
 .quantity-input {
@@ -238,14 +188,9 @@ body {
 .player-rate { font-size: 0.78rem; font-weight: 700; color: #f0c060; font-family: var(--font-mono); }
 
 /* 加急开关 */
-.urgent-toggle {
-    display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 8px 0; flex-wrap: wrap;
-}
+.urgent-toggle { display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 8px 0; flex-wrap: wrap; }
 .urgent-toggle input { position: absolute; opacity: 0; }
-.toggle-track {
-    width: 50px; height: 28px; border-radius: 14px; background: #2d3748;
-    position: relative; transition: background var(--transition);
-}
+.toggle-track { width: 50px; height: 28px; border-radius: 14px; background: #2d3748; position: relative; transition: background var(--transition); }
 .toggle-thumb {
     position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
     border-radius: 50%; background: #a0aec0; transition: all var(--transition);
@@ -261,10 +206,7 @@ body {
 .urgent-hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
 
 /* 价格展示 */
-.price-box {
-    margin: 20px 0; background: #0f172a; padding: 18px 16px;
-    border-radius: var(--radius-sm); border: 1px solid var(--border);
-}
+.price-box { margin: 20px 0; background: #0f172a; padding: 18px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
 .price-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; }
 .price-label { font-size: 0.85rem; color: var(--text-secondary); }
 .price-value { font-size: 0.9rem; font-weight: 600; color: var(--text); font-family: var(--font-mono); }
@@ -285,8 +227,7 @@ body {
     width: 100%; padding: 14px; margin-top: 16px; border-radius: var(--radius-sm);
     border: 2px solid var(--accent); background: rgba(240,160,80,0.08);
     color: var(--accent); font-weight: 700; cursor: pointer; transition: all var(--transition);
-    display: flex; align-items: center; justify-content: center; gap: 8px; position: relative;
-    overflow: hidden;
+    display: flex; align-items: center; justify-content: center; gap: 8px; position: relative; overflow: hidden;
 }
 .copy-btn:hover { background: rgba(240,160,80,0.16); box-shadow: 0 0 24px var(--accent-glow); transform: translateY(-1px); }
 .copy-feedback {
@@ -300,8 +241,7 @@ body {
 .contact-grid { display: flex; flex-direction: column; gap: 10px; }
 .contact-item {
     display: flex; align-items: center; gap: 12px; padding: 12px 14px;
-    border-radius: var(--radius-sm); background: #0f172a; border: 1px solid var(--border);
-    flex-wrap: wrap;
+    border-radius: var(--radius-sm); background: #0f172a; border: 1px solid var(--border); flex-wrap: wrap;
 }
 .contact-icon { font-size: 1.5rem; }
 .contact-info { flex: 1; min-width: 120px; }
@@ -343,10 +283,7 @@ body {
     font-weight: 700; cursor: pointer; transition: all var(--transition);
 }
 .calc-btn:hover { background: rgba(240,160,80,0.2); box-shadow: 0 0 20px var(--accent-glow); }
-.calc-result {
-    margin-top: 12px; padding: 16px; background: #0f172a;
-    border-radius: var(--radius-sm); border: 1px solid var(--border);
-}
+.calc-result { margin-top: 12px; padding: 16px; background: #0f172a; border-radius: var(--radius-sm); border: 1px solid var(--border); }
 .tool-hint { text-align: center; color: var(--text-muted); font-size: 0.78rem; }
 
 /* 新闻 */
@@ -389,60 +326,39 @@ body {
     color: #fff; font-weight: 700; cursor: pointer; transition: opacity 0.2s;
 }
 .submit-btn:hover { opacity: 0.9; }
-.modal-footer-text {
-    text-align: center; margin-top: 14px; font-size: 0.8rem; color: var(--text-muted);
-}
+.modal-footer-text { text-align: center; margin-top: 14px; font-size: 0.8rem; color: var(--text-muted); }
 .modal-footer-text a { color: var(--accent); text-decoration: none; }
 
 /* 登录按钮 */
 .login-btn {
-    background: transparent;
-    border: 2px solid #58a6ff;
-    color: #58a6ff;
-    padding: 8px 20px;
-    border-radius: 20px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all var(--transition);
-    margin-left: 10px;
+    background: transparent; border: 2px solid #58a6ff; color: #58a6ff;
+    padding: 8px 20px; border-radius: 20px; font-weight: 600; cursor: pointer;
+    transition: all var(--transition); margin-left: 10px;
 }
-.login-btn:hover {
-    background: rgba(88, 166, 255, 0.1);
-    box-shadow: 0 0 12px rgba(88, 166, 255, 0.3);
-}
-
+.login-btn:hover { background: rgba(88,166,255,0.1); box-shadow: 0 0 12px rgba(88,166,255,0.3); }
 .user-actions { display: flex; align-items: center; gap: 10px; }
 
 /* 已登录用户菜单 */
 .user-menu { position: relative; }
 .user-menu-btn {
-    background: rgba(240,160,80,0.1);
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    padding: 8px 18px;
-    border-radius: 20px;
-    font-weight: 600;
-    cursor: pointer;
+    background: rgba(240,160,80,0.1); border: 1px solid var(--accent); color: var(--accent);
+    padding: 8px 18px; border-radius: 20px; font-weight: 600; cursor: pointer;
 }
 .user-dropdown {
-    position: absolute; right: 0; top: 40px;
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-    z-index: 150; min-width: 140px;
+    position: absolute; right: 0; top: 40px; background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 150; min-width: 140px;
 }
 .user-dropdown button {
-    display: block; width: 100%; padding: 10px 16px;
-    background: none; border: none; color: var(--text);
-    cursor: pointer; text-align: left; font-size: 0.9rem;
+    display: block; width: 100%; padding: 10px 16px; background: none; border: none;
+    color: var(--text); cursor: pointer; text-align: left; font-size: 0.9rem;
 }
 .user-dropdown button:hover { background: rgba(240,160,80,0.1); }
 
 /* Toast */
 .toast-message {
     position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-    background: #2d3748; color: white; padding: 10px 24px;
-    border-radius: 20px; font-size: 0.9rem; z-index: 9999;
-    animation: fadeInUp 0.3s ease;
+    background: #2d3748; color: white; padding: 10px 24px; border-radius: 20px;
+    font-size: 0.9rem; z-index: 9999; animation: fadeInUp 0.3s ease;
 }
 @keyframes fadeInUp {
     from { opacity: 0; transform: translate(-50%, 20px); }
@@ -453,8 +369,7 @@ body {
 .remark-input {
     width: 100%; padding: 12px 14px; border-radius: var(--radius-sm);
     border: 2px solid var(--border); background: #111927; color: var(--text);
-    font-family: inherit; font-size: 0.9rem; resize: vertical;
-    transition: border-color var(--transition); line-height: 1.5;
+    font-family: inherit; font-size: 0.9rem; resize: vertical; transition: border-color var(--transition); line-height: 1.5;
 }
 .remark-input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 14px var(--accent-glow); }
 .remark-hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 8px; text-align: right; }
@@ -484,18 +399,13 @@ body {
 .payment-paid { background: rgba(72,187,120,0.2); color: var(--green); }
 
 .upload-payment-btn, .confirm-payment-btn, .delete-order-btn {
-    padding: 6px 12px; border-radius: 4px; font-size: 0.8rem; cursor: pointer; margin: 2px; white-space: nowrap;
-    display: inline-block; transition: all var(--transition);
+    padding: 6px 12px; border-radius: 4px; font-size: 0.8rem; cursor: pointer; margin: 2px;
+    white-space: nowrap; display: inline-block; transition: all var(--transition);
 }
-.upload-payment-btn, .confirm-payment-btn {
-    border: 1px solid var(--accent); background: rgba(240,160,80,0.1); color: var(--accent);
-}
-.delete-order-btn {
-    border: 1px solid var(--red); background: rgba(248,81,73,0.15); color: var(--red);
-}
+.upload-payment-btn, .confirm-payment-btn { border: 1px solid var(--accent); background: rgba(240,160,80,0.1); color: var(--accent); }
+.delete-order-btn { border: 1px solid var(--red); background: rgba(248,81,73,0.15); color: var(--red); }
 .delete-order-btn:hover { background: rgba(248,81,73,0.25); box-shadow: 0 0 8px rgba(248,81,73,0.4); }
 .upload-payment-btn:hover, .confirm-payment-btn:hover { background: rgba(240,160,80,0.2); }
-
 .paste-area { cursor: text; }
 
 /* ========== 移动端适配 ========== */
@@ -521,6 +431,11 @@ body {
     .contact-item { flex-wrap: wrap; gap: 8px; }
     .contact-copy-btn { width: 100%; text-align: center; }
     .modal-card { padding: 20px 16px; width: 95%; }
+
+    /* 表格在手机端强制可滚动 */
+    .order-table, .admin-order-list table, .booster-tab-content table, #leagueStandingsContainer table {
+        min-width: 100%; display: block; overflow-x: auto;
+    }
 }
 
 /* ========== 以下为所有功能补充样式 ========== */
@@ -529,8 +444,7 @@ body {
 .booster-tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
 .booster-tab {
     background: transparent; border: none; color: var(--text-secondary);
-    padding: 8px 20px; font-weight: 600; cursor: pointer; border-radius: 6px;
-    transition: all var(--transition);
+    padding: 8px 20px; font-weight: 600; cursor: pointer; border-radius: 6px; transition: all var(--transition);
 }
 .booster-tab.active { background: rgba(240,160,80,0.1); color: var(--accent); }
 .booster-tab-content { display: none; }
@@ -547,8 +461,7 @@ body {
 #updateRoleBtn {
     padding: 8px 16px; margin: 0; border-radius: var(--radius-sm);
     border: 1px solid var(--accent); background: rgba(240,160,80,0.1);
-    color: var(--accent); font-weight: 600; cursor: pointer; transition: all var(--transition);
-    font-size: 0.9rem;
+    color: var(--accent); font-weight: 600; cursor: pointer; transition: all var(--transition); font-size: 0.9rem;
 }
 #updateRoleBtn:hover { background: rgba(240,160,80,0.25); box-shadow: 0 0 14px var(--accent-glow); }
 #roleUpdateMsg { margin-top: 6px; font-size: 0.85rem; color: var(--green); }
@@ -557,8 +470,7 @@ body {
 .take-order-btn, .complete-order-btn {
     padding: 6px 12px; border-radius: 4px; border: 1px solid var(--accent);
     background: rgba(240,160,80,0.1); color: var(--accent); font-size: 0.8rem;
-    cursor: pointer; margin: 2px; white-space: nowrap; display: inline-block;
-    transition: all var(--transition);
+    cursor: pointer; margin: 2px; white-space: nowrap; display: inline-block; transition: all var(--transition);
 }
 .take-order-btn:hover, .complete-order-btn:hover { background: rgba(240,160,80,0.2); box-shadow: 0 0 8px var(--accent-glow); }
 .complete-order-btn { border-color: var(--green); background: rgba(72,187,120,0.1); color: var(--green); }
@@ -567,8 +479,7 @@ body {
 /* 打手面板表格 */
 .booster-tab-content table { width: 100%; border-collapse: collapse; min-width: 600px; }
 .booster-tab-content th, .booster-tab-content td {
-    padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border);
-    font-size: 0.8rem; white-space: nowrap;
+    padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.8rem; white-space: nowrap;
 }
 .booster-tab-content th { background: rgba(240,160,80,0.1); color: var(--accent); }
 .booster-tab-content .order-list { overflow-x: auto; }
@@ -580,8 +491,7 @@ body {
 .hall-btn {
     padding: 6px 12px; border-radius: 4px; border: 1px solid var(--accent);
     background: rgba(240,160,80,0.1); color: var(--accent); font-size: 0.8rem;
-    cursor: pointer; margin: 2px; white-space: nowrap; display: inline-block;
-    transition: all var(--transition);
+    cursor: pointer; margin: 2px; white-space: nowrap; display: inline-block; transition: all var(--transition);
 }
 .hall-btn:hover { background: rgba(240,160,80,0.2); box-shadow: 0 0 8px var(--accent-glow); }
 
@@ -597,16 +507,15 @@ body {
 /* 开箱模拟器 */
 .checkin-btn, .recharge-btn {
     padding: 8px 18px; border-radius: 20px; font-weight: 600; cursor: pointer;
-    border: 2px solid var(--accent); background: rgba(240,160,80,0.1);
-    color: var(--accent); transition: all var(--transition); font-size: 0.9rem;
+    border: 2px solid var(--accent); background: rgba(240,160,80,0.1); color: var(--accent);
+    transition: all var(--transition); font-size: 0.9rem;
 }
 .checkin-btn:hover, .recharge-btn:hover { background: rgba(240,160,80,0.2); box-shadow: 0 0 12px var(--accent-glow); }
 .chest-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 @media (max-width: 600px) { .chest-grid { grid-template-columns: repeat(2, 1fr); } }
 .chest-item {
     background: #111927; border: 2px solid var(--border); border-radius: var(--radius-sm);
-    padding: 14px 10px; text-align: center; cursor: pointer; transition: all var(--transition);
-    user-select: none;
+    padding: 14px 10px; text-align: center; cursor: pointer; transition: all var(--transition); user-select: none;
 }
 .chest-item:hover { border-color: var(--accent); box-shadow: 0 0 14px var(--accent-glow); transform: translateY(-2px); }
 .chest-item img { width: 100%; height: 120px; object-fit: contain; border-radius: 8px; margin-bottom: 8px; background: #0a0f1a; }
@@ -629,15 +538,9 @@ body {
 
 /* 转盘 */
 #wheelCanvas {
-    display: block;
-    margin: 0 auto;
-    width: 100% !important;
-    height: auto !important;
-    max-width: 400px;
-    aspect-ratio: 1 / 1;
-    object-fit: contain;
-    border-radius: 50%;
-    box-shadow: 0 0 20px var(--accent-glow);
+    display: block; margin: 0 auto; width: 100% !important; height: auto !important;
+    max-width: 400px; aspect-ratio: 1 / 1; object-fit: contain;
+    border-radius: 50%; box-shadow: 0 0 20px var(--accent-glow);
 }
 
 /* 客户端选择 */
@@ -655,9 +558,8 @@ body {
 /* 订单详情/复制按钮 */
 .detail-btn, .copy-order-detail-btn {
     padding: 4px 10px; font-size: 0.75rem; margin: 2px; border-radius: 4px;
-    border: 1px solid var(--accent); background: rgba(240,160,80,0.1);
-    color: var(--accent); cursor: pointer; transition: all var(--transition);
-    white-space: nowrap; display: inline-block; font-weight: 500;
+    border: 1px solid var(--accent); background: rgba(240,160,80,0.1); color: var(--accent);
+    cursor: pointer; transition: all var(--transition); white-space: nowrap; display: inline-block; font-weight: 500;
 }
 .detail-btn:hover, .copy-order-detail-btn:hover { background: rgba(240,160,80,0.2); box-shadow: 0 0 8px var(--accent-glow); }
 
@@ -675,17 +577,14 @@ body {
 
 /* 定制化需求卡片 */
 .custom-project-card { cursor: pointer; }
-.custom-project-card .card-inner {
-    border-style: dashed; border-color: var(--accent); opacity: 0.9;
-}
+.custom-project-card .card-inner { border-style: dashed; border-color: var(--accent); opacity: 0.9; }
 .custom-project-card .card-inner:hover { opacity: 1; background: rgba(240,160,80,0.08); }
 
 /* 联赛相关板块 */
 .league-tabs { display: flex; gap: 10px; margin-bottom: 16px; }
 .league-tab {
     padding: 6px 20px; border-radius: 20px; border: 1px solid var(--border);
-    background: transparent; color: var(--text-secondary); font-weight: 600;
-    cursor: pointer; transition: all var(--transition);
+    background: transparent; color: var(--text-secondary); font-weight: 600; cursor: pointer; transition: all var(--transition);
 }
 .league-tab.active { border-color: var(--accent); background: rgba(240,160,80,0.1); color: var(--accent); }
 
@@ -704,8 +603,7 @@ body {
 #leagueStandingsContainer { overflow-x: auto; }
 #leagueStandingsContainer table { width: 100%; border-collapse: collapse; min-width: 800px; margin-top: 10px; }
 #leagueStandingsContainer th, #leagueStandingsContainer td {
-    padding: 8px 6px; border: 1px solid var(--border); text-align: center;
-    font-size: 0.85rem; color: var(--text);
+    padding: 8px 6px; border: 1px solid var(--border); text-align: center; font-size: 0.85rem; color: var(--text);
 }
 #leagueStandingsContainer th { background: rgba(240,160,80,0.15); color: var(--accent); font-weight: 600; }
 #leagueStandingsContainer tr:hover td { background: rgba(240,160,80,0.05); }
@@ -714,8 +612,7 @@ body {
 .league-admin-menu { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .league-admin-btn {
     padding: 8px 20px; border-radius: 20px; border: 1px solid var(--border);
-    background: transparent; color: var(--text-secondary); font-weight: 600;
-    cursor: pointer; transition: all var(--transition);
+    background: transparent; color: var(--text-secondary); font-weight: 600; cursor: pointer; transition: all var(--transition);
 }
 .league-admin-btn.active { border-color: var(--accent); background: rgba(240,160,80,0.1); color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
 .league-admin-btn:hover { border-color: var(--accent); background: rgba(240,160,80,0.08); }
@@ -739,38 +636,29 @@ body {
 /* 联赛面板中的通用按钮 */
 .league-panel button {
     padding: 6px 14px; border-radius: 6px; border: 1px solid var(--accent);
-    background: rgba(240,160,80,0.1); color: var(--accent); font-size: 0.8rem;
-    cursor: pointer; transition: all var(--transition);
+    background: rgba(240,160,80,0.1); color: var(--accent); font-size: 0.8rem; cursor: pointer; transition: all var(--transition);
 }
 .league-panel button:hover { background: rgba(240,160,80,0.2); box-shadow: 0 0 8px var(--accent-glow); }
 
-/* 补全 select 下拉框在所有面板中的样式 */
+/* 统一 select 下拉框 */
 select {
     padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border);
-    background: #111927; color: var(--text); font-size: 0.9rem; cursor: pointer;
-    transition: border-color var(--transition);
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
+    background: #111927; color: var(--text); font-size: 0.9rem; cursor: pointer; transition: border-color var(--transition);
+    -webkit-appearance: none; -moz-appearance: none; appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a0aec0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 10px center;
-    padding-right: 30px;
+    background-repeat: no-repeat; background-position: right 10px center; padding-right: 30px;
 }
 select:focus { border-color: var(--accent); outline: none; }
 
-/* 修复可能出现的白底输入框 */
+/* 修复输入框白底 */
 input[type="text"], input[type="password"], input[type="email"], input[type="tel"], input[type="number"], textarea {
-    background: #111927;
-    color: var(--text);
-    border: 1px solid var(--border);
+    background: #111927; color: var(--text); border: 1px solid var(--border);
 }
 
 /* 打手管理面板表格 */
 #adminBoostersList table { width: 100%; border-collapse: collapse; min-width: 600px; margin-top: 10px; }
 #adminBoostersList th, #adminBoostersList td {
-    padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border);
-    font-size: 0.85rem; color: var(--text);
+    padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.85rem; color: var(--text);
 }
 #adminBoostersList th { background: rgba(240,160,80,0.1); color: var(--accent); }
 .booster-identity-select {
@@ -779,67 +667,35 @@ input[type="text"], input[type="password"], input[type="email"], input[type="tel
 }
 #adminBoostersList button {
     padding: 6px 14px; border-radius: 6px; border: 1px solid var(--accent);
-    background: rgba(240,160,80,0.1); color: var(--accent); font-size: 0.8rem;
-    cursor: pointer; transition: all var(--transition);
+    background: rgba(240,160,80,0.1); color: var(--accent); font-size: 0.8rem; cursor: pointer; transition: all var(--transition);
 }
 #adminBoostersList button:hover { background: rgba(240,160,80,0.2); }
 
-/* 全屏页面通用容器宽度（与 content-section 保持一致） */
+/* 全屏页面特定容器宽度 */
 #sectionProfile .container, #sectionAdmin .container, #sectionBooster .container, #sectionLeagueAdmin .container {
-    max-width: 820px;
+    max-width: 1200px; /* 和 .container 相同，确保覆盖 */
 }
 
 /* 个人中心信息 */
-.profile-info p {
-    display: flex;
-    justify-content: space-between;
-    padding: 6px 0;
-    font-size: 0.9rem;
-    color: var(--text);
-}
-.profile-info span:last-child {
-    color: var(--text-secondary);
-    font-weight: 500;
-}
+.profile-info p { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.9rem; color: var(--text); }
+.profile-info span:last-child { color: var(--text-secondary); font-weight: 500; }
 
-/* 管理面板表格样式补全 */
+/* 管理面板表格样式 */
 .admin-order-list table {
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 1000px;
+    width: 100%; border-collapse: collapse; min-width: 1000px;
 }
 .admin-order-list th, .admin-order-list td {
-    padding: 10px 8px;
-    text-align: left;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.8rem;
-    white-space: nowrap;
+    padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.8rem; white-space: nowrap;
 }
-.admin-order-list th {
-    background: rgba(240,160,80,0.1);
-    color: var(--accent);
-}
+.admin-order-list th { background: rgba(240,160,80,0.1); color: var(--accent); }
 .status-select {
-    padding: 4px;
-    border-radius: 4px;
-    border: 1px solid var(--border);
-    background: #111927;
-    color: var(--text);
-    font-size: 0.75rem;
+    padding: 4px; border-radius: 4px; border: 1px solid var(--border);
+    background: #111927; color: var(--text); font-size: 0.75rem;
 }
 .admin-filter {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 15px;
-    flex-wrap: wrap;
+    display: flex; align-items: center; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;
 }
 .admin-filter select, .admin-filter button {
-    padding: 6px 12px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: #111927;
-    color: var(--text);
-    font-size: 0.85rem;
-    cursor: pointer;
+    padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border);
+    background: #111927; color: var(--text); font-size: 0.85rem; cursor: pointer;
 }
