@@ -466,7 +466,7 @@ submitOrderBtn.addEventListener('click', async () => {
     } catch (err) { showToast('❌ 网络错误'); }
 });
 
-// ==================== 管理面板（订单/定制需求/打手管理） ====================
+// ==================== 管理面板（订单/定制需求/打手管理/角色管理） ====================
 const adminPanelBtn = document.getElementById('adminPanelBtn');
 const adminModal = document.getElementById('adminModal');
 const closeAdminBtn = document.getElementById('closeAdminBtn');
@@ -474,7 +474,7 @@ const statusFilter = document.getElementById('statusFilter');
 const refreshOrdersBtn = document.getElementById('refreshOrdersBtn');
 const adminOrderList = document.getElementById('adminOrderList');
 
-adminPanelBtn.addEventListener('click', () => { adminModal.style.display = 'flex'; loadAdminOrders(); loadUserList(); });
+adminPanelBtn.addEventListener('click', () => { adminModal.style.display = 'flex'; loadAdminOrders(); });
 closeAdminBtn.addEventListener('click', () => adminModal.style.display = 'none');
 adminModal.addEventListener('click', (e) => { if (e.target === adminModal) adminModal.style.display = 'none'; });
 
@@ -579,6 +579,31 @@ document.addEventListener('click', async (e) => {
 statusFilter.addEventListener('change', loadAdminOrders);
 refreshOrdersBtn.addEventListener('click', loadAdminOrders);
 
+// 管理面板标签切换
+document.querySelectorAll('.admin-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.dataset.admintab;
+        document.getElementById('adminOrdersSection').style.display = 'none';
+        document.getElementById('adminCustomSection').style.display = 'none';
+        document.getElementById('adminBoostersSection').style.display = 'none';
+        document.getElementById('adminRolesSection').style.display = 'none';
+        if (target === 'orders') {
+            document.getElementById('adminOrdersSection').style.display = 'block';
+        } else if (target === 'custom') {
+            document.getElementById('adminCustomSection').style.display = 'block';
+            loadAdminCustomRequests();
+        } else if (target === 'boosters') {
+            document.getElementById('adminBoostersSection').style.display = 'block';
+            loadAdminBoosters();
+        } else if (target === 'roles') {
+            document.getElementById('adminRolesSection').style.display = 'block';
+            loadUserList();
+        }
+    });
+});
+
 async function loadUserList() {
     const token = localStorage.getItem('token'); const select = document.getElementById('userSelect'); if (!select) return;
     try {
@@ -605,33 +630,6 @@ function bindUpdateRole() {
     });
 }
 
-// 管理面板标签切换
-document.querySelectorAll('.admin-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-        document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        const target = tab.dataset.admintab;
-        // 隐藏所有面板
-        document.getElementById('adminOrdersSection').style.display = 'none';
-        document.getElementById('adminCustomSection').style.display = 'none';
-        document.getElementById('adminBoostersSection').style.display = 'none';
-        document.getElementById('adminRolesSection').style.display = 'none';
-        // 显示目标面板
-        if (target === 'orders') {
-            document.getElementById('adminOrdersSection').style.display = 'block';
-        } else if (target === 'custom') {
-            document.getElementById('adminCustomSection').style.display = 'block';
-            loadAdminCustomRequests();
-        } else if (target === 'boosters') {
-            document.getElementById('adminBoostersSection').style.display = 'block';
-            loadAdminBoosters();
-        } else if (target === 'roles') {
-            document.getElementById('adminRolesSection').style.display = 'block';
-            loadUserList(); // 加载用户列表
-        }
-    });
-});
-
 async function loadAdminCustomRequests() {
     const token = localStorage.getItem('token'); const list = document.getElementById('adminCustomList');
     try {
@@ -647,7 +645,6 @@ async function loadAdminCustomRequests() {
     } catch (err) { list.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
 
-// 打手管理
 async function loadAdminBoosters() {
     const token = localStorage.getItem('token');
     const list = document.getElementById('adminBoostersList');
@@ -904,16 +901,54 @@ document.getElementById('checkinBtn').addEventListener('click', doCheckin);
 document.getElementById('rechargeBtn').addEventListener('click', doRecharge);
 function initChestSimulator() { updateTicketDisplay(); renderChests(); }
 
-// ==================== 独立工具子菜单 ====================
+// ==================== 独立工具子菜单（修复版） ====================
 function initToolSubMenu() {
     const tabs = document.querySelectorAll('.tool-tab');
-    const panels = { calculator: document.getElementById('toolCalculator'), chestsim: document.getElementById('toolChestSim'), randomtank: document.getElementById('toolRandomTank') };
-    tabs.forEach(tab => { tab.addEventListener('click', () => { tabs.forEach(t => t.classList.remove('active')); tab.classList.add('active'); const tool = tab.dataset.tab; Object.values(panels).forEach(p => p.style.display = 'none'); if (panels[tool]) panels[tool].style.display = 'block'; }); });
+    const panels = {
+        calculator: document.getElementById('toolCalculator'),
+        chestsim: document.getElementById('toolChestSim'),
+        randomtank: document.getElementById('toolRandomTank')
+    };
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            const tool = tab.dataset.tool;
+            Object.values(panels).forEach(p => p.style.display = 'none');
+            if (panels[tool]) {
+                panels[tool].style.display = 'block';
+                // 切换到转盘时重新初始化 canvas，避免隐藏时尺寸为0
+                if (tool === 'randomtank') {
+                    setTimeout(() => {
+                        wheelCanvas = document.getElementById('wheelCanvas');
+                        if (wheelCanvas) {
+                            wheelCanvas.width = wheelCanvas.offsetWidth || 400;
+                            wheelCanvas.height = wheelCanvas.offsetHeight || 400;
+                            wheelCtx = wheelCanvas.getContext('2d');
+                            drawWheel(wheelAngle);
+                        }
+                    }, 100);
+                }
+            }
+        });
+    });
 }
 
-// ==================== 转盘 ====================
+// ==================== 转盘（修复版） ====================
 let wheelAngle = 0, spinning = false, wheelCanvas, wheelCtx;
-function initWheel() { wheelCanvas = document.getElementById('wheelCanvas'); if (!wheelCanvas) return; wheelCtx = wheelCanvas.getContext('2d'); drawWheel(0); }
+function initWheel() {
+    wheelCanvas = document.getElementById('wheelCanvas');
+    if (!wheelCanvas) return;
+    if (wheelCanvas.offsetWidth > 0 && wheelCanvas.offsetHeight > 0) {
+        wheelCanvas.width = wheelCanvas.offsetWidth;
+        wheelCanvas.height = wheelCanvas.offsetHeight;
+    } else {
+        wheelCanvas.width = 400;
+        wheelCanvas.height = 400;
+    }
+    wheelCtx = wheelCanvas.getContext('2d');
+    drawWheel(0);
+}
 function drawWheel(rotation = 0) {
     if (!wheelCtx) return;
     const w = wheelCanvas.width, h = wheelCanvas.height, cx = w/2, cy = h/2, radius = Math.min(cx,cy)-5, sliceAngle = (2*Math.PI)/tankList.length;
