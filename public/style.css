@@ -668,8 +668,13 @@ body {
 .announcement-content hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 .announcement-content img { display: block; margin: 0 auto; }
 
-/* 转盘 */
-#wheelCanvas { display: block; margin: 0 auto; }
+#wheelCanvas {
+    display: block;
+    margin: 0 auto;
+    width: 100%;
+    max-width: 400px;
+    aspect-ratio: 1 / 1;          /* 强制显示为正方形 */
+}
 
 /* 客户端选择 */
 .client-select { display: flex; gap: 20px; justify-content: center; padding: 8px 0; }
