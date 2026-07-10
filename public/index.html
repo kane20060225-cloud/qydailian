@@ -63,7 +63,7 @@
         </div>
     </main>
 
-    <!-- 板块一：代练下单 -->
+    <!-- ==================== 板块一：代练下单 ==================== -->
     <div id="sectionBoost" class="content-section" style="display: none;">
         <div class="section-top">
             <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
@@ -96,9 +96,9 @@
             <section class="card">
                 <div class="card-header"><span class="card-num">02</span><h3>选择代练详情</h3><span class="badge-required">必选</span></div>
                 <div class="detail-grid" id="detailGrid">
-                    <label class="detail-card" data-detail="a"><input type="radio" name="detail" value="a" checked><div class="detail-inner"><span class="detail-label">方案 A</span><span class="detail-desc" id="detailDescA">有紫狗牌有高级银币</span><span class="detail-price" id="detailPriceA">¥9</span></div><div class="detail-check"></div></label>
-                    <label class="detail-card" data-detail="b"><input type="radio" name="detail" value="b"><div class="detail-inner"><span class="detail-label">方案 B</span><span class="detail-desc" id="detailDescB">无紫狗牌有高级银币</span><span class="detail-price" id="detailPriceB">¥13</span></div><div class="detail-check"></div></label>
-                    <label class="detail-card" data-detail="c"><input type="radio" name="detail" value="c"><div class="detail-inner"><span class="detail-label">方案 C</span><span class="detail-desc" id="detailDescC">无紫狗牌无高级银币</span><span class="detail-price" id="detailPriceC">¥15</span></div><div class="detail-check"></div></label>
+                    <label class="detail-card" data-detail="a"><input type="radio" name="detail" value="a" checked><div class="detail-inner"><span class="detail-label">方案 A</span><span class="detail-desc" id="detailDescA">有紫狗牌有高级银币/百万</span><span class="detail-price" id="detailPriceA">¥9</span></div><div class="detail-check"></div></label>
+                    <label class="detail-card" data-detail="b"><input type="radio" name="detail" value="b"><div class="detail-inner"><span class="detail-label">方案 B</span><span class="detail-desc" id="detailDescB">无紫狗牌有高级银币/百万</span><span class="detail-price" id="detailPriceB">¥13</span></div><div class="detail-check"></div></label>
+                    <label class="detail-card" data-detail="c"><input type="radio" name="detail" value="c"><div class="detail-inner"><span class="detail-label">方案 C</span><span class="detail-desc" id="detailDescC">无紫狗牌无高级银币/百万</span><span class="detail-price" id="detailPriceC">¥15</span></div><div class="detail-check"></div></label>
                 </div>
             </section>
 
@@ -316,6 +316,119 @@
         </div>
     </div>
 
+    <!-- ==================== 全屏页面：个人中心 ==================== -->
+    <div id="sectionProfile" class="content-section" style="display: none;">
+        <div class="section-top">
+            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+            <h2 class="section-heading">👤 个人中心</h2>
+        </div>
+        <div class="container">
+            <section class="card">
+                <h4 style="color:var(--accent); margin-bottom:10px;">基本信息</h4>
+                <div class="profile-info" id="profileInfo">加载中...</div>
+            </section>
+            <section class="card">
+                <h4 style="color:var(--accent); margin-bottom:10px;">我的订单</h4>
+                <div class="order-list" id="orderList">加载中...</div>
+            </section>
+        </div>
+    </div>
+
+    <!-- ==================== 全屏页面：管理面板 ==================== -->
+    <div id="sectionAdmin" class="content-section" style="display: none;">
+        <div class="section-top">
+            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+            <h2 class="section-heading">🛠️ 管理面板</h2>
+        </div>
+        <div class="container">
+            <div class="admin-tabs" style="display:flex; gap:10px; margin-bottom:15px; flex-wrap: wrap;">
+                <button class="admin-tab active" data-admintab="orders">📋 订单管理</button>
+                <button class="admin-tab" data-admintab="custom">✏️ 定制需求</button>
+                <button class="admin-tab" data-admintab="boosters">👥 打手管理</button>
+                <button class="admin-tab" data-admintab="roles">👑 角色管理</button>
+            </div>
+            <div id="adminOrdersSection">
+                <div class="admin-filter">
+                    <label>筛选状态：</label>
+                    <select id="statusFilter">
+                        <option value="">全部</option>
+                        <option value="pending">待接单</option>
+                        <option value="playing">代练中</option>
+                        <option value="done">已完成</option>
+                    </select>
+                    <button id="refreshOrdersBtn">刷新</button>
+                </div>
+                <div id="adminOrderList" class="admin-order-list">加载中...</div>
+            </div>
+            <div id="adminCustomSection" style="display:none;">
+                <div id="adminCustomList">加载中...</div>
+            </div>
+            <div id="adminBoostersSection" style="display:none;">
+                <div id="adminBoostersList">加载中...</div>
+            </div>
+            <div id="adminRolesSection" style="display:none;">
+                <div class="admin-role-section">
+                    <h4 style="margin-bottom:12px;">👥 修改用户角色</h4>
+                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                        <select id="userSelect" style="flex:1; min-width:150px;">
+                            <option value="">-- 选择用户 --</option>
+                        </select>
+                        <select id="roleSelect" style="width:130px;">
+                            <option value="user">普通用户</option>
+                            <option value="booster">打手</option>
+                            <option value="admin">管理员</option>
+                        </select>
+                        <button id="updateRoleBtn" class="submit-btn" style="margin:0; padding:8px 16px;">更新角色</button>
+                    </div>
+                    <p id="roleUpdateMsg" style="margin-top:6px; font-size:0.85rem; color:var(--green);"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 全屏页面：打手面板 ==================== -->
+    <div id="sectionBooster" class="content-section" style="display: none;">
+        <div class="section-top">
+            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+            <h2 class="section-heading">⚔️ 打手面板</h2>
+        </div>
+        <div class="container">
+            <div class="booster-tabs">
+                <button class="booster-tab active" data-tab="booster-hall">接单大厅</button>
+                <button class="booster-tab" data-tab="booster-my">我的接单</button>
+                <button class="booster-tab" data-tab="booster-earnings">我的收益</button>
+            </div>
+            <div class="booster-tab-content active" id="booster-hall">
+                <div id="hallOrderList" class="order-list">加载中...</div>
+            </div>
+            <div class="booster-tab-content" id="booster-my" style="display:none;">
+                <div id="myBoosterOrderList" class="order-list">加载中...</div>
+            </div>
+            <div class="booster-tab-content" id="booster-earnings" style="display:none;">
+                <div id="earningsDisplay">加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 全屏页面：联赛管理 ==================== -->
+    <div id="sectionLeagueAdmin" class="content-section" style="display: none;">
+        <div class="section-top">
+            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+            <h2 class="section-heading">🏆 联赛管理</h2>
+        </div>
+        <div class="container">
+            <div class="league-admin-menu">
+                <button class="league-admin-btn active" data-panel="league-config">📅 联赛配置</button>
+                <button class="league-admin-btn" data-panel="league-teams">👥 队伍表</button>
+                <button class="league-admin-btn" data-panel="league-scores">📊 成绩表</button>
+            </div>
+            <div id="leagueConfigPanel" class="league-panel"></div>
+            <div id="leagueTeamsPanel" class="league-panel" style="display:none;"></div>
+            <div id="leagueScoresPanel" class="league-panel" style="display:none;"></div>
+        </div>
+    </div>
+
+    <!-- ==================== 弹窗部分 ==================== -->
     <!-- 注册弹窗 -->
     <div class="modal-overlay" id="registerModal" style="display: none;">
         <div class="modal-card">
@@ -347,71 +460,6 @@
         </div>
     </div>
 
-    <!-- 个人中心弹窗 -->
-    <div class="modal-overlay" id="profileModal" style="display: none;">
-        <div class="modal-card profile-modal">
-            <div class="modal-header"><h3>👤 个人中心</h3><button class="modal-close" id="closeProfileBtn">&times;</button></div>
-            <div class="profile-content">
-                <div class="profile-section"><h4>基本信息</h4><div class="profile-info" id="profileInfo">加载中...</div></div>
-                <div class="profile-section"><h4>我的订单</h4><div class="order-list" id="orderList">加载中...</div></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 管理面板弹窗（含订单/定制需求/打手管理/角色管理标签） -->
-    <div class="modal-overlay" id="adminModal" style="display: none;">
-        <div class="modal-card admin-modal">
-            <div class="modal-header">
-                <h3>🛠️ 管理面板</h3>
-                <button class="modal-close" id="closeAdminBtn">&times;</button>
-            </div>
-            <div class="admin-content">
-                <div class="admin-tabs" style="display:flex; gap:10px; margin-bottom:15px;">
-                    <button class="admin-tab active" data-admintab="orders">📋 订单管理</button>
-                    <button class="admin-tab" data-admintab="custom">✏️ 定制需求</button>
-                    <button class="admin-tab" data-admintab="boosters">👥 打手管理</button>
-                    <button class="admin-tab" data-admintab="roles">👑 角色管理</button>
-                </div>
-                <div id="adminOrdersSection">
-                    <div class="admin-filter">
-                        <label>筛选状态：</label>
-                        <select id="statusFilter">
-                            <option value="">全部</option>
-                            <option value="pending">待接单</option>
-                            <option value="playing">代练中</option>
-                            <option value="done">已完成</option>
-                        </select>
-                        <button id="refreshOrdersBtn">刷新</button>
-                    </div>
-                    <div id="adminOrderList" class="admin-order-list">加载中...</div>
-                </div>
-                <div id="adminCustomSection" style="display:none;">
-                    <div id="adminCustomList">加载中...</div>
-                </div>
-                <div id="adminBoostersSection" style="display:none;">
-                    <div id="adminBoostersList">加载中...</div>
-                </div>
-                <div id="adminRolesSection" style="display:none;">
-                    <div class="admin-role-section">
-                        <h4 style="margin-bottom:12px;">👥 修改用户角色</h4>
-                        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                            <select id="userSelect" style="flex:1; min-width:150px;">
-                                <option value="">-- 选择用户 --</option>
-                            </select>
-                            <select id="roleSelect" style="width:130px;">
-                                <option value="user">普通用户</option>
-                                <option value="booster">打手</option>
-                                <option value="admin">管理员</option>
-                            </select>
-                            <button id="updateRoleBtn" class="submit-btn" style="margin:0; padding:8px 16px;">更新角色</button>
-                        </div>
-                        <p id="roleUpdateMsg" style="margin-top:6px; font-size:0.85rem; color:var(--green);"></p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- 支付凭证上传弹窗 -->
     <div class="modal-overlay" id="paymentModal" style="display: none;">
         <div class="modal-card">
@@ -424,32 +472,6 @@
             </div>
             <div class="form-error" id="paymentError"></div>
             <button class="submit-btn" id="submitPaymentBtn">提交凭证</button>
-        </div>
-    </div>
-
-    <!-- 打手面板弹窗 -->
-    <div class="modal-overlay" id="boosterModal" style="display: none;">
-        <div class="modal-card booster-modal">
-            <div class="modal-header">
-                <h3>⚔️ 打手面板</h3>
-                <button class="modal-close" id="closeBoosterBtn">&times;</button>
-            </div>
-            <div class="booster-content">
-                <div class="booster-tabs">
-                    <button class="booster-tab active" data-tab="booster-hall">接单大厅</button>
-                    <button class="booster-tab" data-tab="booster-my">我的接单</button>
-                    <button class="booster-tab" data-tab="booster-earnings">我的收益</button>
-                </div>
-                <div class="booster-tab-content active" id="booster-hall">
-                    <div id="hallOrderList" class="order-list">加载中...</div>
-                </div>
-                <div class="booster-tab-content" id="booster-my" style="display:none;">
-                    <div id="myBoosterOrderList" class="order-list">加载中...</div>
-                </div>
-                <div class="booster-tab-content" id="booster-earnings" style="display:none;">
-                    <div id="earningsDisplay">加载中...</div>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -535,24 +557,6 @@
             </div>
             <p id="leagueDetailTime" style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 12px;"></p>
             <div id="leagueDetailContent" style="line-height: 1.8; font-size: 0.95rem;"></div>
-        </div>
-    </div>
-
-    <!-- 联赛管理弹窗 -->
-    <div class="modal-overlay" id="leagueAdminModal" style="display: none;">
-        <div class="modal-card" style="max-width: 700px;">
-            <div class="modal-header">
-                <h3>🏆 联赛管理</h3>
-                <button class="modal-close" id="closeLeagueAdminBtn">&times;</button>
-            </div>
-            <div class="league-admin-menu">
-                <button class="league-admin-btn active" data-panel="league-config">📅 联赛配置</button>
-                <button class="league-admin-btn" data-panel="league-teams">👥 队伍表</button>
-                <button class="league-admin-btn" data-panel="league-scores">📊 成绩表</button>
-            </div>
-            <div id="leagueConfigPanel" class="league-panel"></div>
-            <div id="leagueTeamsPanel" class="league-panel" style="display:none;"></div>
-            <div id="leagueScoresPanel" class="league-panel" style="display:none;"></div>
         </div>
     </div>
 

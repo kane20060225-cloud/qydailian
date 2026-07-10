@@ -96,7 +96,7 @@ body {
 .menu-card h3 { font-size: 1.3rem; margin-bottom: 8px; letter-spacing: 0.02em; }
 .menu-card p { color: var(--text-muted); font-size: 0.9rem; }
 
-/* 内容板块通用 */
+/* 内容板块通用（所有全屏页面均使用此样式） */
 .content-section { padding: 20px 0; }
 .section-top {
     display: flex;
@@ -468,13 +468,6 @@ body {
 .submit-order-btn:hover { background: rgba(240,160,80,0.25); box-shadow: 0 0 20px var(--accent-glow); }
 .submit-hint { text-align: center; font-size: 0.72rem; color: var(--text-muted); margin-top: 6px; }
 
-/* 个人中心弹窗 */
-.profile-modal { width: 1100px; max-width: 95vw; max-height: 85vh; overflow-y: auto; }
-.profile-content { display: flex; flex-direction: column; gap: 20px; }
-.profile-section h4 { color: var(--accent); margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
-.profile-info p { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.9rem; }
-.profile-info span:last-child { color: var(--text-secondary); font-weight: 500; }
-
 /* 订单表格 */
 .order-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; min-width: 700px; }
 .order-table th { background: rgba(240,160,80,0.1); padding: 8px 6px; text-align: left; color: var(--accent); white-space: nowrap; }
@@ -484,45 +477,25 @@ body {
 .status-playing { background: rgba(240,160,80,0.2); color: var(--accent); }
 .status-done { background: rgba(72,187,120,0.2); color: var(--green); }
 
-/* 管理面板 */
-.admin-modal { width: 1100px; max-width: 95vw; max-height: 85vh; overflow-y: auto; }
-.admin-filter { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
-.admin-filter select, .admin-filter button {
-    padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border);
-    background: #111927; color: var(--text); font-size: 0.85rem; cursor: pointer;
-}
-.admin-order-list table { width: 100%; border-collapse: collapse; min-width: 1000px; }
-.admin-order-list th, .admin-order-list td {
-    padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border);
-    font-size: 0.8rem; white-space: nowrap;
-}
-.admin-order-list th { background: rgba(240,160,80,0.1); color: var(--accent); }
-.status-select {
-    padding: 4px; border-radius: 4px; border: 1px solid var(--border);
-    background: #111927; color: var(--text); font-size: 0.75rem;
-}
-
-/* 计算器复制按钮 */
-.copy-calc-btn {
-    margin-top: 10px; padding: 6px 16px; border-radius: 6px;
-    border: 1px solid var(--accent); background: rgba(240,160,80,0.1);
-    color: var(--accent); font-size: 0.8rem; cursor: pointer; transition: all var(--transition);
-}
-.copy-calc-btn:hover { background: rgba(240,160,80,0.2); }
-
 /* 支付状态 */
 .payment-status { font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; }
 .payment-unpaid { background: rgba(248,81,73,0.2); color: var(--red); }
 .payment-pending { background: rgba(240,160,80,0.2); color: var(--accent); }
 .payment-paid { background: rgba(72,187,120,0.2); color: var(--green); }
 
-.upload-payment-btn, .confirm-payment-btn {
-    padding: 6px 12px; border-radius: 4px; border: 1px solid var(--accent);
-    background: rgba(240,160,80,0.1); color: var(--accent);
-    font-size: 0.8rem; cursor: pointer; margin: 2px; white-space: nowrap;
+.upload-payment-btn, .confirm-payment-btn, .delete-order-btn {
+    padding: 6px 12px; border-radius: 4px; font-size: 0.8rem; cursor: pointer; margin: 2px; white-space: nowrap;
     display: inline-block; transition: all var(--transition);
 }
+.upload-payment-btn, .confirm-payment-btn {
+    border: 1px solid var(--accent); background: rgba(240,160,80,0.1); color: var(--accent);
+}
+.delete-order-btn {
+    border: 1px solid var(--red); background: rgba(248,81,73,0.15); color: var(--red);
+}
+.delete-order-btn:hover { background: rgba(248,81,73,0.25); box-shadow: 0 0 8px rgba(248,81,73,0.4); }
 .upload-payment-btn:hover, .confirm-payment-btn:hover { background: rgba(240,160,80,0.2); }
+
 .paste-area { cursor: text; }
 
 /* ========== 移动端适配 ========== */
@@ -548,22 +521,11 @@ body {
     .contact-item { flex-wrap: wrap; gap: 8px; }
     .contact-copy-btn { width: 100%; text-align: center; }
     .modal-card { padding: 20px 16px; width: 95%; }
-    .admin-modal, .profile-modal { max-width: 95%; }
 }
 
-/* ========== 以下为所有功能补充样式（统一整合） ========== */
-
-/* 管理员删除订单按钮 */
-.delete-order-btn {
-    padding: 6px 12px; border-radius: 4px; border: 1px solid var(--red);
-    background: rgba(248,81,73,0.15); color: var(--red); font-size: 0.8rem;
-    cursor: pointer; margin: 2px; white-space: nowrap; transition: all var(--transition);
-    display: inline-block;
-}
-.delete-order-btn:hover { background: rgba(248,81,73,0.25); box-shadow: 0 0 8px rgba(248,81,73,0.4); }
+/* ========== 以下为所有功能补充样式 ========== */
 
 /* 打手面板 */
-.booster-modal { width: 1100px; max-width: 95vw; max-height: 85vh; overflow-y: auto; }
 .booster-tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
 .booster-tab {
     background: transparent; border: none; color: var(--text-secondary);
@@ -718,7 +680,7 @@ body {
 }
 .custom-project-card .card-inner:hover { opacity: 1; background: rgba(240,160,80,0.08); }
 
-/* ====== 联赛相关板块 ====== */
+/* 联赛相关板块 */
 .league-tabs { display: flex; gap: 10px; margin-bottom: 16px; }
 .league-tab {
     padding: 6px 20px; border-radius: 20px; border: 1px solid var(--border);
@@ -748,7 +710,7 @@ body {
 #leagueStandingsContainer th { background: rgba(240,160,80,0.15); color: var(--accent); font-weight: 600; }
 #leagueStandingsContainer tr:hover td { background: rgba(240,160,80,0.05); }
 
-/* 联赛管理弹窗 */
+/* 联赛管理弹窗（全屏版） */
 .league-admin-menu { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .league-admin-btn {
     padding: 8px 20px; border-radius: 20px; border: 1px solid var(--border);
@@ -767,7 +729,7 @@ body {
 }
 .league-panel ul li button { margin-left: auto; }
 
-/* 联赛配置中的输入框（赛季名称、分数） */
+/* 联赛配置中的输入框 */
 #seasonName, #rulesSection input[type="number"], .league-panel input[type="text"], .league-panel input[type="number"] {
     padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border);
     background: #111927; color: var(--text); font-size: 0.85rem; margin-right: 8px;
@@ -797,7 +759,7 @@ select {
 }
 select:focus { border-color: var(--accent); outline: none; }
 
-/* 修复某些特定区域可能出现的白底输入框 */
+/* 修复可能出现的白底输入框 */
 input[type="text"], input[type="password"], input[type="email"], input[type="tel"], input[type="number"], textarea {
     background: #111927;
     color: var(--text);
