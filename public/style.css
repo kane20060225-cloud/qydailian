@@ -220,8 +220,8 @@ body {
 .quantity-hint { text-align: center; font-size: 0.72rem; color: var(--text-muted); margin-top: 8px; }
 
 /* 打手网格 */
-.player-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
-@media (max-width: 640px) { .player-grid { grid-template-columns: repeat(4, 1fr); } }
+.player-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+@media (max-width: 640px) { .player-grid { grid-template-columns: repeat(2, 1fr); } }
 .player-card { cursor: pointer; position: relative; }
 .player-card input { position: absolute; opacity: 0; }
 .player-inner {
@@ -437,9 +437,7 @@ body {
 }
 .user-dropdown button:hover { background: rgba(240,160,80,0.1); }
 
-/* 弹窗中的链接切换 */
-.modal-footer-text a { color: var(--accent); text-decoration: none; cursor: pointer; }
-.modal-footer-text a:hover { text-decoration: underline; }
+/* Toast */
 .toast-message {
     position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
     background: #2d3748; color: white; padding: 10px 24px;
@@ -459,7 +457,6 @@ body {
     transition: border-color var(--transition); line-height: 1.5;
 }
 .remark-input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 14px var(--accent-glow); }
-.remark-input::placeholder { color: var(--text-muted); opacity: 0.7; }
 .remark-hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 8px; text-align: right; }
 
 /* 提交订单按钮 */
@@ -488,7 +485,7 @@ body {
 .status-done { background: rgba(72,187,120,0.2); color: var(--green); }
 
 /* 管理面板 */
-.admin-modal { width: 1400px; max-width: 95vw; max-height: 85vh; overflow-y: auto; }
+.admin-modal { width: 1100px; max-width: 95vw; max-height: 85vh; overflow-y: auto; }
 .admin-filter { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
 .admin-filter select, .admin-filter button {
     padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border);
@@ -541,7 +538,7 @@ body {
     .project-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .card-inner { padding: 10px 4px; }
     .detail-grid { grid-template-columns: 1fr; }
-    .player-grid { grid-template-columns: repeat(3, 1fr); }
+    .player-grid { grid-template-columns: repeat(2, 1fr); }
     .quantity-input { width: 70px; height: 42px; font-size: 1.1rem; }
     .qty-btn { width: 36px; height: 36px; font-size: 1.1rem; }
     .price-total { font-size: 1.3rem; }
@@ -554,7 +551,7 @@ body {
     .admin-modal, .profile-modal { max-width: 95%; }
 }
 
-/* ========== 以下为所有新增样式（统一整合） ========== */
+/* ========== 以下为所有功能补充样式（统一整合） ========== */
 
 /* 管理员删除订单按钮 */
 .delete-order-btn {
@@ -566,7 +563,7 @@ body {
 .delete-order-btn:hover { background: rgba(248,81,73,0.25); box-shadow: 0 0 8px rgba(248,81,73,0.4); }
 
 /* 打手面板 */
-.booster-modal { width: 1400px; max-width: 95vw; max-height: 85vh; overflow-y: auto; }
+.booster-modal { width: 1100px; max-width: 95vw; max-height: 85vh; overflow-y: auto; }
 .booster-tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
 .booster-tab {
     background: transparent; border: none; color: var(--text-secondary);
@@ -668,12 +665,17 @@ body {
 .announcement-content hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 .announcement-content img { display: block; margin: 0 auto; }
 
+/* 转盘 - 修复移动端椭圆光晕 */
 #wheelCanvas {
     display: block;
     margin: 0 auto;
-    width: 100%;
+    width: 100% !important;
+    height: auto !important;
     max-width: 400px;
-    aspect-ratio: 1 / 1;          /* 强制显示为正方形 */
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+    border-radius: 50%;
+    box-shadow: 0 0 20px var(--accent-glow);
 }
 
 /* 客户端选择 */
@@ -716,337 +718,106 @@ body {
 }
 .custom-project-card .card-inner:hover { opacity: 1; background: rgba(240,160,80,0.08); }
 
-/* 联赛相关卡片 */
-.league-news-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 18px;
-}
-.league-news-card {
-    background: #0f172a;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-    cursor: pointer;
-    transition: all var(--transition);
-}
-.league-news-card:hover {
-    border-color: var(--accent);
-    box-shadow: 0 0 14px var(--accent-glow);
-    transform: translateY(-2px);
-}
-.league-news-card h4 {
-    color: var(--accent);
-    margin-bottom: 8px;
-    font-size: 1rem;
-}
-.league-card-time {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    margin-bottom: 10px;
-}
-.league-card-summary {
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-    line-height: 1.5;
-}
-#leagueDetailContent {
-    white-space: pre-wrap;
-    word-break: break-word;
-}
-
-/* ====== 联赛相关板块（整合所有样式） ====== */
-
-/* 联赛标签切换（积分榜/新闻） */
-.league-tabs {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 16px;
-}
+/* ====== 联赛相关板块 ====== */
+.league-tabs { display: flex; gap: 10px; margin-bottom: 16px; }
 .league-tab {
-    padding: 6px 20px;
-    border-radius: 20px;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-secondary);
-    font-weight: 600;
-    cursor: pointer;
-    transition: all var(--transition);
+    padding: 6px 20px; border-radius: 20px; border: 1px solid var(--border);
+    background: transparent; color: var(--text-secondary); font-weight: 600;
+    cursor: pointer; transition: all var(--transition);
 }
-.league-tab.active {
-    border-color: var(--accent);
-    background: rgba(240,160,80,0.1);
-    color: var(--accent);
-}
+.league-tab.active { border-color: var(--accent); background: rgba(240,160,80,0.1); color: var(--accent); }
 
-/* 联赛新闻卡片网格 */
-.league-news-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 18px;
-}
+.league-news-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
 .league-news-card {
-    background: #0f172a;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-    cursor: pointer;
-    transition: all var(--transition);
+    background: #0f172a; border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px; cursor: pointer; transition: all var(--transition);
 }
-.league-news-card:hover {
-    border-color: var(--accent);
-    box-shadow: 0 0 14px var(--accent-glow);
-    transform: translateY(-2px);
-}
-.league-news-card h4 {
-    color: var(--accent);
-    margin-bottom: 8px;
-    font-size: 1rem;
-}
-.league-card-time {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    margin-bottom: 10px;
-}
-.league-card-summary {
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-    line-height: 1.5;
-}
+.league-news-card:hover { border-color: var(--accent); box-shadow: 0 0 14px var(--accent-glow); transform: translateY(-2px); }
+.league-news-card h4 { color: var(--accent); margin-bottom: 8px; font-size: 1rem; }
+.league-card-time { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 10px; }
+.league-card-summary { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; }
+#leagueDetailContent { white-space: pre-wrap; word-break: break-word; line-height: 1.8; color: var(--text-secondary); }
 
-/* 联赛详情弹窗 */
-#leagueDetailContent {
-    white-space: pre-wrap;
-    word-break: break-word;
-    line-height: 1.8;
-    color: var(--text-secondary);
+/* 积分榜 */
+#leagueStandingsContainer { overflow-x: auto; }
+#leagueStandingsContainer table { width: 100%; border-collapse: collapse; min-width: 800px; margin-top: 10px; }
+#leagueStandingsContainer th, #leagueStandingsContainer td {
+    padding: 8px 6px; border: 1px solid var(--border); text-align: center;
+    font-size: 0.85rem; color: var(--text);
 }
+#leagueStandingsContainer th { background: rgba(240,160,80,0.15); color: var(--accent); font-weight: 600; }
+#leagueStandingsContainer tr:hover td { background: rgba(240,160,80,0.05); }
 
-/* 积分榜容器 */
-#leagueStandingsContainer {
-    overflow-x: auto;
-}
-#leagueStandingsContainer table {
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 800px;
-    margin-top: 10px;
-}
-#leagueStandingsContainer th,
-#leagueStandingsContainer td {
-    padding: 8px 6px;
-    border: 1px solid var(--border);
-    text-align: center;
-    font-size: 0.85rem;
-    color: var(--text);
-}
-#leagueStandingsContainer th {
-    background: rgba(240,160,80,0.15);
-    color: var(--accent);
-    font-weight: 600;
-}
-#leagueStandingsContainer tr:hover td {
-    background: rgba(240,160,80,0.05);
-}
-
-/* ====== 联赛管理弹窗 ====== */
-.league-admin-menu {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 12px;
-}
+/* 联赛管理弹窗 */
+.league-admin-menu { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .league-admin-btn {
-    padding: 8px 20px;
-    border-radius: 20px;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-secondary);
-    font-weight: 600;
-    cursor: pointer;
-    transition: all var(--transition);
+    padding: 8px 20px; border-radius: 20px; border: 1px solid var(--border);
+    background: transparent; color: var(--text-secondary); font-weight: 600;
+    cursor: pointer; transition: all var(--transition);
 }
-.league-admin-btn.active {
-    border-color: var(--accent);
-    background: rgba(240,160,80,0.1);
-    color: var(--accent);
-    box-shadow: 0 0 8px var(--accent-glow);
-}
-.league-admin-btn:hover {
-    border-color: var(--accent);
-    background: rgba(240,160,80,0.08);
-}
+.league-admin-btn.active { border-color: var(--accent); background: rgba(240,160,80,0.1); color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+.league-admin-btn:hover { border-color: var(--accent); background: rgba(240,160,80,0.08); }
 
-/* 联赛面板通用容器 */
-.league-panel {
-    margin-top: 16px;
-}
-.league-panel h4 {
-    color: var(--accent);
-    margin-bottom: 12px;
-}
-.league-panel ul {
-    list-style: none;
-    padding: 0;
-}
+.league-panel { margin-top: 16px; }
+.league-panel h4 { color: var(--accent); margin-bottom: 12px; }
+.league-panel ul { list-style: none; padding: 0; }
 .league-panel ul li {
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-    color: var(--text);
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--text);
 }
-.league-panel ul li button {
-    margin-left: auto;
-}
+.league-panel ul li button { margin-left: auto; }
 
 /* 联赛配置中的输入框（赛季名称、分数） */
-#seasonName,
-#rulesSection input[type="number"] {
-    padding: 6px 10px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: #111927;
-    color: var(--text);
-    font-size: 0.85rem;
-    margin-right: 8px;
+#seasonName, #rulesSection input[type="number"], .league-panel input[type="text"], .league-panel input[type="number"] {
+    padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border);
+    background: #111927; color: var(--text); font-size: 0.85rem; margin-right: 8px;
 }
-#rulesSection input[type="number"] {
-    width: 60px;
-}
+#rulesSection input[type="number"] { width: 60px; }
 
-/* 联赛面板中的通用按钮（创建赛季、保存规则等） */
+/* 联赛面板中的通用按钮 */
 .league-panel button {
-    padding: 6px 14px;
-    border-radius: 6px;
-    border: 1px solid var(--accent);
-    background: rgba(240,160,80,0.1);
-    color: var(--accent);
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: all var(--transition);
+    padding: 6px 14px; border-radius: 6px; border: 1px solid var(--accent);
+    background: rgba(240,160,80,0.1); color: var(--accent); font-size: 0.8rem;
+    cursor: pointer; transition: all var(--transition);
 }
-.league-panel button:hover {
-    background: rgba(240,160,80,0.2);
-    box-shadow: 0 0 8px var(--accent-glow);
+.league-panel button:hover { background: rgba(240,160,80,0.2); box-shadow: 0 0 8px var(--accent-glow); }
+
+/* 补全 select 下拉框在所有面板中的样式 */
+select {
+    padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+    background: #111927; color: var(--text); font-size: 0.9rem; cursor: pointer;
+    transition: border-color var(--transition);
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a0aec0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 30px;
 }
+select:focus { border-color: var(--accent); outline: none; }
 
-/* ====== 移动端优化：减少顶部元素占位 ====== */
-@media (max-width: 480px) {
-    .section-top {
-        padding: 10px 14px;            /* 缩小上下左右内边距 */
-        gap: 8px;                     /* 缩小返回按钮与标题间距 */
-    }
-    .back-btn {
-        padding: 4px 10px;            /* 更紧凑的返回按钮 */
-        font-size: 0.75rem;
-        border-radius: 4px;
-        white-space: nowrap;          /* 防止文字换行 */
-    }
-    .back-btn::before {
-        content: "← ";                /* 保留箭头，但可以只显示箭头 */
-    }
-    /* 如果只想显示箭头，可改为：
-    .back-btn { font-size: 0; padding: 4px 8px; }
-    .back-btn::before { content: "←"; font-size: 1.2rem; }
-    */
-    .section-heading {
-        font-size: 1.1rem;            /* 缩小板块标题 */
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 60%;               /* 防止标题过长挤出按钮 */
-    }
-
-    /* 独立工具子菜单：紧凑排列，允许横向滚动 */
-    .tools-submenu {
-        gap: 6px;
-        margin-bottom: 12px;
-        flex-wrap: nowrap;            /* 不换行 */
-        overflow-x: auto;             /* 横向滚动 */
-        -webkit-overflow-scrolling: touch;
-        padding-bottom: 4px;          /* 留出滚动条空间 */
-    }
-    .tool-tab {
-        padding: 5px 12px;
-        font-size: 0.8rem;
-        white-space: nowrap;
-        border-radius: 14px;          /* 稍圆润的小标签 */
-    }
-    .tool-tab.active {
-        box-shadow: none;
-    }
-
-    /* 代练下单页面的卡片标题也可以收紧 */
-    .card-header h3 {
-        font-size: 0.95rem;
-    }
-    .card-num {
-        width: 28px; height: 28px;
-        font-size: 0.75rem;
-    }
-}
-
-
-/* ====== 打手管理面板补充样式 ====== */
-
-/* 打手管理表格（与订单表格风格统一） */
-#adminBoostersList table {
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 600px;
-    margin-top: 10px;
-}
-#adminBoostersList th,
-#adminBoostersList td {
-    padding: 10px 8px;
-    text-align: left;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.85rem;
-    color: var(--text);
-}
-#adminBoostersList th {
-    background: rgba(240,160,80,0.1);
-    color: var(--accent);
-    font-weight: 600;
-}
-#adminBoostersList tr:hover td {
-    background: rgba(240,160,80,0.05);
-}
-
-/* 身份组下拉框 */
-.booster-identity-select {
-    padding: 6px 8px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
+/* 修复某些特定区域可能出现的白底输入框 */
+input[type="text"], input[type="password"], input[type="email"], input[type="tel"], input[type="number"], textarea {
     background: #111927;
     color: var(--text);
-    font-size: 0.85rem;
-    cursor: pointer;
-    margin-right: 8px;
-    transition: border-color var(--transition);
-}
-.booster-identity-select:focus {
-    border-color: var(--accent);
-    outline: none;
+    border: 1px solid var(--border);
 }
 
-/* 更新按钮（沿用通用按钮风格，这里进行微调） */
+/* 打手管理面板表格 */
+#adminBoostersList table { width: 100%; border-collapse: collapse; min-width: 600px; margin-top: 10px; }
+#adminBoostersList th, #adminBoostersList td {
+    padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border);
+    font-size: 0.85rem; color: var(--text);
+}
+#adminBoostersList th { background: rgba(240,160,80,0.1); color: var(--accent); }
+.booster-identity-select {
+    padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border);
+    background: #111927; color: var(--text); font-size: 0.85rem; margin-right: 8px;
+}
 #adminBoostersList button {
-    padding: 6px 14px;
-    border-radius: 6px;
-    border: 1px solid var(--accent);
-    background: rgba(240,160,80,0.1);
-    color: var(--accent);
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: all var(--transition);
-    white-space: nowrap;
+    padding: 6px 14px; border-radius: 6px; border: 1px solid var(--accent);
+    background: rgba(240,160,80,0.1); color: var(--accent); font-size: 0.8rem;
+    cursor: pointer; transition: all var(--transition);
 }
-#adminBoostersList button:hover {
-    background: rgba(240,160,80,0.2);
-    box-shadow: 0 0 8px var(--accent-glow);
-}
+#adminBoostersList button:hover { background: rgba(240,160,80,0.2); }
