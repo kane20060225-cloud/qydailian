@@ -196,7 +196,6 @@ leagueAdminBtn.addEventListener('click', () => showSection('leagueAdmin'));
 
 function showSection(target) {
     if (target === 'mainMenu') {
-        // 显示主菜单
         mainMenu.style.display = 'flex';
         Object.values(sections).forEach(sec => sec.style.display = 'none');
         return;
@@ -216,12 +215,20 @@ function showSection(target) {
         } else if (target === 'leagueAdmin') {
             loadLeagueConfig();
         } else if (target === 'league') {
-            // 默认显示积分榜
             document.getElementById('leagueStandingsView').style.display = 'block';
             document.getElementById('leagueNewsView').style.display = 'none';
             document.querySelector('.league-tab[data-league-view="standings"]').classList.add('active');
             document.querySelector('.league-tab[data-league-view="news"]').classList.remove('active');
             loadLeagueStandings();
+        }
+        // 重置独立工具面板（修复黑屏）
+        if (target === 'tools') {
+            document.getElementById('toolCalculator').style.display = 'block';
+            document.getElementById('toolChestSim').style.display = 'none';
+            document.getElementById('toolRandomTank').style.display = 'none';
+            document.querySelectorAll('.tool-tab').forEach(t => t.classList.remove('active'));
+            const calcTab = document.querySelector('.tool-tab[data-tool="calculator"]');
+            if (calcTab) calcTab.classList.add('active');
         }
     }
 }
@@ -309,10 +316,32 @@ copyBtn.addEventListener('click', async () => {
 document.querySelectorAll('.contact-copy-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
         const text = btn.dataset.copy;
-        await navigator.clipboard.writeText(text);
-        const orig = btn.textContent; btn.textContent = '✅ 已复制';
+        const orig = btn.textContent;
+        btn.textContent = '✅ 已复制';
         setTimeout(() => btn.textContent = orig, 1500);
-        showToast('✅ 已复制到剪贴板');
+        // 优先尝试现代 API
+        if (navigator.clipboard && window.isSecureContext) {
+            try {
+                await navigator.clipboard.writeText(text);
+                showToast('✅ 已复制到剪贴板');
+                return;
+            } catch (err) {}
+        }
+        // 传统降级方案
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            showToast('✅ 已复制到剪贴板');
+        } catch (err) {
+            showToast('❌ 复制失败，请手动复制');
+        }
+        document.body.removeChild(textarea);
     });
 });
 
@@ -1180,7 +1209,8 @@ async function loadLeagueTeams() {
         } else {
             html += '<ul>';
             teams.forEach(t => {
-                html += `<li>${t.name} <button onclick="editTeam(${t.id}, '${t.name.replace(/'/g, "\\'")}')">编辑</button> <button onclick="deleteTeam(${t.id})">删除</button></li>`;
+                // 修复：队伍名用 span.team-name 包裹，避免换行错位
+                html += `<li><span class="team-name">${t.name}</span> <button onclick="editTeam(${t.id}, '${t.name.replace(/'/g, "\\'")}')">编辑</button> <button onclick="deleteTeam(${t.id})">删除</button></li>`;
             });
             html += '</ul>';
         }
