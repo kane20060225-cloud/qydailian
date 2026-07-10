@@ -1217,7 +1217,7 @@ async function loadLeagueStandings() {
     } catch (err) { container.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
 
-// ==================== 联赛管理后台 ====================
+// ==================== 联赛管理后台（完整） ====================
 document.querySelectorAll('.league-admin-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.league-admin-btn').forEach(b => b.classList.remove('active'));
@@ -1235,6 +1235,7 @@ document.querySelectorAll('.league-admin-btn').forEach(btn => {
 
 let selectedSeasonId = null;
 
+// 赛季配置
 async function loadLeagueConfig() {
     const panel = getEl('leagueConfigPanel'); if (!panel) return;
     panel.innerHTML = '加载中...';
@@ -1252,6 +1253,7 @@ async function loadLeagueConfig() {
         if (seasons.length > 0) { selectedSeasonId = seasons[0].id; loadRules(selectedSeasonId); }
     } catch (err) { panel.innerHTML = '加载失败'; }
 }
+
 async function loadRules(seasonId) {
     const token = safeGetItem('token');
     const rulesSection = getEl('rulesSection'); if (!rulesSection) return;
@@ -1275,6 +1277,7 @@ async function loadRules(seasonId) {
         rulesSection.innerHTML = html;
     } catch (err) { rulesSection.innerHTML = '加载规则失败'; }
 }
+
 async function saveRules(seasonId) {
     const token = safeGetItem('token');
     const rules = [];
@@ -1294,10 +1297,187 @@ async function saveRules(seasonId) {
         if (res.ok) showToast('✅ 规则已保存'); else showToast('❌ ' + (data.error||'保存失败'));
     } catch (err) { showToast('❌ 网络错误'); }
 }
-window.editLeagueSeason = async function(id) { /* ... 保持不变 ... */ };
-window.deleteLeagueSeason = async function(id) { /* ... 保持不变 ... */ };
-window.saveLeagueSeason = async function() { /* ... 保持不变 ... */ };
-// 队伍表和成绩表相关函数省略，保持原有逻辑（已在之前版本中完善），但需对 DOM 操作加上 getEl 保护。
+
+window.editLeagueSeason = async function(id) {
+    const token = safeGetItem('token');
+    const name = prompt('修改赛季名称');
+    if (!name) return;
+    const round = prompt('当前轮次 (1-5)');
+    const day = prompt('当前天数 (1-2)');
+    try {
+        const res = await fetch(`${API_BASE}/admin/leagues`, { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify({ id, name, current_round: parseInt(round)||1, current_day: parseInt(day)||1 }) });
+        const data = await res.json();
+        if (res.ok) { showToast('✅ 赛季已更新'); loadLeagueConfig(); } else showToast('❌ ' + (data.error||'更新失败'));
+    } catch (err) { showToast('❌ 网络错误'); }
+};
+
+window.deleteLeagueSeason = async function(id) {
+    if (!confirm('确定删除该赛季吗？')) return;
+    const token = safeGetItem('token');
+    try {
+        const res = await fetch(`${API_BASE}/admin/leagues/${id}`, { method:'DELETE', headers:{'Authorization':`Bearer ${token}`} });
+        const data = await res.json();
+        if (res.ok) { showToast('🗑️ 赛季已删除'); loadLeagueConfig(); } else showToast('❌ ' + (data.error||'删除失败'));
+    } catch (err) { showToast('❌ 网络错误'); }
+};
+
+window.saveLeagueSeason = async function() {
+    const nameEl = getEl('seasonName');
+    if (!nameEl) return;
+    const name = nameEl.value.trim();
+    if (!name) return showToast('❌ 请输入赛季名称');
+    const token = safeGetItem('token');
+    try {
+        const res = await fetch(`${API_BASE}/admin/leagues`, { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify({ name }) });
+        const data = await res.json();
+        if (res.ok) { showToast('✅ 赛季已创建'); loadLeagueConfig(); } else showToast('❌ ' + (data.error||'创建失败'));
+    } catch (err) { showToast('❌ 网络错误'); }
+};
+
+// ==================== 队伍表 ====================
+async function loadLeagueTeams() {
+    const panel = getEl('leagueTeamsPanel'); if (!panel) return;
+    panel.innerHTML = '加载中...';
+    const token = safeGetItem('token');
+    try {
+        const res = await fetch(`${API_BASE}/admin/teams`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const teams = await res.json();
+        let html = '<h4>队伍列表</h4>';
+        if (teams.length === 0) {
+            html += '<p>暂无队伍，请添加</p>';
+        } else {
+            html += '<ul>';
+            teams.forEach(t => {
+                html += `<li><span class="team-name">${t.name}</span> <button onclick="editTeam(${t.id}, '${t.name.replace(/'/g, "\\'")}')">编辑</button> <button onclick="deleteTeam(${t.id})">删除</button></li>`;
+            });
+            html += '</ul>';
+        }
+        html += `<hr><h4>添加队伍</h4>
+            <input type="text" id="newTeamName" placeholder="队伍名称" style="margin-right:8px;">
+            <button onclick="addTeam()">添加</button>
+            <p id="teamMsg" style="margin-top:8px; color:var(--green);"></p>`;
+        panel.innerHTML = html;
+    } catch (err) { panel.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+}
+
+window.addTeam = async function() {
+    const nameEl = getEl('newTeamName');
+    if (!nameEl) return;
+    const name = nameEl.value.trim();
+    if (!name) return showToast('❌ 请输入队伍名');
+    const token = safeGetItem('token');
+    try {
+        const res = await fetch(`${API_BASE}/admin/teams`, { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify({ name }) });
+        const data = await res.json();
+        if (res.ok) { showToast('✅ 队伍已添加'); loadLeagueTeams(); }
+        else showToast('❌ ' + (data.error||'添加失败'));
+    } catch (err) { showToast('❌ 网络错误'); }
+};
+
+window.editTeam = async function(id, oldName) {
+    const newName = prompt('修改队伍名称', oldName);
+    if (!newName || newName === oldName) return;
+    const token = safeGetItem('token');
+    try {
+        const res = await fetch(`${API_BASE}/admin/teams`, { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify({ id, name: newName }) });
+        const data = await res.json();
+        if (res.ok) { showToast('✅ 队伍已更新'); loadLeagueTeams(); }
+        else showToast('❌ ' + (data.error||'更新失败'));
+    } catch (err) { showToast('❌ 网络错误'); }
+};
+
+window.deleteTeam = async function(id) {
+    if (!confirm('确定删除该队伍吗？')) return;
+    const token = safeGetItem('token');
+    try {
+        const res = await fetch(`${API_BASE}/admin/teams/${id}`, { method:'DELETE', headers:{'Authorization':`Bearer ${token}`} });
+        const data = await res.json();
+        if (res.ok) { showToast('🗑️ 队伍已删除'); loadLeagueTeams(); }
+        else showToast('❌ ' + (data.error||'删除失败'));
+    } catch (err) { showToast('❌ 网络错误'); }
+};
+
+// ==================== 成绩表 ====================
+async function loadLeagueScoresPanel() {
+    const panel = getEl('leagueScoresPanel'); if (!panel) return;
+    panel.innerHTML = '加载中...';
+    const token = safeGetItem('token');
+    try {
+        const seasonsRes = await fetch(`${API_BASE}/admin/leagues`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const seasons = await seasonsRes.json();
+        if (!seasons.length) { panel.innerHTML = '<p>请先创建赛季</p>'; return; }
+        const teamsRes = await fetch(`${API_BASE}/admin/teams`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const teams = await teamsRes.json();
+        if (!teams.length) { panel.innerHTML = '<p>请先添加队伍</p>'; return; }
+        let html = '<h4>录入成绩</h4>';
+        html += '<label>赛季：</label><select id="scoreSeason">';
+        seasons.forEach(s => html += `<option value="${s.id}">${s.name} (R${s.current_round}D${s.current_day})</option>`);
+        html += '</select>';
+        html += '<label style="margin-left:10px;">轮次：</label><select id="scoreRound">';
+        for (let r=1; r<=5; r++) html += `<option value="${r}">R${r}</option>`;
+        html += '</select>';
+        html += '<label style="margin-left:10px;">天次：</label><select id="scoreDay">';
+        html += '<option value="1">第1天</option><option value="2">第2天</option>';
+        html += '</select>';
+        html += '<button onclick="loadScoreForm()" style="margin-left:10px;">加载队伍</button>';
+        html += '<div id="scoreForm" style="margin-top:16px;"></div>';
+        panel.innerHTML = html;
+    } catch (err) { panel.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+}
+
+window.loadScoreForm = async function() {
+    const seasonIdEl = getEl('scoreSeason');
+    const roundEl = getEl('scoreRound');
+    const dayEl = getEl('scoreDay');
+    if (!seasonIdEl || !roundEl || !dayEl) return;
+    const seasonId = seasonIdEl.value;
+    const round = roundEl.value;
+    const day = dayEl.value;
+    const token = safeGetItem('token');
+    const formDiv = getEl('scoreForm');
+    if (!formDiv) return;
+    formDiv.innerHTML = '加载队伍...';
+    try {
+        const scoresRes = await fetch(`${API_BASE}/admin/leagues/${seasonId}/scores/${round}/${day}`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const existingScores = await scoresRes.json();
+        const scoreMap = {};
+        existingScores.forEach(s => scoreMap[s.team_id] = s.rank_position);
+        const teamsRes = await fetch(`${API_BASE}/admin/teams`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const teams = await teamsRes.json();
+        let html = '<table><tr><th>队伍</th><th>名次 (1-4)</th></tr>';
+        teams.forEach(t => {
+            const currentRank = scoreMap[t.id] || '';
+            html += `<tr><td>${t.name}</td><td><input type="number" id="rank_${t.id}" min="1" max="4" value="${currentRank}" style="width:60px;"></td></tr>`;
+        });
+        html += '</table>';
+        html += `<button onclick="submitScores(${seasonId}, ${round}, ${day})" style="margin-top:10px;">提交成绩</button>`;
+        formDiv.innerHTML = html;
+    } catch (err) { formDiv.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+};
+
+window.submitScores = async function(seasonId, round, day) {
+    const token = safeGetItem('token');
+    const scores = [];
+    const teamInputs = document.querySelectorAll('[id^="rank_"]');
+    teamInputs.forEach(input => {
+        const teamId = parseInt(input.id.split('_')[1]);
+        const rank = parseInt(input.value);
+        if (!isNaN(rank) && rank >= 1 && rank <= 4) {
+            scores.push({ team_id: teamId, rank_position: rank });
+        }
+    });
+    if (scores.length === 0) return showToast('❌ 请至少填写一个队伍的名次');
+    try {
+        const res = await fetch(`${API_BASE}/admin/leagues/${seasonId}/scores`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ round_num: parseInt(round), day_num: parseInt(day), scores })
+        });
+        const data = await res.json();
+        if (res.ok) { showToast('✅ 成绩已提交'); }
+        else showToast('❌ ' + (data.error||'提交失败'));
+    } catch (err) { showToast('❌ 网络错误'); }
+};
 
 // ==================== 启动 ====================
 init();
