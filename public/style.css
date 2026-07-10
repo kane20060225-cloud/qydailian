@@ -96,7 +96,7 @@ body {
 .menu-card h3 { font-size: 1.3rem; margin-bottom: 8px; letter-spacing: 0.02em; }
 .menu-card p { color: var(--text-muted); font-size: 0.9rem; }
 
-/* 内容板块通用（所有全屏页面均使用此样式） */
+/* 内容板块通用 */
 .content-section { padding: 20px 0; }
 .section-top {
     display: flex;
@@ -627,7 +627,7 @@ body {
 .announcement-content hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 .announcement-content img { display: block; margin: 0 auto; }
 
-/* 转盘 - 修复移动端椭圆光晕 */
+/* 转盘 */
 #wheelCanvas {
     display: block;
     margin: 0 auto;
@@ -710,7 +710,7 @@ body {
 #leagueStandingsContainer th { background: rgba(240,160,80,0.15); color: var(--accent); font-weight: 600; }
 #leagueStandingsContainer tr:hover td { background: rgba(240,160,80,0.05); }
 
-/* 联赛管理弹窗（全屏版） */
+/* 联赛管理（全屏版） */
 .league-admin-menu { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .league-admin-btn {
     padding: 8px 20px; border-radius: 20px; border: 1px solid var(--border);
@@ -783,3 +783,63 @@ input[type="text"], input[type="password"], input[type="email"], input[type="tel
     cursor: pointer; transition: all var(--transition);
 }
 #adminBoostersList button:hover { background: rgba(240,160,80,0.2); }
+
+/* 全屏页面通用容器宽度（与 content-section 保持一致） */
+#sectionProfile .container, #sectionAdmin .container, #sectionBooster .container, #sectionLeagueAdmin .container {
+    max-width: 820px;
+}
+
+/* 个人中心信息 */
+.profile-info p {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 0.9rem;
+    color: var(--text);
+}
+.profile-info span:last-child {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* 管理面板表格样式补全 */
+.admin-order-list table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 1000px;
+}
+.admin-order-list th, .admin-order-list td {
+    padding: 10px 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+.admin-order-list th {
+    background: rgba(240,160,80,0.1);
+    color: var(--accent);
+}
+.status-select {
+    padding: 4px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: #111927;
+    color: var(--text);
+    font-size: 0.75rem;
+}
+.admin-filter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+.admin-filter select, .admin-filter button {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #111927;
+    color: var(--text);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
