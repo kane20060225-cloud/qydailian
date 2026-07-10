@@ -197,11 +197,11 @@ leagueAdminBtn.addEventListener('click', () => showSection('leagueAdmin'));
 function showSection(target) {
     if (target === 'mainMenu') {
         mainMenu.style.display = 'flex';
-        Object.values(sections).forEach(sec => sec.style.display = 'none');
+        Object.values(sections).forEach(sec => { if (sec) sec.style.display = 'none'; });
         return;
     }
     mainMenu.style.display = 'none';
-    Object.values(sections).forEach(sec => sec.style.display = 'none');
+    Object.values(sections).forEach(sec => { if (sec) sec.style.display = 'none'; });
     if (sections[target]) {
         sections[target].style.display = 'block';
         // 加载对应页面数据
@@ -215,22 +215,59 @@ function showSection(target) {
         } else if (target === 'leagueAdmin') {
             loadLeagueConfig();
         } else if (target === 'league') {
-            document.getElementById('leagueStandingsView').style.display = 'block';
-            document.getElementById('leagueNewsView').style.display = 'none';
-            document.querySelector('.league-tab[data-league-view="standings"]').classList.add('active');
-            document.querySelector('.league-tab[data-league-view="news"]').classList.remove('active');
+            const standingsView = document.getElementById('leagueStandingsView');
+            const newsView = document.getElementById('leagueNewsView');
+            if (standingsView) standingsView.style.display = 'block';
+            if (newsView) newsView.style.display = 'none';
+            document.querySelectorAll('.league-tab').forEach(t => t.classList.remove('active'));
+            const standingsTab = document.querySelector('.league-tab[data-league-view="standings"]');
+            if (standingsTab) standingsTab.classList.add('active');
             loadLeagueStandings();
         }
         // 重置独立工具面板（修复黑屏）
         if (target === 'tools') {
-            document.getElementById('toolCalculator').style.display = 'block';
-            document.getElementById('toolChestSim').style.display = 'none';
-            document.getElementById('toolRandomTank').style.display = 'none';
-            document.querySelectorAll('.tool-tab').forEach(t => t.classList.remove('active'));
-            const calcTab = document.querySelector('.tool-tab[data-tool="calculator"]');
-            if (calcTab) calcTab.classList.add('active');
+            resetToolPanels('calculator');
         }
     }
+}
+
+/**
+ * 安全地重置独立工具面板到指定工具
+ * @param {'calculator' | 'chestsim' | 'randomtank'} activeTool - 要激活的工具面板
+ */
+function resetToolPanels(activeTool) {
+    const calcPanel = document.getElementById('toolCalculator');
+    const chestPanel = document.getElementById('toolChestSim');
+    const tankPanel = document.getElementById('toolRandomTank');
+
+    // 安全隐藏所有面板
+    if (calcPanel) calcPanel.style.display = 'none';
+    if (chestPanel) chestPanel.style.display = 'none';
+    if (tankPanel) tankPanel.style.display = 'none';
+
+    // 显示目标面板
+    if (activeTool === 'calculator' && calcPanel) {
+        calcPanel.style.display = 'block';
+    } else if (activeTool === 'chestsim' && chestPanel) {
+        chestPanel.style.display = 'block';
+    } else if (activeTool === 'randomtank' && tankPanel) {
+        tankPanel.style.display = 'block';
+        // 当切换到转盘面板时，重新初始化 Canvas
+        setTimeout(() => {
+            const canvas = document.getElementById('wheelCanvas');
+            if (canvas) {
+                canvas.width = canvas.offsetWidth || 400;
+                canvas.height = canvas.offsetHeight || 400;
+                wheelCtx = canvas.getContext('2d');
+                drawWheel(wheelAngle);
+            }
+        }, 150);
+    }
+
+    // 更新标签激活状态
+    document.querySelectorAll('.tool-tab').forEach(t => t.classList.remove('active'));
+    const activeTab = document.querySelector(`.tool-tab[data-tool="${activeTool}"]`);
+    if (activeTab) activeTab.classList.add('active');
 }
 
 // ==================== 打手卡片生成 ====================
@@ -266,6 +303,7 @@ function isUrgent() { return urgentCheck.checked; }
 
 function updateDetailCards() {
     const p = projectDetails[getSelectedProject()];
+    if (!p) return;
     detailDescA.textContent = p.a.desc;
     detailDescB.textContent = p.b.desc;
     detailDescC.textContent = p.c.desc;
@@ -273,9 +311,20 @@ function updateDetailCards() {
     detailPriceB.textContent = `¥${p.b.price}`;
     detailPriceC.textContent = `¥${p.c.price}`;
 }
-function calcTotal() { const base = projectDetails[getSelectedProject()][getSelectedDetail()].price; return base * getQty() * getPlayerRate() * (isUrgent() ? 1.1 : 1); }
+function calcTotal() {
+    const project = projectDetails[getSelectedProject()];
+    if (!project) return 0;
+    const detail = project[getSelectedDetail()];
+    if (!detail) return 0;
+    const base = detail.price;
+    return base * getQty() * getPlayerRate() * (isUrgent() ? 1.1 : 1);
+}
 function refreshPrice() {
-    const base = projectDetails[getSelectedProject()][getSelectedDetail()].price;
+    const project = projectDetails[getSelectedProject()];
+    if (!project) return;
+    const detail = project[getSelectedDetail()];
+    if (!detail) return;
+    const base = detail.price;
     basePriceDisplay.textContent = `¥${base.toFixed(2)}`;
     qtyMultDisplay.textContent = `×${getQty()}`;
     playerMultDisplay.textContent = `×${getPlayerRate().toFixed(2)}`;
@@ -293,7 +342,10 @@ document.addEventListener('change', e => { if (e.target.name === 'player') refre
 // 复制订单
 copyBtn.addEventListener('click', async () => {
     const p = projectDetails[getSelectedProject()];
+    if (!p) return;
     const detailKey = getSelectedDetail();
+    const detailInfo = p[detailKey];
+    if (!detailInfo) return;
     const playerChecked = document.querySelector('input[name="player"]:checked');
     const playerInfo = playerData.find(pd => pd.key === playerChecked?.value) || { name:'未知', rate:getPlayerRate() };
     const remark = document.getElementById('remarkInput')?.value.trim() || '';
@@ -301,7 +353,7 @@ copyBtn.addEventListener('click', async () => {
     const token = localStorage.getItem('token');
     const currentUsername = localStorage.getItem('username');
     const userLine = (token && currentUsername) ? `\n👤 下单用户：${currentUsername}` : '';
-    const order = `【WOTB情谊代练订单】\n🎯 项目：${p.name}\n📋 详情：方案${detailKey.toUpperCase()} - ${p[detailKey].desc}\n🔢 数量：${getQty()}\n👤 打手：${playerInfo.name} (${playerInfo.rate}x)\n⚡ 加急：${isUrgent()?'是':'否'}\n💰 总价：¥${calcTotal().toFixed(2)}\n📅 下单时间：${new Date().toLocaleString()}${remarkLine}${userLine}\n---\n如需帮助请联系客服`;
+    const order = `【WOTB情谊代练订单】\n🎯 项目：${p.name}\n📋 详情：方案${detailKey.toUpperCase()} - ${detailInfo.desc}\n🔢 数量：${getQty()}\n👤 打手：${playerInfo.name} (${playerInfo.rate}x)\n⚡ 加急：${isUrgent()?'是':'否'}\n💰 总价：¥${calcTotal().toFixed(2)}\n📅 下单时间：${new Date().toLocaleString()}${remarkLine}${userLine}\n---\n如需帮助请联系客服`;
     if (navigator.clipboard && window.isSecureContext) {
         try { await navigator.clipboard.writeText(order); copyFeedback.classList.add('show'); setTimeout(() => copyFeedback.classList.remove('show'), 1800); showToast('✅ 订单已复制'); return; } catch (err) {}
     }
@@ -383,7 +435,10 @@ const newsData = [
     { title:'⚡ 周末优惠活动', time:'2026-06-29', content:'本周六日全场下单优惠10%，代练价格大幅下降，欢迎下单！' },
     { title:'🛡️ 账号安全提醒', time:'2026-06-29', content:'近期出现第三方虚假代练，请认准本站唯一客服联系方式，谨防上当。' }
 ];
-document.getElementById('newsContainer').innerHTML = newsData.map(n => `<div class="news-item"><div class="news-title">${n.title}</div><div class="news-time">${n.time}</div><div class="news-content">${n.content}</div></div>`).join('');
+const newsContainer = document.getElementById('newsContainer');
+if (newsContainer) {
+    newsContainer.innerHTML = newsData.map(n => `<div class="news-item"><div class="news-title">${n.title}</div><div class="news-time">${n.time}</div><div class="news-content">${n.content}</div></div>`).join('');
+}
 
 // ==================== 用户登录状态管理 ====================
 function checkLoginStatus() {
@@ -453,6 +508,7 @@ loginForm.addEventListener('submit', async (e) => {
 async function loadProfile() {
     const token = localStorage.getItem('token');
     const info = document.getElementById('profileInfo');
+    if (!info) return;
     if (!token) { info.innerHTML = '<p style="color:var(--red)">请先登录</p>'; return; }
     try {
         const res = await fetch(`${API_BASE}/user/profile`, { headers: { 'Authorization': `Bearer ${token}` } });
@@ -504,7 +560,12 @@ submitOrderBtn.addEventListener('click', async () => {
     const project = getSelectedProject(); const detail = getSelectedDetail(); const qty = getQty();
     const playerChecked = document.querySelector('input[name="player"]:checked');
     const playerInfo = playerData.find(p => p.key === (playerChecked?.value || 'standard')) || { name:'标准打手', rate:1.0, identity:'standard' };
-    const urgent = isUrgent(); const total = calcTotal(); const base = projectDetails[project][detail].price;
+    const urgent = isUrgent(); const total = calcTotal();
+    const projectInfo = projectDetails[project];
+    if (!projectInfo) { showToast('❌ 请选择项目'); return; }
+    const detailInfo = projectInfo[detail];
+    if (!detailInfo) { showToast('❌ 请选择详情'); return; }
+    const base = detailInfo.price;
     const remark = document.getElementById('remarkInput')?.value.trim() || '';
     const gameUid = document.getElementById('gameUid').value.trim();
     const gameAccount = document.getElementById('gameAccount').value.trim();
@@ -513,8 +574,8 @@ submitOrderBtn.addEventListener('click', async () => {
     const clientType = clientTypeEl ? clientTypeEl.value : 'Android';
     const playerType = playerChecked ? playerChecked.value : 'standard';
     const body = {
-        project: projectDetails[project].name,
-        detail: `${detail.toUpperCase()} - ${projectDetails[project][detail].desc}`,
+        project: projectInfo.name,
+        detail: `${detail.toUpperCase()} - ${detailInfo.desc}`,
         quantity: qty,
         player_name: playerInfo.name,
         price: base,
@@ -549,9 +610,10 @@ async function loadAdminOrders() {
         if (!Array.isArray(orders)) throw new Error('数据错误');
         const filtered = status ? orders.filter(o => o.status === status) : orders;
         renderAdminOrders(filtered);
-    } catch (err) { adminOrderList.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+    } catch (err) { if (adminOrderList) adminOrderList.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
 function renderAdminOrders(orders) {
+    if (!adminOrderList) return;
     const statusOptions = ['pending', 'playing', 'done'];
     const statusText = { pending: '待接单', playing: '代练中', done: '已完成' };
     const paymentStatusMap = { unpaid: '未支付', pending: '待确认', paid: '已支付' };
@@ -634,8 +696,8 @@ document.addEventListener('click', async (e) => {
         } catch (err) { showToast('❌ 网络错误'); }
     }
 });
-statusFilter.addEventListener('change', loadAdminOrders);
-refreshOrdersBtn.addEventListener('click', loadAdminOrders);
+if (statusFilter) statusFilter.addEventListener('change', loadAdminOrders);
+if (refreshOrdersBtn) refreshOrdersBtn.addEventListener('click', loadAdminOrders);
 
 // 管理面板标签切换
 document.querySelectorAll('.admin-tab').forEach(tab => {
@@ -643,10 +705,14 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
         document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         const target = tab.dataset.admintab;
-        document.getElementById('adminOrdersSection').style.display = target === 'orders' ? 'block' : 'none';
-        document.getElementById('adminCustomSection').style.display = target === 'custom' ? 'block' : 'none';
-        document.getElementById('adminBoostersSection').style.display = target === 'boosters' ? 'block' : 'none';
-        document.getElementById('adminRolesSection').style.display = target === 'roles' ? 'block' : 'none';
+        const ordersSection = document.getElementById('adminOrdersSection');
+        const customSection = document.getElementById('adminCustomSection');
+        const boostersSection = document.getElementById('adminBoostersSection');
+        const rolesSection = document.getElementById('adminRolesSection');
+        if (ordersSection) ordersSection.style.display = target === 'orders' ? 'block' : 'none';
+        if (customSection) customSection.style.display = target === 'custom' ? 'block' : 'none';
+        if (boostersSection) boostersSection.style.display = target === 'boosters' ? 'block' : 'none';
+        if (rolesSection) rolesSection.style.display = target === 'roles' ? 'block' : 'none';
         if (target === 'custom') loadAdminCustomRequests();
         else if (target === 'boosters') loadAdminBoosters();
         else if (target === 'roles') loadUserList();
@@ -668,17 +734,18 @@ function bindUpdateRole() {
         const userId = document.getElementById('userSelect').value;
         const role = document.getElementById('roleSelect').value;
         const msgEl = document.getElementById('roleUpdateMsg');
-        if (!userId) { msgEl.textContent = '请先选择一个用户'; return; }
+        if (!userId) { if (msgEl) msgEl.textContent = '请先选择一个用户'; return; }
         try {
             const res = await fetch(`${API_BASE}/admin/users/${userId}/role`, { method:'PUT', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify({ role }) });
             const data = await res.json();
-            if (res.ok) { msgEl.textContent = '✅ ' + data.message; loadUserList(); }
-            else msgEl.textContent = '❌ ' + (data.error||'操作失败');
-        } catch (err) { msgEl.textContent = '❌ 网络错误'; }
+            if (res.ok) { if (msgEl) msgEl.textContent = '✅ ' + data.message; loadUserList(); }
+            else { if (msgEl) msgEl.textContent = '❌ ' + (data.error||'操作失败'); }
+        } catch (err) { if (msgEl) msgEl.textContent = '❌ 网络错误'; }
     });
 }
 async function loadAdminCustomRequests() {
     const token = localStorage.getItem('token'); const list = document.getElementById('adminCustomList');
+    if (!list) return;
     try {
         const res = await fetch(`${API_BASE}/admin/custom-requests`, { headers:{'Authorization':`Bearer ${token}`} });
         const requests = await res.json();
@@ -694,6 +761,7 @@ async function loadAdminCustomRequests() {
 async function loadAdminBoosters() {
     const token = localStorage.getItem('token');
     const list = document.getElementById('adminBoostersList');
+    if (!list) return;
     try {
         const res = await fetch(`${API_BASE}/admin/boosters`, { headers: { 'Authorization': `Bearer ${token}` } });
         const boosters = await res.json();
@@ -760,8 +828,10 @@ async function showOrderDetail(orderNo) {
             <p><strong>状态：</strong>${order.status}</p>
             <p><strong>支付状态：</strong>${order.payment_status}</p>
         `;
-        document.getElementById('orderDetailContent').innerHTML = html;
-        document.getElementById('orderDetailModal').style.display = 'flex';
+        const detailContent = document.getElementById('orderDetailContent');
+        const detailModal = document.getElementById('orderDetailModal');
+        if (detailContent) detailContent.innerHTML = html;
+        if (detailModal) detailModal.style.display = 'flex';
     } catch (err) { showToast('❌ ' + (err.message || '加载详情失败')); }
 }
 async function copyOrderDetail(orderNo) {
@@ -780,8 +850,10 @@ async function copyOrderDetail(orderNo) {
         showToast('✅ 订单信息已复制');
     } catch (err) { showToast('❌ 复制失败'); }
 }
-document.getElementById('closeOrderDetailBtn').addEventListener('click', () => { document.getElementById('orderDetailModal').style.display = 'none'; });
-document.getElementById('orderDetailModal').addEventListener('click', (e) => { if (e.target === document.getElementById('orderDetailModal')) document.getElementById('orderDetailModal').style.display = 'none'; });
+const closeOrderDetailBtn = document.getElementById('closeOrderDetailBtn');
+const orderDetailModal = document.getElementById('orderDetailModal');
+if (closeOrderDetailBtn) closeOrderDetailBtn.addEventListener('click', () => { if (orderDetailModal) orderDetailModal.style.display = 'none'; });
+if (orderDetailModal) orderDetailModal.addEventListener('click', (e) => { if (e.target === orderDetailModal) orderDetailModal.style.display = 'none'; });
 
 // ==================== 支付凭证上传 ====================
 let currentOrderNo = '';
@@ -795,37 +867,41 @@ const paymentError = document.getElementById('paymentError');
 document.addEventListener('click', (e) => {
     if (e.target.classList.contains('upload-payment-btn')) {
         currentOrderNo = e.target.dataset.order;
-        paymentModal.style.display = 'flex'; paymentError.textContent = ''; previewImage.style.display = 'none'; paymentFile.value = ''; pasteArea.innerText = '';
+        if (paymentModal) paymentModal.style.display = 'flex';
+        if (paymentError) paymentError.textContent = '';
+        if (previewImage) previewImage.style.display = 'none';
+        if (paymentFile) paymentFile.value = '';
+        if (pasteArea) pasteArea.innerText = '';
     }
 });
-closePaymentBtn.addEventListener('click', () => paymentModal.style.display = 'none');
-paymentModal.addEventListener('click', (e) => { if (e.target === paymentModal) paymentModal.style.display = 'none'; });
-paymentFile.addEventListener('change', (e) => {
+if (closePaymentBtn) closePaymentBtn.addEventListener('click', () => { if (paymentModal) paymentModal.style.display = 'none'; });
+if (paymentModal) paymentModal.addEventListener('click', (e) => { if (e.target === paymentModal) paymentModal.style.display = 'none'; });
+if (paymentFile) paymentFile.addEventListener('change', (e) => {
     const file = e.target.files[0]; if (!file) return;
-    const reader = new FileReader(); reader.onload = (ev) => { previewImage.src = ev.target.result; previewImage.style.display = 'block'; };
+    const reader = new FileReader(); reader.onload = (ev) => { if (previewImage) { previewImage.src = ev.target.result; previewImage.style.display = 'block'; } };
     reader.readAsDataURL(file);
 });
-pasteArea.addEventListener('paste', (e) => {
+if (pasteArea) pasteArea.addEventListener('paste', (e) => {
     const items = e.clipboardData.items;
     for (let item of items) {
         if (item.type.indexOf('image') !== -1) {
             const blob = item.getAsFile(); const reader = new FileReader();
-            reader.onload = (ev) => { previewImage.src = ev.target.result; previewImage.style.display = 'block'; };
+            reader.onload = (ev) => { if (previewImage) { previewImage.src = ev.target.result; previewImage.style.display = 'block'; } };
             reader.readAsDataURL(blob); e.preventDefault();
         }
     }
 });
-submitPaymentBtn.addEventListener('click', async () => {
-    const token = localStorage.getItem('token'); if (!token) { paymentError.textContent = '请先登录'; return; }
-    if (!currentOrderNo) { paymentError.textContent = '订单号异常'; return; }
-    const screenshot = previewImage.src;
-    if (!screenshot || screenshot === window.location.href) { paymentError.textContent = '请先选择或粘贴截图'; return; }
+if (submitPaymentBtn) submitPaymentBtn.addEventListener('click', async () => {
+    const token = localStorage.getItem('token'); if (!token) { if (paymentError) paymentError.textContent = '请先登录'; return; }
+    if (!currentOrderNo) { if (paymentError) paymentError.textContent = '订单号异常'; return; }
+    const screenshot = previewImage ? previewImage.src : '';
+    if (!screenshot || screenshot === window.location.href) { if (paymentError) paymentError.textContent = '请先选择或粘贴截图'; return; }
     try {
         const res = await fetch(`${API_BASE}/orders/${currentOrderNo}/payment`, { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify({ screenshot }) });
         const data = await res.json();
-        if (res.ok) { showToast('✅ 支付凭证已提交'); paymentModal.style.display = 'none'; if (document.getElementById('sectionProfile').style.display === 'block') await loadOrders(); }
-        else paymentError.textContent = data.error || '提交失败';
-    } catch (err) { paymentError.textContent = '网络错误'; }
+        if (res.ok) { showToast('✅ 支付凭证已提交'); if (paymentModal) paymentModal.style.display = 'none'; const sectionProfile = document.getElementById('sectionProfile'); if (sectionProfile && sectionProfile.style.display === 'block') await loadOrders(); }
+        else { if (paymentError) paymentError.textContent = data.error || '提交失败'; }
+    } catch (err) { if (paymentError) paymentError.textContent = '网络错误'; }
 });
 
 // ==================== 打手面板（全屏版） ====================
@@ -835,7 +911,8 @@ document.querySelectorAll('.booster-tab').forEach(tab => {
         tab.classList.add('active');
         const target = tab.dataset.tab;
         document.querySelectorAll('.booster-tab-content').forEach(c => c.style.display = 'none');
-        document.getElementById(target).style.display = 'block';
+        const targetEl = document.getElementById(target);
+        if (targetEl) targetEl.style.display = 'block';
         if (target === 'booster-hall') loadHallOrders();
         else if (target === 'booster-my') loadMyBoosterOrders();
         else if (target === 'booster-earnings') loadEarnings();
@@ -844,6 +921,7 @@ document.querySelectorAll('.booster-tab').forEach(tab => {
 async function loadHallOrders() {
     const token = localStorage.getItem('token');
     const list = document.getElementById('hallOrderList');
+    if (!list) return;
     try {
         const profileRes = await fetch(`${API_BASE}/user/profile`, { headers: { 'Authorization': `Bearer ${token}` } });
         const profile = await profileRes.json();
@@ -865,6 +943,7 @@ async function loadHallOrders() {
 }
 async function loadMyBoosterOrders() {
     const token = localStorage.getItem('token'); const list = document.getElementById('myBoosterOrderList');
+    if (!list) return;
     try {
         const res = await fetch(`${API_BASE}/booster/my-orders`, { headers:{'Authorization':`Bearer ${token}`} });
         const orders = await res.json();
@@ -879,6 +958,7 @@ async function loadMyBoosterOrders() {
 }
 async function loadEarnings() {
     const token = localStorage.getItem('token'); const display = document.getElementById('earningsDisplay');
+    if (!display) return;
     try {
         const res = await fetch(`${API_BASE}/booster/earnings`, { headers:{'Authorization':`Bearer ${token}`} });
         const data = await res.json();
@@ -912,40 +992,90 @@ function renderChests() {
 }
 function openChestDetail(chest) {
     currentChestId = chest.id;
-    document.getElementById('chestDetailTitle').textContent = chest.name;
-    document.getElementById('chestDetailImg').src = chest.image;
-    document.getElementById('chestDetailDesc').textContent = chest.desc;
-    document.getElementById('chestPriceDisplay').textContent = chest.price;
+    const titleEl = document.getElementById('chestDetailTitle');
+    const imgEl = document.getElementById('chestDetailImg');
+    const descEl = document.getElementById('chestDetailDesc');
+    const priceEl = document.getElementById('chestPriceDisplay');
     const probContainer = document.getElementById('chestDetailProb');
-    let html = '<div class="prob-list"><div><strong>类别</strong><strong>概率</strong></div>';
-    normalPool.forEach(item => { const p = (item.weight / normalTotalWeight * 95).toFixed(2); html += `<div><span class="prob-label">${item.name}</span><span class="prob-value">${p}%</span></div>`; });
-    rarePool.forEach(item => { const p = (item.weight / rareTotalWeight * 5).toFixed(2); html += `<div><span class="prob-label">${item.name}</span><span class="prob-value">${p}%</span></div>`; });
-    html += '</div>'; probContainer.innerHTML = html;
-    document.getElementById('chestBuyMsg').style.display = 'none';
-    document.getElementById('chestDetailModal').style.display = 'flex';
+    const buyMsg = document.getElementById('chestBuyMsg');
+    const modal = document.getElementById('chestDetailModal');
+    if (titleEl) titleEl.textContent = chest.name;
+    if (imgEl) imgEl.src = chest.image;
+    if (descEl) descEl.textContent = chest.desc;
+    if (priceEl) priceEl.textContent = chest.price;
+    if (probContainer) {
+        let html = '<div class="prob-list"><div><strong>类别</strong><strong>概率</strong></div>';
+        normalPool.forEach(item => { const p = (item.weight / normalTotalWeight * 95).toFixed(2); html += `<div><span class="prob-label">${item.name}</span><span class="prob-value">${p}%</span></div>`; });
+        rarePool.forEach(item => { const p = (item.weight / rareTotalWeight * 5).toFixed(2); html += `<div><span class="prob-label">${item.name}</span><span class="prob-value">${p}%</span></div>`; });
+        html += '</div>'; probContainer.innerHTML = html;
+    }
+    if (buyMsg) buyMsg.style.display = 'none';
+    if (modal) modal.style.display = 'flex';
 }
-document.getElementById('closeChestDetailBtn').addEventListener('click', () => { document.getElementById('chestDetailModal').style.display = 'none'; });
-document.getElementById('chestDetailModal').addEventListener('click', (e) => { if (e.target === document.getElementById('chestDetailModal')) document.getElementById('chestDetailModal').style.display = 'none'; });
-document.getElementById('buyChestBtn').addEventListener('click', () => {
+const closeChestDetailBtn = document.getElementById('closeChestDetailBtn');
+const chestDetailModal = document.getElementById('chestDetailModal');
+if (closeChestDetailBtn) closeChestDetailBtn.addEventListener('click', () => { if (chestDetailModal) chestDetailModal.style.display = 'none'; });
+if (chestDetailModal) chestDetailModal.addEventListener('click', (e) => { if (e.target === chestDetailModal) chestDetailModal.style.display = 'none'; });
+const buyChestBtn = document.getElementById('buyChestBtn');
+if (buyChestBtn) buyChestBtn.addEventListener('click', () => {
     if (!currentChestId) return;
     const chest = chestsConfig.find(c => c.id === currentChestId); if (!chest) return;
-    if (getTickets() < chest.price) { document.getElementById('chestBuyMsg').textContent = '❌ 军需券不足'; document.getElementById('chestBuyMsg').style.display = 'block'; return; }
+    const buyMsg = document.getElementById('chestBuyMsg');
+    if (getTickets() < chest.price) { if (buyMsg) { buyMsg.textContent = '❌ 军需券不足'; buyMsg.style.display = 'block'; } return; }
     setTickets(getTickets() - chest.price);
     const rand = Math.random() * 100;
     const reward = rand < 5 ? drawFromPool(rarePool, rareTotalWeight) : drawFromPool(normalPool, normalTotalWeight);
     showToast(`🎉 打开 ${chest.name} 获得：${reward.name}`);
-    document.getElementById('chestDetailModal').style.display = 'none';
+    if (chestDetailModal) chestDetailModal.style.display = 'none';
 });
 function drawFromPool(pool, totalWeight) { let r = Math.random() * totalWeight; for (let item of pool) { r -= item.weight; if (r <= 0) return item; } return pool[0]; }
-document.getElementById('checkinBtn').addEventListener('click', doCheckin);
-document.getElementById('rechargeBtn').addEventListener('click', doRecharge);
+const checkinBtn = document.getElementById('checkinBtn');
+const rechargeBtn = document.getElementById('rechargeBtn');
+if (checkinBtn) checkinBtn.addEventListener('click', doCheckin);
+if (rechargeBtn) rechargeBtn.addEventListener('click', doRecharge);
 function initChestSimulator() { updateTicketDisplay(); renderChests(); }
 
 // ==================== 独立工具子菜单 ====================
 function initToolSubMenu() {
     const tabs = document.querySelectorAll('.tool-tab');
-    const panels = { calculator: document.getElementById('toolCalculator'), chestsim: document.getElementById('toolChestSim'), randomtank: document.getElementById('toolRandomTank') };
-    tabs.forEach(tab => { tab.addEventListener('click', () => { tabs.forEach(t => t.classList.remove('active')); tab.classList.add('active'); const tool = tab.dataset.tab; Object.values(panels).forEach(p => p.style.display = 'none'); if (panels[tool]) { panels[tool].style.display = 'block'; if (tool === 'randomtank') { setTimeout(() => { wheelCanvas = document.getElementById('wheelCanvas'); if (wheelCanvas) { wheelCanvas.width = wheelCanvas.offsetWidth || 400; wheelCanvas.height = wheelCanvas.offsetHeight || 400; wheelCtx = wheelCanvas.getContext('2d'); drawWheel(wheelAngle); } }, 100); } } }); });
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            // 更新标签激活状态
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+
+            const tool = tab.dataset.tab;
+
+            // 实时获取所有工具面板（避免缓存引用失效）
+            const calculatorPanel = document.getElementById('toolCalculator');
+            const chestSimPanel = document.getElementById('toolChestSim');
+            const randomTankPanel = document.getElementById('toolRandomTank');
+
+            // 安全隐藏所有面板
+            if (calculatorPanel) calculatorPanel.style.display = 'none';
+            if (chestSimPanel) chestSimPanel.style.display = 'none';
+            if (randomTankPanel) randomTankPanel.style.display = 'none';
+
+            // 显示目标面板
+            if (tool === 'calculator' && calculatorPanel) {
+                calculatorPanel.style.display = 'block';
+            } else if (tool === 'chestsim' && chestSimPanel) {
+                chestSimPanel.style.display = 'block';
+            } else if (tool === 'randomtank' && randomTankPanel) {
+                randomTankPanel.style.display = 'block';
+                // 当切换到转盘面板时，重新初始化 Canvas
+                setTimeout(() => {
+                    const canvas = document.getElementById('wheelCanvas');
+                    if (canvas) {
+                        canvas.width = canvas.offsetWidth || 400;
+                        canvas.height = canvas.offsetHeight || 400;
+                        wheelCtx = canvas.getContext('2d');
+                        drawWheel(wheelAngle);
+                    }
+                }, 150);
+            }
+        });
+    });
 }
 
 // ==================== 转盘 ====================
@@ -991,21 +1121,24 @@ function spinWheel() {
             wheelAngle %= (2*Math.PI);
             const normalizedAngle = (wheelAngle+Math.PI*2)%(Math.PI*2), pointerAngle = (2*Math.PI-normalizedAngle+Math.PI/2)%(2*Math.PI);
             const finalSlice = Math.floor(pointerAngle/sliceAngle) % tankList.length;
-            document.getElementById('wheelResult').textContent = `🎉 抽中：${tankList[finalSlice]}`;
+            const resultEl = document.getElementById('wheelResult');
+            if (resultEl) resultEl.textContent = `🎉 抽中：${tankList[finalSlice]}`;
             spinning = false;
         }
     }
     requestAnimationFrame(animate);
 }
-document.getElementById('spinWheelBtn')?.addEventListener('click', spinWheel);
-document.getElementById('wheelCanvas')?.addEventListener('click', spinWheel);
+const spinWheelBtn = document.getElementById('spinWheelBtn');
+const wheelCanvasEl = document.getElementById('wheelCanvas');
+if (spinWheelBtn) spinWheelBtn.addEventListener('click', spinWheel);
+if (wheelCanvasEl) wheelCanvasEl.addEventListener('click', spinWheel);
 
 // ==================== 定制化需求 ====================
-customRequestCard.addEventListener('click', () => { customRequestModal.style.display = 'flex'; });
-closeCustomRequestBtn.addEventListener('click', () => customRequestModal.style.display = 'none');
-customRequestModal.addEventListener('click', (e) => { if (e.target === customRequestModal) customRequestModal.style.display = 'none'; });
-customRequestForm.addEventListener('submit', async (e) => {
-    e.preventDefault(); const token = localStorage.getItem('token'); if (!token) { customRequestError.textContent = '请先登录'; return; }
+if (customRequestCard) customRequestCard.addEventListener('click', () => { if (customRequestModal) customRequestModal.style.display = 'flex'; });
+if (closeCustomRequestBtn) closeCustomRequestBtn.addEventListener('click', () => { if (customRequestModal) customRequestModal.style.display = 'none'; });
+if (customRequestModal) customRequestModal.addEventListener('click', (e) => { if (e.target === customRequestModal) customRequestModal.style.display = 'none'; });
+if (customRequestForm) customRequestForm.addEventListener('submit', async (e) => {
+    e.preventDefault(); const token = localStorage.getItem('token'); if (!token) { if (customRequestError) customRequestError.textContent = '请先登录'; return; }
     const client_type = document.getElementById('customClientType').value;
     const request_type = document.getElementById('customRequestType').value.trim();
     const description = document.getElementById('customDescription').value.trim();
@@ -1013,13 +1146,13 @@ customRequestForm.addEventListener('submit', async (e) => {
     const budget = document.getElementById('customBudget').value.trim();
     const available_time = document.getElementById('customAvailableTime').value.trim();
     const remark = document.getElementById('customRemark').value.trim();
-    if (!client_type || !request_type || !description || !contact) { customRequestError.textContent = '请填写所有必填项'; return; }
+    if (!client_type || !request_type || !description || !contact) { if (customRequestError) customRequestError.textContent = '请填写所有必填项'; return; }
     try {
         const res = await fetch(`${API_BASE}/custom-request`, { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify({ client_type, request_type, description, contact, budget, available_time, remark }) });
         const data = await res.json();
-        if (res.ok) { showToast('✅ 定制需求已提交'); customRequestModal.style.display = 'none'; customRequestForm.reset(); customRequestError.textContent = ''; }
-        else customRequestError.textContent = data.error || '提交失败';
-    } catch (err) { customRequestError.textContent = '网络错误'; }
+        if (res.ok) { showToast('✅ 定制需求已提交'); if (customRequestModal) customRequestModal.style.display = 'none'; customRequestForm.reset(); if (customRequestError) customRequestError.textContent = ''; }
+        else { if (customRequestError) customRequestError.textContent = data.error || '提交失败'; }
+    } catch (err) { if (customRequestError) customRequestError.textContent = '网络错误'; }
 });
 
 // ==================== 联赛相关 ====================
@@ -1041,30 +1174,41 @@ function renderLeagueCards() {
     });
 }
 function showLeagueDetail(item) {
-    document.getElementById('leagueDetailTitle').textContent = item.title;
-    document.getElementById('leagueDetailTime').textContent = `发布时间：${item.time}`;
-    document.getElementById('leagueDetailContent').textContent = item.content;
-    document.getElementById('leagueDetailModal').style.display = 'flex';
+    const titleEl = document.getElementById('leagueDetailTitle');
+    const timeEl = document.getElementById('leagueDetailTime');
+    const contentEl = document.getElementById('leagueDetailContent');
+    const modal = document.getElementById('leagueDetailModal');
+    if (titleEl) titleEl.textContent = item.title;
+    if (timeEl) timeEl.textContent = `发布时间：${item.time}`;
+    if (contentEl) contentEl.textContent = item.content;
+    if (modal) modal.style.display = 'flex';
 }
-document.getElementById('closeLeagueDetailBtn').addEventListener('click', () => { document.getElementById('leagueDetailModal').style.display = 'none'; });
-document.getElementById('leagueDetailModal').addEventListener('click', (e) => { if (e.target === document.getElementById('leagueDetailModal')) document.getElementById('leagueDetailModal').style.display = 'none'; });
+const closeLeagueDetailBtn = document.getElementById('closeLeagueDetailBtn');
+const leagueDetailModal = document.getElementById('leagueDetailModal');
+if (closeLeagueDetailBtn) closeLeagueDetailBtn.addEventListener('click', () => { if (leagueDetailModal) leagueDetailModal.style.display = 'none'; });
+if (leagueDetailModal) leagueDetailModal.addEventListener('click', (e) => { if (e.target === leagueDetailModal) leagueDetailModal.style.display = 'none'; });
 
 document.querySelectorAll('.league-tab').forEach(tab => {
     tab.addEventListener('click', () => {
         document.querySelectorAll('.league-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         if (tab.dataset.leagueView === 'standings') {
-            document.getElementById('leagueStandingsView').style.display = 'block';
-            document.getElementById('leagueNewsView').style.display = 'none';
+            const standingsView = document.getElementById('leagueStandingsView');
+            const newsView = document.getElementById('leagueNewsView');
+            if (standingsView) standingsView.style.display = 'block';
+            if (newsView) newsView.style.display = 'none';
             loadLeagueStandings();
         } else {
-            document.getElementById('leagueNewsView').style.display = 'block';
-            document.getElementById('leagueStandingsView').style.display = 'none';
+            const newsView = document.getElementById('leagueNewsView');
+            const standingsView = document.getElementById('leagueStandingsView');
+            if (newsView) newsView.style.display = 'block';
+            if (standingsView) standingsView.style.display = 'none';
         }
     });
 });
 async function loadLeagueStandings() {
     const container = document.getElementById('leagueStandingsContainer');
+    if (!container) return;
     container.innerHTML = '加载中...';
     const token = localStorage.getItem('token');
     try {
@@ -1093,8 +1237,9 @@ document.querySelectorAll('.league-admin-btn').forEach(btn => {
         btn.classList.add('active');
         const panel = btn.dataset.panel;
         document.querySelectorAll('.league-panel').forEach(p => p.style.display = 'none');
-        const targetPanel = panel === 'league-config' ? 'leagueConfigPanel' : (panel === 'league-teams' ? 'leagueTeamsPanel' : 'leagueScoresPanel');
-        document.getElementById(targetPanel).style.display = 'block';
+        const targetPanelId = panel === 'league-config' ? 'leagueConfigPanel' : (panel === 'league-teams' ? 'leagueTeamsPanel' : 'leagueScoresPanel');
+        const targetPanel = document.getElementById(targetPanelId);
+        if (targetPanel) targetPanel.style.display = 'block';
         if (panel === 'league-config') loadLeagueConfig();
         else if (panel === 'league-teams') loadLeagueTeams();
         else if (panel === 'league-scores') loadLeagueScoresPanel();
@@ -1105,6 +1250,7 @@ let selectedSeasonId = null;
 
 async function loadLeagueConfig() {
     const panel = document.getElementById('leagueConfigPanel');
+    if (!panel) return;
     panel.innerHTML = '加载中...';
     const token = localStorage.getItem('token');
     try {
@@ -1185,7 +1331,9 @@ window.deleteLeagueSeason = async function(id) {
     } catch (err) { showToast('❌ 网络错误'); }
 };
 window.saveLeagueSeason = async function() {
-    const name = document.getElementById('seasonName').value.trim();
+    const nameEl = document.getElementById('seasonName');
+    if (!nameEl) return;
+    const name = nameEl.value.trim();
     if (!name) return showToast('❌ 请输入赛季名称');
     const token = localStorage.getItem('token');
     try {
@@ -1198,6 +1346,7 @@ window.saveLeagueSeason = async function() {
 // 队伍表
 async function loadLeagueTeams() {
     const panel = document.getElementById('leagueTeamsPanel');
+    if (!panel) return;
     panel.innerHTML = '加载中...';
     const token = localStorage.getItem('token');
     try {
@@ -1209,7 +1358,6 @@ async function loadLeagueTeams() {
         } else {
             html += '<ul>';
             teams.forEach(t => {
-                // 修复：队伍名用 span.team-name 包裹，避免换行错位
                 html += `<li><span class="team-name">${t.name}</span> <button onclick="editTeam(${t.id}, '${t.name.replace(/'/g, "\\'")}')">编辑</button> <button onclick="deleteTeam(${t.id})">删除</button></li>`;
             });
             html += '</ul>';
@@ -1222,7 +1370,9 @@ async function loadLeagueTeams() {
     } catch (err) { panel.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
 window.addTeam = async function() {
-    const name = document.getElementById('newTeamName').value.trim();
+    const nameEl = document.getElementById('newTeamName');
+    if (!nameEl) return;
+    const name = nameEl.value.trim();
     if (!name) return showToast('❌ 请输入队伍名');
     const token = localStorage.getItem('token');
     try {
@@ -1257,6 +1407,7 @@ window.deleteTeam = async function(id) {
 // 成绩表
 async function loadLeagueScoresPanel() {
     const panel = document.getElementById('leagueScoresPanel');
+    if (!panel) return;
     panel.innerHTML = '加载中...';
     const token = localStorage.getItem('token');
     try {
@@ -1282,11 +1433,16 @@ async function loadLeagueScoresPanel() {
     } catch (err) { panel.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
 window.loadScoreForm = async function() {
-    const seasonId = document.getElementById('scoreSeason').value;
-    const round = document.getElementById('scoreRound').value;
-    const day = document.getElementById('scoreDay').value;
+    const seasonIdEl = document.getElementById('scoreSeason');
+    const roundEl = document.getElementById('scoreRound');
+    const dayEl = document.getElementById('scoreDay');
+    if (!seasonIdEl || !roundEl || !dayEl) return;
+    const seasonId = seasonIdEl.value;
+    const round = roundEl.value;
+    const day = dayEl.value;
     const token = localStorage.getItem('token');
     const formDiv = document.getElementById('scoreForm');
+    if (!formDiv) return;
     formDiv.innerHTML = '加载队伍...';
     try {
         const scoresRes = await fetch(`${API_BASE}/admin/leagues/${seasonId}/scores/${round}/${day}`, { headers: { 'Authorization': `Bearer ${token}` } });
