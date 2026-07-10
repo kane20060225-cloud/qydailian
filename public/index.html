@@ -114,7 +114,7 @@
                 <p class="quantity-hint">请输入1到99之间的数量</p>
             </section>
 
-            <!-- 打手选择（四个类别） -->
+            <!-- 打手选择 -->
             <section class="card">
                 <div class="card-header"><span class="card-num">04</span><h3>选择打手类别</h3><span class="section-hint">影响价格倍率与接单资格</span></div>
                 <div class="player-grid" id="playerGrid"></div>
@@ -212,7 +212,7 @@
                 <button class="tool-tab" data-tool="randomtank">🎲 这把玩什么</button>
             </div>
 
-            <!-- 计算器面板 -->
+            <!-- 计算器面板：初始显示由JS控制，不再写内联style -->
             <div id="toolCalculator" class="tool-panel">
                 <section class="card">
                     <div class="calc-type">
@@ -232,7 +232,7 @@
             </div>
 
             <!-- 开箱模拟器面板 -->
-            <div id="toolChestSim" class="tool-panel" style="display: none;">
+            <div id="toolChestSim" class="tool-panel">
                 <section class="card">
                     <div class="card-header">
                         <span class="card-num">🎁</span>
@@ -251,7 +251,7 @@
             </div>
 
             <!-- 这把玩什么转盘面板 -->
-            <div id="toolRandomTank" class="tool-panel" style="display: none;">
+            <div id="toolRandomTank" class="tool-panel">
                 <section class="card">
                     <div class="card-header"><span class="card-num">🎲</span><h3>这把玩什么？</h3></div>
                     <div style="display: flex; flex-direction: column; align-items: center;">
@@ -292,7 +292,7 @@
         </div>
     </div>
 
-    <!-- 板块五：联赛相关（积分榜优先） -->
+    <!-- 板块五：联赛相关 -->
     <div id="sectionLeague" class="content-section" style="display: none;">
         <div class="section-top">
             <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>

@@ -23,6 +23,53 @@ body {
     min-height: 100vh;
 }
 
+/* ==================== 全局按钮基础样式 ==================== */
+button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 18px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--card-bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+    line-height: 1.4;
+    white-space: nowrap;
+    text-decoration: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+button:hover {
+    border-color: var(--accent);
+    background: rgba(240,160,80,0.08);
+    box-shadow: 0 0 12px var(--accent-glow);
+    transform: translateY(-1px);
+}
+
+button:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 /* ==================== 顶部导航栏 ==================== */
 .top-bar {
     display: flex; justify-content: space-between; align-items: center;
@@ -288,7 +335,11 @@ body {
 }
 .tool-tab.active { border-color: var(--accent); background: rgba(240,160,80,0.1); color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
 
-/* 独立工具面板不做任何强制隐藏，完全由 JS 控制 display */
+/* 工具面板默认隐藏，完全由 JS 控制 */
+.tool-panel {
+    display: none;
+}
+
 /* 计算器 */
 .calc-type { display: flex; gap: 12px; align-items: center; margin-bottom: 20px; }
 .calc-type-option { cursor: pointer; }
@@ -317,6 +368,25 @@ body {
     font-weight: 700; cursor: pointer; transition: all var(--transition);
 }
 .calc-btn:hover { background: rgba(240,160,80,0.2); box-shadow: 0 0 20px var(--accent-glow); }
+
+/* 计算器复制结果按钮 */
+.copy-calc-btn {
+    padding: 8px 18px;
+    margin-top: 10px;
+    border-radius: var(--radius-sm);
+    border: 2px solid var(--accent);
+    background: rgba(240,160,80,0.1);
+    color: var(--accent);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+    font-size: 0.85rem;
+}
+.copy-calc-btn:hover {
+    background: rgba(240,160,80,0.2);
+    box-shadow: 0 0 12px var(--accent-glow);
+}
+
 .calc-result { margin-top: 12px; padding: 16px; background: #0f172a; border-radius: var(--radius-sm); border: 1px solid var(--border); }
 .tool-hint { text-align: center; color: var(--text-muted); font-size: 0.78rem; }
 
@@ -604,7 +674,7 @@ body {
 .league-panel { margin-top: 16px; }
 .league-panel h4 { color: var(--accent); margin-bottom: 12px; }
 
-/* 队伍列表样式（修复对齐） */
+/* 队伍列表样式 */
 .league-panel ul { list-style: none; padding: 0; }
 .league-panel ul li {
     padding: 8px 0;
@@ -642,10 +712,10 @@ body {
 }
 #rulesSection input[type="number"] { width: 60px; }
 
-/* 联赛面板中的通用按钮（保存规则、提交成绩等） */
+/* 联赛面板中的通用按钮 */
 .league-panel > button,
 .league-panel .add-btn,
-.league-panel button { /* 确保所有按钮都有样式 */
+.league-panel button {
     padding: 6px 14px;
     border-radius: 6px;
     border: 1px solid var(--accent);
@@ -677,11 +747,6 @@ body {
     background: rgba(240,160,80,0.1); color: var(--accent); cursor: pointer; transition: all var(--transition);
 }
 .league-panel .team-add-row button:hover { background: rgba(240,160,80,0.2); }
-
-/* 统一所有动态生成按钮的样式（安全网） */
-button {
-    /* 基本样式已覆盖，确保没有浏览器默认样式残留 */
-}
 
 /* ==================== 全局表单元素 ==================== */
 select {
