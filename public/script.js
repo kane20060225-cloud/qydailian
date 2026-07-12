@@ -26,6 +26,26 @@ function safeSetItem(key, value) {
     }
 }
 
+// ==================== 快捷获取 DOM 元素 ====================
+const getEl = (id) => document.getElementById(id);
+
+// ==================== 积分抵扣相关 ====================
+async function loadUserCreditsForBoost() {
+  const token = safeGetItem('token');
+  if (!token) return;
+  try {
+    const res = await fetch(`${API_BASE}/user/credits`, { headers: { 'Authorization': `Bearer ${token}` } });
+    const data = await res.json();
+    const el = getEl('availableCredits');
+    if (el) el.textContent = data.qy_credits || 0;
+  } catch (e) {}
+}
+
+function getUseCredits() {
+  const input = getEl('useCreditsInput');
+  return input ? parseInt(input.value) || 0 : 0;
+}
+
 // ==================== 配置 ====================
 const API_BASE = '/api';
 
@@ -105,8 +125,6 @@ const leagueData = [
 ];
 
 // ==================== DOM 元素引用 (带 null 检查) ====================
-const getEl = (id) => document.getElementById(id);
-
 const mainMenu = getEl('mainMenu');
 const sections = {
     boost: getEl('sectionBoost'),
@@ -117,7 +135,8 @@ const sections = {
     profile: getEl('sectionProfile'),
     admin: getEl('sectionAdmin'),
     booster: getEl('sectionBooster'),
-    leagueAdmin: getEl('sectionLeagueAdmin')
+    leagueAdmin: getEl('sectionLeagueAdmin'),
+    qyshop: getEl('sectionQYShop')
 };
 
 // 代练相关
@@ -188,12 +207,11 @@ function init() {
     generatePlayers();
     checkLoginStatus();
     bindUpdateRole();
-    initChestSimulator();  // 预渲染箱子列表和券显示
+    initChestSimulator();
     renderLeagueCards();
-    // 工具面板完全由 showSection 和 switchTool 控制，不再调用 initToolSubMenu
 }
 
-// ==================== 板块切换 (全屏页面) ====================
+// ==================== 板块切换 ====================
 document.querySelectorAll('.menu-card').forEach(card => {
     card.addEventListener('click', () => {
         const target = card.dataset.target;
@@ -212,7 +230,6 @@ if (boosterPanelBtn) boosterPanelBtn.addEventListener('click', () => showSection
 if (leagueAdminBtn) leagueAdminBtn.addEventListener('click', () => showSection('leagueAdmin'));
 
 function showSection(target) {
-    // 安全隐藏所有板块
     if (mainMenu) mainMenu.style.display = 'none';
     Object.values(sections).forEach(sec => { if (sec) sec.style.display = 'none'; });
 
@@ -225,7 +242,6 @@ function showSection(target) {
     if (!targetSection) return;
     targetSection.style.display = 'block';
 
-    // 根据目标板块加载数据
     switch (target) {
         case 'profile':
             loadProfile();
@@ -251,7 +267,13 @@ function showSection(target) {
             loadLeagueStandings();
             break;
         case 'tools':
-            resetToolsOnEnter();  // 统一工具面板重置
+            resetToolsOnEnter();
+            break;
+        case 'qyshop':
+            loadShopItems();
+            break;
+        case 'boost':
+            loadUserCreditsForBoost();
             break;
     }
 }
@@ -297,14 +319,18 @@ function updateDetailCards() {
     if (detailPriceB) detailPriceB.textContent = `¥${p.b.price}`;
     if (detailPriceC) detailPriceC.textContent = `¥${p.c.price}`;
 }
+
 function calcTotal() {
     const project = projectDetails[getSelectedProject()];
     if (!project) return 0;
     const detail = project[getSelectedDetail()];
     if (!detail || isNaN(detail.price)) return 0;
     const base = detail.price;
-    return base * getQty() * getPlayerRate() * (isUrgent() ? 1.1 : 1);
+    const subTotal = base * getQty() * getPlayerRate() * (isUrgent() ? 1.1 : 1);
+    const creditsDiscount = getUseCredits() / 100;
+    return Math.max(0, subTotal - creditsDiscount);
 }
+
 function refreshPrice() {
     const project = projectDetails[getSelectedProject()];
     if (!project) return;
@@ -324,6 +350,20 @@ if (qtyPlus) qtyPlus.addEventListener('click', () => { if (getQty() < 99) { qtyI
 if (qtyInput) qtyInput.addEventListener('input', () => { qtyInput.value = getQty(); refreshPrice(); });
 if (urgentCheck) urgentCheck.addEventListener('change', refreshPrice);
 document.addEventListener('change', e => { if (e.target.name === 'player') refreshPrice(); });
+
+// 积分输入监听
+const useCreditsInput = getEl('useCreditsInput');
+const discountAmountEl = getEl('discountAmount');
+if (useCreditsInput) {
+    useCreditsInput.addEventListener('input', () => {
+        let credits = parseInt(useCreditsInput.value) || 0;
+        const maxCredits = parseInt(getEl('availableCredits')?.textContent || 0);
+        if (credits > maxCredits) credits = maxCredits;
+        useCreditsInput.value = credits;
+        if (discountAmountEl) discountAmountEl.textContent = `¥${(credits / 100).toFixed(2)}`;
+        refreshPrice();
+    });
+}
 
 // 复制订单
 if (copyBtn) copyBtn.addEventListener('click', async () => {
@@ -516,20 +556,45 @@ async function loadProfile() {
     const token = safeGetItem('token');
     if (!token) { info.innerHTML = '<p style="color:var(--red)">请先登录</p>'; return; }
     try {
-        const res = await fetch(`${API_BASE}/user/profile`, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (!res.ok) throw new Error('获取失败');
-        const user = await res.json();
+        const [userRes, creditRes] = await Promise.all([
+            fetch(`${API_BASE}/user/profile`, { headers: { 'Authorization': `Bearer ${token}` } }),
+            fetch(`${API_BASE}/user/credits`, { headers: { 'Authorization': `Bearer ${token}` } })
+        ]);
+        const user = await userRes.json();
+        const credits = await creditRes.json();
+
+        const vipNames = ['VIP 0', 'VIP 1', 'VIP 2', 'VIP 3', 'VIP 4', 'VIP 5'];
+        const vipThresholds = [0, 600, 1500, 3000, 6000, 15000];
+        const currentVip = credits.vip_level || 0;
+        const totalEarned = credits.total_earned_credits || 0;
+        let nextThreshold = vipThresholds[currentVip + 1] || totalEarned;
+        let vipProgress = 0;
+        if (nextThreshold > 0) {
+            const prevThreshold = vipThresholds[currentVip] || 0;
+            vipProgress = Math.min(100, Math.floor(((totalEarned - prevThreshold) / (nextThreshold - prevThreshold)) * 100));
+        }
+
         info.innerHTML = `
             <p><span>用户名：</span><span>${user.username}</span></p>
             <p><span>邮箱：</span><span>${user.email || '未填写'}</span></p>
             <p><span>手机：</span><span>${user.phone || '未填写'}</span></p>
-            <p><span>余额：</span><span>¥${user.balance}</span></p>
+            <p><span>QY积分：</span><span><img src="qy-coin.png" style="width:18px;height:18px;vertical-align:middle;margin-right:4px;">${credits.qy_credits} (可用) / ${totalEarned} (累积)</span></p>
+            <p><span>VIP等级：</span><span>${vipNames[currentVip]}</span></p>
+            <div style="background:#1e2a3a; border-radius:10px; height:10px; margin:8px 0; width:100%;">
+                <div style="width:${vipProgress}%; height:100%; background:var(--accent); border-radius:10px;"></div>
+            </div>
+            <p style="font-size:0.75rem; color:var(--text-muted);">升级还需 ${nextThreshold - totalEarned} 积分</p>
             <p><span>信誉分：</span><span>${user.reputation}</span></p>
             <p><span>推荐码：</span><span>${user.referral_code}</span></p>
             <p><span>打手身份：</span><span>${user.booster_identity || 'standard'}</span></p>
             <p><span>打手积分：</span><span>${user.booster_points || 0}</span></p>
             <p><span>注册时间：</span><span>${new Date(user.created_at).toLocaleString()}</span></p>
+            <div style="margin-top:10px;">
+                <button class="submit-btn" id="openShopBtn">🎁 积分商城</button>
+            </div>
         `;
+
+        getEl('openShopBtn')?.addEventListener('click', () => showSection('qyshop'));
     } catch (err) { info.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
 async function loadOrders() {
@@ -557,7 +622,7 @@ async function loadOrders() {
     } catch (err) { list.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
 
-// ==================== 提交订单 (防重复点击) ====================
+// ==================== 提交订单 (防重复点击 + 积分抵扣) ====================
 if (submitOrderBtn) {
     submitOrderBtn.addEventListener('click', async function() {
         if (this.disabled) return;
@@ -579,6 +644,8 @@ if (submitOrderBtn) {
         const clientTypeEl = document.querySelector('input[name="clientType"]:checked');
         const clientType = clientTypeEl ? clientTypeEl.value : 'Android';
         const playerType = playerChecked ? playerChecked.value : 'standard';
+        const useCredits = getUseCredits();
+
         this.disabled = true;
         this.textContent = '⏳ 提交中...';
         try {
@@ -595,7 +662,8 @@ if (submitOrderBtn) {
                 game_account: gameAccount || null,
                 game_password: gamePassword || null,
                 client_type: clientType,
-                player_type: playerType
+                player_type: playerType,
+                use_credits: useCredits
             };
             const res = await fetch(`${API_BASE}/orders`, { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify(body) });
             const data = await res.json();
@@ -1028,7 +1096,7 @@ function initChestSimulator() {
     renderChests();
 }
 
-// ==================== 独立工具面板控制 (彻底重构版) ====================
+// ==================== 独立工具面板控制 ====================
 const toolTabs = document.querySelectorAll('.tool-tab');
 const toolPanels = {
     calculator: getEl('toolCalculator'),
@@ -1235,7 +1303,6 @@ document.querySelectorAll('.league-admin-btn').forEach(btn => {
 
 let selectedSeasonId = null;
 
-// 赛季配置
 async function loadLeagueConfig() {
     const panel = getEl('leagueConfigPanel'); if (!panel) return;
     panel.innerHTML = '加载中...';
@@ -1253,7 +1320,6 @@ async function loadLeagueConfig() {
         if (seasons.length > 0) { selectedSeasonId = seasons[0].id; loadRules(selectedSeasonId); }
     } catch (err) { panel.innerHTML = '加载失败'; }
 }
-
 async function loadRules(seasonId) {
     const token = safeGetItem('token');
     const rulesSection = getEl('rulesSection'); if (!rulesSection) return;
@@ -1277,7 +1343,6 @@ async function loadRules(seasonId) {
         rulesSection.innerHTML = html;
     } catch (err) { rulesSection.innerHTML = '加载规则失败'; }
 }
-
 async function saveRules(seasonId) {
     const token = safeGetItem('token');
     const rules = [];
@@ -1297,7 +1362,6 @@ async function saveRules(seasonId) {
         if (res.ok) showToast('✅ 规则已保存'); else showToast('❌ ' + (data.error||'保存失败'));
     } catch (err) { showToast('❌ 网络错误'); }
 }
-
 window.editLeagueSeason = async function(id) {
     const token = safeGetItem('token');
     const name = prompt('修改赛季名称');
@@ -1310,7 +1374,6 @@ window.editLeagueSeason = async function(id) {
         if (res.ok) { showToast('✅ 赛季已更新'); loadLeagueConfig(); } else showToast('❌ ' + (data.error||'更新失败'));
     } catch (err) { showToast('❌ 网络错误'); }
 };
-
 window.deleteLeagueSeason = async function(id) {
     if (!confirm('确定删除该赛季吗？')) return;
     const token = safeGetItem('token');
@@ -1320,7 +1383,6 @@ window.deleteLeagueSeason = async function(id) {
         if (res.ok) { showToast('🗑️ 赛季已删除'); loadLeagueConfig(); } else showToast('❌ ' + (data.error||'删除失败'));
     } catch (err) { showToast('❌ 网络错误'); }
 };
-
 window.saveLeagueSeason = async function() {
     const nameEl = getEl('seasonName');
     if (!nameEl) return;
@@ -1334,7 +1396,7 @@ window.saveLeagueSeason = async function() {
     } catch (err) { showToast('❌ 网络错误'); }
 };
 
-// ==================== 队伍表 ====================
+// 队伍表
 async function loadLeagueTeams() {
     const panel = getEl('leagueTeamsPanel'); if (!panel) return;
     panel.innerHTML = '加载中...';
@@ -1359,7 +1421,6 @@ async function loadLeagueTeams() {
         panel.innerHTML = html;
     } catch (err) { panel.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
-
 window.addTeam = async function() {
     const nameEl = getEl('newTeamName');
     if (!nameEl) return;
@@ -1373,7 +1434,6 @@ window.addTeam = async function() {
         else showToast('❌ ' + (data.error||'添加失败'));
     } catch (err) { showToast('❌ 网络错误'); }
 };
-
 window.editTeam = async function(id, oldName) {
     const newName = prompt('修改队伍名称', oldName);
     if (!newName || newName === oldName) return;
@@ -1385,7 +1445,6 @@ window.editTeam = async function(id, oldName) {
         else showToast('❌ ' + (data.error||'更新失败'));
     } catch (err) { showToast('❌ 网络错误'); }
 };
-
 window.deleteTeam = async function(id) {
     if (!confirm('确定删除该队伍吗？')) return;
     const token = safeGetItem('token');
@@ -1397,7 +1456,7 @@ window.deleteTeam = async function(id) {
     } catch (err) { showToast('❌ 网络错误'); }
 };
 
-// ==================== 成绩表 ====================
+// 成绩表
 async function loadLeagueScoresPanel() {
     const panel = getEl('leagueScoresPanel'); if (!panel) return;
     panel.innerHTML = '加载中...';
@@ -1424,7 +1483,6 @@ async function loadLeagueScoresPanel() {
         panel.innerHTML = html;
     } catch (err) { panel.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
-
 window.loadScoreForm = async function() {
     const seasonIdEl = getEl('scoreSeason');
     const roundEl = getEl('scoreRound');
@@ -1454,7 +1512,6 @@ window.loadScoreForm = async function() {
         formDiv.innerHTML = html;
     } catch (err) { formDiv.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 };
-
 window.submitScores = async function(seasonId, round, day) {
     const token = safeGetItem('token');
     const scores = [];
@@ -1478,6 +1535,56 @@ window.submitScores = async function(seasonId, round, day) {
         else showToast('❌ ' + (data.error||'提交失败'));
     } catch (err) { showToast('❌ 网络错误'); }
 };
+
+// ==================== 积分商城 ====================
+async function loadShopItems() {
+  const container = getEl('shopItemsContainer');
+  if (!container) return;
+  container.innerHTML = '加载中...';
+  try {
+    const res = await fetch(`${API_BASE}/shop/items`);
+    const items = await res.json();
+    if (!items.length) {
+      container.innerHTML = '<p>暂无商品</p>';
+      return;
+    }
+    let html = '';
+    items.forEach(item => {
+      html += `
+        <div class="card" style="text-align:center;">
+          <img src="${item.image || 'qy-coin.png'}" style="width:100px; height:100px; object-fit:contain; margin-bottom:10px;" onerror="this.src='qy-coin.png'">
+          <h4>${item.name}</h4>
+          <p style="color:var(--text-secondary); font-size:0.9rem;">${item.description || ''}</p>
+          <p style="color:#f0c060; font-weight:700;">🪙 ${item.price_credits} 积分</p>
+          <button class="submit-btn buy-item-btn" data-itemid="${item.id}" data-name="${item.name}">购买</button>
+        </div>
+      `;
+    });
+    container.innerHTML = html;
+    document.querySelectorAll('.buy-item-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const itemId = btn.dataset.itemid;
+        const itemName = btn.dataset.name;
+        if (!confirm(`确定用积分购买 ${itemName} 吗？`)) return;
+        const token = safeGetItem('token');
+        if (!token) { showToast('请先登录'); return; }
+        try {
+          const res = await fetch(`${API_BASE}/shop/buy/${itemId}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (res.ok) {
+            showToast('购买成功！');
+            loadShopItems();
+          } else {
+            showToast(data.error || '购买失败');
+          }
+        } catch (err) { showToast('网络错误'); }
+      });
+    });
+  } catch (err) { container.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+}
 
 // ==================== 启动 ====================
 init();

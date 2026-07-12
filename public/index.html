@@ -162,7 +162,7 @@
                 <p class="remark-hint">备注内容将附加在订单信息中，方便客服处理。</p>
             </section>
 
-            <!-- 加急服务 + 价格展示 -->
+            <!-- 加急服务 + 价格展示 (包含积分抵扣) -->
             <section class="card">
                 <div class="card-header"><span class="card-num">⚡</span><h3>加急服务</h3></div>
                 <label class="urgent-toggle">
@@ -172,6 +172,18 @@
                     <span class="badge-urgent">+10%</span>
                 </label>
                 <p class="urgent-hint">加急服务将在总价基础上额外增加10%费用，优先安排打手</p>
+
+                <!-- QY积分抵扣区域 -->
+                <div class="credits-section" style="margin-bottom:15px;">
+                    <div class="card-header"><span class="card-num">🎫</span><h3>QY积分抵扣</h3></div>
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <span>可用积分：<strong id="availableCredits">0</strong></span>
+                        <input type="number" id="useCreditsInput" placeholder="使用积分" min="0" step="100" style="width:120px;" class="remark-input">
+                        <span>= 抵扣 <strong id="discountAmount">¥0.00</strong></span>
+                    </div>
+                    <p class="quantity-hint">100积分 = 1元，抵扣金额将从总价中扣除。</p>
+                </div>
+
                 <div class="price-box">
                     <div class="price-row"><span class="price-label">基础单价</span><span class="price-value" id="basePriceDisplay">¥50.00</span></div>
                     <div class="price-row"><span class="price-label">数量倍率</span><span class="price-value" id="qtyMultiplierDisplay">×1</span></div>
@@ -212,7 +224,7 @@
                 <button class="tool-tab" data-tool="randomtank">🎲 这把玩什么</button>
             </div>
 
-            <!-- 计算器面板：初始显示由JS控制，不再写内联style -->
+            <!-- 计算器面板 -->
             <div id="toolCalculator" class="tool-panel">
                 <section class="card">
                     <div class="calc-type">
@@ -425,6 +437,17 @@
             <div id="leagueConfigPanel" class="league-panel"></div>
             <div id="leagueTeamsPanel" class="league-panel" style="display:none;"></div>
             <div id="leagueScoresPanel" class="league-panel" style="display:none;"></div>
+        </div>
+    </div>
+
+    <!-- ==================== 积分商城页面 ==================== -->
+    <div id="sectionQYShop" class="content-section" style="display: none;">
+        <div class="section-top">
+            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+            <h2 class="section-heading">🎁 积分商城</h2>
+        </div>
+        <div class="container">
+            <div id="shopItemsContainer" class="league-news-grid"></div>
         </div>
     </div>
 
