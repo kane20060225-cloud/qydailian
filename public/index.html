@@ -22,6 +22,7 @@
                 </button>
                 <div class="user-dropdown" id="userDropdown" style="display: none;">
                    <button id="profileBtn">个人中心</button>
+                   <button id="settingsBtn">⚙️ 设置</button>
                    <button id="adminPanelBtn" style="display:none;">管理面板</button>
                    <button id="boosterPanelBtn" style="display:none;">打手面板</button>
                    <button id="leagueAdminBtn" style="display:none;">联赛管理</button>
@@ -81,7 +82,6 @@
                     <label class="project-card" data-project="mmedal"><input type="radio" name="project" value="mmedal"><div class="card-inner"><span class="card-icon">🏅</span><span class="card-name">M章</span><span class="card-desc">获取M级勋章</span></div></label>
                     <label class="project-card" data-project="rings"><input type="radio" name="project" value="rings"><div class="card-inner"><span class="card-icon">💍</span><span class="card-name">三环</span><span class="card-desc">炮管环数提升</span></div></label>
                     <label class="project-card" data-project="rating"><input type="radio" name="project" value="rating"><div class="card-inner"><span class="card-icon">🏆</span><span class="card-name">评级</span><span class="card-desc">账号评级提升</span></div></label>
-                    <!-- 定制化需求卡片 -->
                     <div class="project-card custom-project-card" id="customRequestCard">
                         <div class="card-inner">
                             <span class="card-icon">✏️</span>
@@ -162,7 +162,7 @@
                 <p class="remark-hint">备注内容将附加在订单信息中，方便客服处理。</p>
             </section>
 
-            <!-- 加急服务 + 价格展示 (包含积分抵扣) -->
+            <!-- 加急服务 + 价格展示（含积分抵扣） -->
             <section class="card">
                 <div class="card-header"><span class="card-num">⚡</span><h3>加急服务</h3></div>
                 <label class="urgent-toggle">
@@ -448,6 +448,31 @@
         </div>
         <div class="container">
             <div id="shopItemsContainer" class="league-news-grid"></div>
+        </div>
+    </div>
+
+    <!-- ==================== 设置面板 ==================== -->
+    <div id="sectionSettings" class="content-section" style="display: none;">
+        <div class="section-top">
+            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+            <h2 class="section-heading">⚙️ 设置</h2>
+        </div>
+        <div class="container settings-layout">
+            <!-- 左侧导航 -->
+            <div class="settings-nav" id="settingsNav">
+                <button class="settings-nav-btn active" data-setting="account-security">🔐 账号与安全</button>
+                <button class="settings-nav-btn" data-setting="appearance">🎨 站内风格</button>
+                <button class="settings-nav-btn" data-setting="notifications">🔔 通知与提醒</button>
+                <button class="settings-nav-btn" data-setting="privacy">👁️ 隐私与显示</button>
+                <button class="settings-nav-btn" data-setting="order-defaults">📦 订单默认设置</button>
+                <button class="settings-nav-btn" data-setting="language">🌐 语言 / 地区</button>
+                <button class="settings-nav-btn" data-setting="messages">📬 站内邮箱</button>
+                <button class="settings-nav-btn" data-setting="devices">📱 登录设备</button>
+            </div>
+            <!-- 右侧内容区 -->
+            <div class="settings-content" id="settingsContent">
+                <!-- 每个设置面板由JS动态渲染，此处仅提供容器 -->
+            </div>
         </div>
     </div>
 

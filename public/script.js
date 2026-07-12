@@ -136,7 +136,8 @@ const sections = {
     admin: getEl('sectionAdmin'),
     booster: getEl('sectionBooster'),
     leagueAdmin: getEl('sectionLeagueAdmin'),
-    qyshop: getEl('sectionQYShop')
+    qyshop: getEl('sectionQYShop'),
+    settings: getEl('sectionSettings')
 };
 
 // 代练相关
@@ -199,6 +200,7 @@ const profileBtn = getEl('profileBtn');
 const adminPanelBtn = getEl('adminPanelBtn');
 const boosterPanelBtn = getEl('boosterPanelBtn');
 const leagueAdminBtn = getEl('leagueAdminBtn');
+const settingsBtn = getEl('settingsBtn');
 
 // ==================== 初始化 ====================
 function init() {
@@ -209,6 +211,7 @@ function init() {
     bindUpdateRole();
     initChestSimulator();
     renderLeagueCards();
+    applySavedTheme();
 }
 
 // ==================== 板块切换 ====================
@@ -272,6 +275,9 @@ function showSection(target) {
         case 'qyshop':
             loadShopItems();
             break;
+        case 'settings':
+            loadSettingsPanel();
+            break;    
         case 'boost':
             loadUserCreditsForBoost();
             break;
@@ -1585,6 +1591,367 @@ async function loadShopItems() {
     });
   } catch (err) { container.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
+
+
+// ==================== 设置面板核心 ====================
+const settingsBtn = getEl('settingsBtn');
+if (settingsBtn) settingsBtn.addEventListener('click', () => showSection('settings'));
+
+// 加载设置面板主框架
+async function loadSettingsPanel() {
+    const content = getEl('settingsContent');
+    if (!content) return;
+    content.innerHTML = '<p>加载中...</p>';
+    const token = safeGetItem('token');
+    if (!token) { content.innerHTML = '<p style="color:var(--red)">请先登录</p>'; return; }
+    try {
+        const res = await fetch(`${API_BASE}/user/settings`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!res.ok) throw new Error('获取设置失败');
+        const settings = await res.json();
+        window._userSettings = settings;  // 缓存设置供子面板使用
+        bindSettingsNav();
+        // 默认显示第一个（账号与安全）
+        const firstBtn = document.querySelector('.settings-nav-btn');
+        if (firstBtn) {
+            firstBtn.classList.add('active');
+            showSettingSection(firstBtn.dataset.setting);
+        }
+    } catch (e) {
+        content.innerHTML = '<p style="color:var(--red)">加载设置失败</p>';
+    }
+}
+
+// 绑定左侧导航点击
+function bindSettingsNav() {
+    const navBtns = document.querySelectorAll('.settings-nav-btn');
+    navBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            navBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            showSettingSection(btn.dataset.setting);
+        });
+    });
+}
+
+// 根据导航名称显示右侧内容
+function showSettingSection(name) {
+    switch (name) {
+        case 'account-security': renderAccountSecurity(); break;
+        case 'appearance': renderAppearance(); break;
+        case 'notifications': renderNotifications(); break;
+        case 'privacy': renderPrivacy(); break;
+        case 'order-defaults': renderOrderDefaults(); break;
+        case 'language': renderLanguage(); break;
+        case 'messages': loadMessages(); break;
+        case 'devices': loadDevices(); break;
+    }
+}
+
+// ---------- 账号与安全 ----------
+function renderAccountSecurity() {
+    const content = getEl('settingsContent');
+    content.innerHTML = `
+        <div class="card"><h4>修改用户名</h4>
+            <input type="text" id="newUsername" placeholder="新用户名" class="remark-input" style="margin-bottom:8px;">
+            <button id="changeUsernameBtn" class="submit-btn">更新用户名</button>
+            <p id="usernameMsg" style="margin-top:4px; font-size:0.85rem;"></p>
+        </div>
+        <div class="card"><h4>修改密码</h4>
+            <input type="password" id="oldPassword" placeholder="原密码" class="remark-input" style="margin-bottom:8px;">
+            <input type="password" id="newPassword" placeholder="新密码" class="remark-input" style="margin-bottom:8px;">
+            <button id="changePasswordBtn" class="submit-btn">更新密码</button>
+            <p id="passwordMsg" style="margin-top:4px; font-size:0.85rem;"></p>
+        </div>
+        <div class="card"><h4>绑定手机</h4>
+            <input type="tel" id="phoneInput" placeholder="手机号" class="remark-input" style="margin-bottom:8px;">
+            <button id="changePhoneBtn" class="submit-btn">更新手机</button>
+            <p id="phoneMsg" style="margin-top:4px; font-size:0.85rem;"></p>
+        </div>
+        <div class="card"><h4>绑定邮箱</h4>
+            <input type="email" id="emailInput" placeholder="邮箱" class="remark-input" style="margin-bottom:8px;">
+            <button id="changeEmailBtn" class="submit-btn">更新邮箱</button>
+            <p id="emailMsg" style="margin-top:4px; font-size:0.85rem;"></p>
+        </div>`;
+
+    // 绑定修改事件（与之前相同，此处省略具体 fetch 代码，实际使用时请复制之前给出的完整事件绑定）
+    bindAccountSecurityEvents();
+}
+
+function bindAccountSecurityEvents() {
+    getEl('changeUsernameBtn')?.addEventListener('click', async () => {
+        const newUsername = getEl('newUsername').value.trim();
+        if (!newUsername) return showToast('请输入新用户名');
+        const token = safeGetItem('token');
+        const res = await fetch(`${API_BASE}/user/change-username`, {
+            method: 'PUT', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ newUsername })
+        });
+        const data = await res.json();
+        getEl('usernameMsg').textContent = data.message || data.error;
+        if (res.ok) { safeSetItem('username', newUsername); displayUsername.textContent = newUsername; }
+    });
+
+    getEl('changePasswordBtn')?.addEventListener('click', async () => {
+        const oldPassword = getEl('oldPassword').value;
+        const newPassword = getEl('newPassword').value;
+        if (!oldPassword || !newPassword) return showToast('请填写完整');
+        const token = safeGetItem('token');
+        const res = await fetch(`${API_BASE}/user/change-password`, {
+            method: 'PUT', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ oldPassword, newPassword })
+        });
+        const data = await res.json();
+        getEl('passwordMsg').textContent = data.message || data.error;
+        if (res.ok) { getEl('oldPassword').value = ''; getEl('newPassword').value = ''; }
+    });
+
+    getEl('changePhoneBtn')?.addEventListener('click', async () => {
+        const phone = getEl('phoneInput').value.trim();
+        if (!phone) return showToast('请输入手机号');
+        const token = safeGetItem('token');
+        const res = await fetch(`${API_BASE}/user/change-phone`, {
+            method: 'PUT', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ phone })
+        });
+        const data = await res.json();
+        getEl('phoneMsg').textContent = data.message || data.error;
+    });
+
+    getEl('changeEmailBtn')?.addEventListener('click', async () => {
+        const email = getEl('emailInput').value.trim();
+        if (!email) return showToast('请输入邮箱');
+        const token = safeGetItem('token');
+        const res = await fetch(`${API_BASE}/user/change-email`, {
+            method: 'PUT', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        getEl('emailMsg').textContent = data.message || data.error;
+    });
+}
+
+// ---------- 外观（深空黑 / 极昼白） ----------
+function renderAppearance() {
+    const settings = window._userSettings || {};
+    const currentTheme = settings.theme || 'dark';
+    const content = getEl('settingsContent');
+    content.innerHTML = `
+        <div class="card"><h4>站内风格</h4>
+            <div style="display:flex; gap:20px; margin-top:12px;">
+                <label class="client-option ${currentTheme==='dark'?'active':''}">
+                    <input type="radio" name="theme" value="dark" ${currentTheme==='dark'?'checked':''}> 🌑 深空黑
+                </label>
+                <label class="client-option ${currentTheme==='light'?'active':''}">
+                    <input type="radio" name="theme" value="light" ${currentTheme==='light'?'checked':''}> 🌕 极昼白
+                </label>
+            </div>
+            <button id="saveThemeBtn" class="submit-btn" style="margin-top:12px;">保存主题</button>
+        </div>`;
+    getEl('saveThemeBtn')?.addEventListener('click', async () => {
+        const theme = document.querySelector('input[name="theme"]:checked')?.value || 'dark';
+        const token = safeGetItem('token');
+        await fetch(`${API_BASE}/user/settings`, {
+            method: 'PUT', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ theme })
+        });
+        applyTheme(theme);
+        showToast('主题已切换');
+    });
+}
+
+function applyTheme(theme) {
+    if (theme === 'light') {
+        document.body.classList.add('theme-light');
+    } else {
+        document.body.classList.remove('theme-light');
+    }
+    safeSetItem('theme', theme);
+}
+
+function applySavedTheme() {
+    const theme = safeGetItem('theme') || 'dark';
+    applyTheme(theme);
+    // 可选：从服务器同步
+    const token = safeGetItem('token');
+    if (token) {
+        fetch(`${API_BASE}/user/settings`, { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(res => res.json())
+            .then(data => { if (data?.theme) applyTheme(data.theme); })
+            .catch(() => {});
+    }
+}
+
+// ---------- 通知与提醒 ----------
+function renderNotifications() {
+    const settings = window._userSettings || {};
+    const content = getEl('settingsContent');
+    content.innerHTML = `
+        <div class="card"><h4>通知与提醒</h4>
+            <label class="urgent-toggle" style="margin-top:12px;">
+                <input type="checkbox" id="notifyOrderUpdate" ${settings.notify_order_update ? 'checked' : ''}>
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span class="toggle-label">订单状态更新通知</span>
+            </label>
+            <label class="urgent-toggle" style="margin-top:12px;">
+                <input type="checkbox" id="notifyPromotion" ${settings.notify_promotion ? 'checked' : ''}>
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span class="toggle-label">营销消息</span>
+            </label>
+            <button id="saveNotifyBtn" class="submit-btn" style="margin-top:12px;">保存</button>
+        </div>`;
+    getEl('saveNotifyBtn')?.addEventListener('click', async () => {
+        const notify_order_update = getEl('notifyOrderUpdate').checked ? 1 : 0;
+        const notify_promotion = getEl('notifyPromotion').checked ? 1 : 0;
+        const token = safeGetItem('token');
+        await fetch(`${API_BASE}/user/settings`, {
+            method: 'PUT', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ notify_order_update, notify_promotion })
+        });
+        showToast('通知设置已保存');
+    });
+}
+
+// ---------- 隐私与显示 ----------
+function renderPrivacy() {
+    const settings = window._userSettings || {};
+    const content = getEl('settingsContent');
+    content.innerHTML = `
+        <div class="card"><h4>隐私与显示</h4>
+            <label class="urgent-toggle" style="margin-top:12px;">
+                <input type="checkbox" id="showPhone" ${settings.privacy_show_phone_to_booster ? 'checked' : ''}>
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span class="toggle-label">向打手显示我的手机号</span>
+            </label>
+            <label class="urgent-toggle" style="margin-top:12px;">
+                <input type="checkbox" id="showEmail" ${settings.privacy_show_email_to_booster ? 'checked' : ''}>
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span class="toggle-label">向打手显示我的邮箱</span>
+            </label>
+            <button id="savePrivacyBtn" class="submit-btn" style="margin-top:12px;">保存</button>
+        </div>`;
+    getEl('savePrivacyBtn')?.addEventListener('click', async () => {
+        const privacy_show_phone_to_booster = getEl('showPhone').checked ? 1 : 0;
+        const privacy_show_email_to_booster = getEl('showEmail').checked ? 1 : 0;
+        const token = safeGetItem('token');
+        await fetch(`${API_BASE}/user/settings`, {
+            method: 'PUT', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ privacy_show_phone_to_booster, privacy_show_email_to_booster })
+        });
+        showToast('隐私设置已保存');
+    });
+}
+
+// ---------- 订单默认设置 ----------
+function renderOrderDefaults() {
+    const settings = window._userSettings || {};
+    const content = getEl('settingsContent');
+    content.innerHTML = `
+        <div class="card"><h4>订单默认设置</h4>
+            <div class="form-group"><label>默认客户端</label>
+                <select id="defaultClientType">
+                    <option value="Android" ${settings.default_client_type==='Android'?'selected':''}>Android</option>
+                    <option value="iOS" ${settings.default_client_type==='iOS'?'selected':''}>iOS</option>
+                </select>
+            </div>
+            <label class="urgent-toggle" style="margin-top:12px;">
+                <input type="checkbox" id="defaultUrgent" ${settings.default_urgent ? 'checked' : ''}>
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span class="toggle-label">默认开启加急</span>
+            </label>
+            <div class="form-group" style="margin-top:12px;"><label>默认备注模板</label>
+                <textarea id="defaultRemarkTemplate" rows="2" class="remark-input">${settings.default_remark_template || ''}</textarea>
+            </div>
+            <button id="saveOrderDefaultsBtn" class="submit-btn" style="margin-top:12px;">保存</button>
+        </div>`;
+    getEl('saveOrderDefaultsBtn')?.addEventListener('click', async () => {
+        const default_client_type = getEl('defaultClientType').value;
+        const default_urgent = getEl('defaultUrgent').checked ? 1 : 0;
+        const default_remark_template = getEl('defaultRemarkTemplate').value;
+        const token = safeGetItem('token');
+        await fetch(`${API_BASE}/user/settings`, {
+            method: 'PUT', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ default_client_type, default_urgent, default_remark_template })
+        });
+        showToast('订单默认设置已保存');
+    });
+}
+
+// ---------- 语言 / 地区 ----------
+function renderLanguage() {
+    const settings = window._userSettings || {};
+    const currentLang = settings.language || 'zh';
+    const content = getEl('settingsContent');
+    content.innerHTML = `
+        <div class="card"><h4>语言 / 地区</h4>
+            <select id="languageSelect" style="width:200px;">
+                <option value="zh" ${currentLang==='zh'?'selected':''}>简体中文</option>
+                <option value="en" ${currentLang==='en'?'selected':''}>English</option>
+            </select>
+            <button id="saveLanguageBtn" class="submit-btn" style="margin-top:12px;">保存</button>
+        </div>`;
+    getEl('saveLanguageBtn')?.addEventListener('click', async () => {
+        const language = getEl('languageSelect').value;
+        const token = safeGetItem('token');
+        await fetch(`${API_BASE}/user/settings`, {
+            method: 'PUT', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ language })
+        });
+        showToast('语言设置已保存');
+    });
+}
+
+// 站内邮箱
+async function loadMessages() {
+    const content = getEl('settingsContent');
+    content.innerHTML = '<p>加载中...</p>';
+    const token = safeGetItem('token');
+    const res = await fetch(`${API_BASE}/user/messages`, { headers: { 'Authorization': `Bearer ${token}` } });
+    const messages = await res.json();
+    if (!messages.length) { content.innerHTML = '<p>暂无消息</p>'; return; }
+    let html = '<div style="display:flex; justify-content:space-between;"><h4>站内邮箱</h4><button id="markAllReadBtn" class="submit-btn" style="width:auto;">全部已读</button></div>';
+    messages.forEach(msg => {
+        html += `<div class="card" style="margin-bottom:8px; opacity:${msg.is_read?0.6:1}">
+            <strong>${msg.title}</strong> <span style="font-size:0.75rem; color:var(--text-muted)">${new Date(msg.created_at).toLocaleString()}</span>
+            <p style="margin-top:4px;">${msg.content}</p>
+            ${!msg.is_read ? `<button class="mark-read-btn" data-id="${msg.id}">标记已读</button>` : ''}
+        </div>`;
+    });
+    content.innerHTML = html;
+    // 标记已读事件
+    document.querySelectorAll('.mark-read-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const id = e.target.dataset.id;
+            await fetch(`${API_BASE}/user/messages/${id}/read`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
+            loadMessages();
+        });
+    });
+    getEl('markAllReadBtn')?.addEventListener('click', async () => {
+        await fetch(`${API_BASE}/user/messages/read-all`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
+        loadMessages();
+    });
+}
+
+// 登录设备
+async function loadDevices() {
+    const content = getEl('settingsContent');
+    content.innerHTML = '<p>加载中...</p>';
+    const token = safeGetItem('token');
+    const res = await fetch(`${API_BASE}/user/devices`, { headers: { 'Authorization': `Bearer ${token}` } });
+    const devices = await res.json();
+    if (!devices.length) { content.innerHTML = '<p>暂无设备记录</p>'; return; }
+    let html = '<h4>登录设备</h4>';
+    devices.forEach(d => {
+        html += `<div class="card" style="margin-bottom:8px;">
+            <p><strong>设备：</strong>${d.device_info || '未知'}</p>
+            <p><strong>IP：</strong>${d.ip_address}</p>
+            <p><strong>时间：</strong>${new Date(d.login_time).toLocaleString()}</p>
+        </div>`;
+    });
+    content.innerHTML = html;
+}
+
+
+
 
 // ==================== 启动 ====================
 init();

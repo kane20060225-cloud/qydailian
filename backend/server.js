@@ -42,10 +42,19 @@ function ipRegisterLimit(req, res, next) {
   next();
 }
 
+// ---------- 站内信辅助函数 ----------
+async function sendMessage(userId, title, content) {
+  try {
+    await pool.execute('INSERT INTO user_messages (user_id, title, content) VALUES (?, ?, ?)', [userId, title, content]);
+  } catch (err) {
+    console.error('发送站内信失败:', err);
+  }
+}
+
 // ---------- 初始化数据库 ----------
 async function initDB() {
   try {
-    // 用户表
+    // 用户表（增加语言和主题字段）
     await pool.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -70,6 +79,50 @@ async function initDB() {
         vip_level TINYINT DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (referrer_id) REFERENCES users(id) ON DELETE SET NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 用户设置表
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS user_settings (
+        user_id INT PRIMARY KEY,
+        theme ENUM('dark','light') DEFAULT 'dark',
+        language ENUM('zh','en') DEFAULT 'zh',
+        notify_order_update TINYINT(1) DEFAULT 1,
+        notify_promotion TINYINT(1) DEFAULT 1,
+        privacy_show_phone_to_booster TINYINT(1) DEFAULT 0,
+        privacy_show_email_to_booster TINYINT(1) DEFAULT 0,
+        default_client_type ENUM('Android','iOS') DEFAULT 'Android',
+        default_urgent TINYINT(1) DEFAULT 0,
+        default_remark_template VARCHAR(255) DEFAULT '',
+        two_factor_enabled TINYINT(1) DEFAULT 0,
+        two_factor_secret VARCHAR(32) DEFAULT '',
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 站内邮箱消息表
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS user_messages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        title VARCHAR(200) NOT NULL,
+        content TEXT NOT NULL,
+        is_read TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 登录设备记录表
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS login_devices (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        device_info VARCHAR(255),
+        ip_address VARCHAR(45),
+        login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
@@ -189,7 +242,7 @@ async function initDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-    // 兼容旧字段（新增积分/VIP等）
+    // 兼容旧字段
     try { await pool.execute(`ALTER TABLE users ADD COLUMN qy_credits INT DEFAULT 0`); } catch(e) {}
     try { await pool.execute(`ALTER TABLE users ADD COLUMN total_earned_credits INT DEFAULT 0`); } catch(e) {}
     try { await pool.execute(`ALTER TABLE users ADD COLUMN vip_level TINYINT DEFAULT 0`); } catch(e) {}
@@ -224,7 +277,6 @@ app.post('/api/auth/register', ipRegisterLimit, async (req, res) => {
       if (refRows.length === 0) { await connection.rollback(); return res.status(400).json({ error: '无效的推荐码' }); }
       referrer_id = refRows[0].id;
 
-      // 检查推荐人今日推荐次数
       const [todayCnt] = await connection.execute(
         `SELECT COUNT(*) AS cnt FROM users WHERE referrer_id = ? AND DATE(created_at) = CURDATE()`,
         [referrer_id]
@@ -242,14 +294,17 @@ app.post('/api/auth/register', ipRegisterLimit, async (req, res) => {
       [username, password_hash, email || null, phone || null, referrer_id, referral_code]
     );
 
-    // 推荐奖励：双方各得300积分
+    // 创建设置记录
+    await connection.execute('INSERT INTO user_settings (user_id) VALUES (?)', [result.insertId]);
+
+    // 推荐奖励
     if (referrer_id) {
       await connection.execute(
-        `UPDATE users SET qy_credits = qy_credits + 300, total_earned_credits = total_earned_credits + 300 WHERE id = ?`,
+        'UPDATE users SET qy_credits = qy_credits + 300, total_earned_credits = total_earned_credits + 300 WHERE id = ?',
         [referrer_id]
       );
       await connection.execute(
-        `UPDATE users SET qy_credits = qy_credits + 300, total_earned_credits = total_earned_credits + 300 WHERE id = ?`,
+        'UPDATE users SET qy_credits = qy_credits + 300, total_earned_credits = total_earned_credits + 300 WHERE id = ?',
         [result.insertId]
       );
     }
@@ -277,6 +332,14 @@ app.post('/api/auth/login', async (req, res) => {
     const validPassword = await bcrypt.compare(password, user.password_hash);
     if (!validPassword) return res.status(401).json({ error: '用户名或密码错误' });
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+
+    // 记录登录设备
+    await connection.execute('INSERT INTO login_devices (user_id, device_info, ip_address) VALUES (?, ?, ?)',
+      [user.id, req.headers['user-agent'] || '', req.ip || '']);
+
+    // 确保设置存在
+    await connection.execute('INSERT IGNORE INTO user_settings (user_id) VALUES (?)', [user.id]);
+
     res.json({ success: true, token, user: {
       id: user.id, username: user.username, email: user.email, phone: user.phone,
       balance: user.balance, reputation: user.reputation, referral_code: user.referral_code,
@@ -315,7 +378,6 @@ const identityWeights = { gold: 4, silver: 3, standard: 2, budget: 1 };
 function canTakeOrder(boosterIdentity, requiredIdentity) {
   return (identityWeights[boosterIdentity] || 0) >= (identityWeights[requiredIdentity] || 0);
 }
-
 async function checkBoosterUpgrade(conn, userId) {
   const [rows] = await conn.execute('SELECT booster_identity, booster_points FROM users WHERE id = ?', [userId]);
   if (!rows.length) return;
@@ -400,7 +462,6 @@ app.get('/api/user/orders', authMiddleware, async (req, res) => {
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-// 获取积分与VIP
 app.get('/api/user/credits', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
@@ -409,6 +470,130 @@ app.get('/api/user/credits', authMiddleware, async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ error: '用户不存在' });
     res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+// ---------- 用户设置 API ----------
+app.get('/api/user/settings', authMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT * FROM user_settings WHERE user_id = ?', [req.userId]);
+    if (!rows.length) {
+      await pool.execute('INSERT INTO user_settings (user_id) VALUES (?)', [req.userId]);
+      const [newRows] = await pool.execute('SELECT * FROM user_settings WHERE user_id = ?', [req.userId]);
+      return res.json(newRows[0]);
+    }
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+app.put('/api/user/settings', authMiddleware, async (req, res) => {
+  const userId = req.userId;
+  const { theme, language, notify_order_update, notify_promotion, privacy_show_phone_to_booster,
+          privacy_show_email_to_booster, default_client_type, default_urgent, default_remark_template,
+          two_factor_enabled } = req.body;
+
+  try {
+    const fields = [];
+    const values = [];
+    if (theme !== undefined) { fields.push('theme = ?'); values.push(theme); }
+    if (language !== undefined) { fields.push('language = ?'); values.push(language); }
+    if (notify_order_update !== undefined) { fields.push('notify_order_update = ?'); values.push(notify_order_update); }
+    if (notify_promotion !== undefined) { fields.push('notify_promotion = ?'); values.push(notify_promotion); }
+    if (privacy_show_phone_to_booster !== undefined) { fields.push('privacy_show_phone_to_booster = ?'); values.push(privacy_show_phone_to_booster); }
+    if (privacy_show_email_to_booster !== undefined) { fields.push('privacy_show_email_to_booster = ?'); values.push(privacy_show_email_to_booster); }
+    if (default_client_type !== undefined) { fields.push('default_client_type = ?'); values.push(default_client_type); }
+    if (default_urgent !== undefined) { fields.push('default_urgent = ?'); values.push(default_urgent); }
+    if (default_remark_template !== undefined) { fields.push('default_remark_template = ?'); values.push(default_remark_template); }
+    if (two_factor_enabled !== undefined) { fields.push('two_factor_enabled = ?'); values.push(two_factor_enabled); }
+
+    if (fields.length === 0) return res.json({ success: true, message: '无更新字段' });
+
+    values.push(userId);
+    await pool.execute(`UPDATE user_settings SET ${fields.join(', ')} WHERE user_id = ?`, values);
+    res.json({ success: true, message: '设置已更新' });
+  } catch (err) {
+    console.error('更新设置错误:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+app.put('/api/user/change-username', authMiddleware, async (req, res) => {
+  const { newUsername } = req.body;
+  if (!newUsername || newUsername.length < 4) return res.status(400).json({ error: '用户名至少4个字符' });
+  try {
+    const [existing] = await pool.execute('SELECT id FROM users WHERE username = ?', [newUsername]);
+    if (existing.length) return res.status(400).json({ error: '用户名已被使用' });
+    await pool.execute('UPDATE users SET username = ? WHERE id = ?', [newUsername, req.userId]);
+    res.json({ success: true, message: '用户名已更新' });
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+app.put('/api/user/change-password', authMiddleware, async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (!oldPassword || !newPassword) return res.status(400).json({ error: '请提供原密码和新密码' });
+  if (newPassword.length < 6) return res.status(400).json({ error: '新密码至少6位' });
+  try {
+    const [rows] = await pool.execute('SELECT password_hash FROM users WHERE id = ?', [req.userId]);
+    if (!rows.length) return res.status(404).json({ error: '用户不存在' });
+    const valid = await bcrypt.compare(oldPassword, rows[0].password_hash);
+    if (!valid) return res.status(400).json({ error: '原密码不正确' });
+    const password_hash = await bcrypt.hash(newPassword, 12);
+    await pool.execute('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash, req.userId]);
+    res.json({ success: true, message: '密码已更新' });
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+app.put('/api/user/change-phone', authMiddleware, async (req, res) => {
+  const { phone } = req.body;
+  if (!phone) return res.status(400).json({ error: '手机号不能为空' });
+  try {
+    await pool.execute('UPDATE users SET phone = ? WHERE id = ?', [phone, req.userId]);
+    res.json({ success: true, message: '手机号已更新' });
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+app.put('/api/user/change-email', authMiddleware, async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: '邮箱不能为空' });
+  try {
+    await pool.execute('UPDATE users SET email = ? WHERE id = ?', [email, req.userId]);
+    res.json({ success: true, message: '邮箱已更新' });
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+// 站内邮箱
+app.get('/api/user/messages', authMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, title, content, is_read, created_at FROM user_messages WHERE user_id = ? ORDER BY created_at DESC LIMIT 50',
+      [req.userId]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+app.put('/api/user/messages/:id/read', authMiddleware, async (req, res) => {
+  const messageId = req.params.id;
+  try {
+    await pool.execute('UPDATE user_messages SET is_read = 1 WHERE id = ? AND user_id = ?', [messageId, req.userId]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+app.put('/api/user/messages/read-all', authMiddleware, async (req, res) => {
+  try {
+    await pool.execute('UPDATE user_messages SET is_read = 1 WHERE user_id = ? AND is_read = 0', [req.userId]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+app.get('/api/user/devices', authMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT device_info, ip_address, login_time FROM login_devices WHERE user_id = ? ORDER BY login_time DESC LIMIT 10',
+      [req.userId]
+    );
+    res.json(rows);
   } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
@@ -437,6 +622,7 @@ app.get('/api/admin/orders', adminMiddleware, async (req, res) => {
     res.json(rows);
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
+
 app.put('/api/admin/orders/:orderNo', adminMiddleware, async (req, res) => {
   const { status } = req.body;
   const { orderNo } = req.params;
@@ -448,19 +634,31 @@ app.put('/api/admin/orders/:orderNo', adminMiddleware, async (req, res) => {
       if (orderRows[0].payment_status !== 'paid') return res.status(400).json({ error: '请先确认收款后才能标记为已完成' });
     }
     await pool.execute('UPDATE orders SET status = ? WHERE order_no = ?', [status, orderNo]);
+    if (status === 'playing') {
+      const [order] = await pool.execute('SELECT user_id FROM orders WHERE order_no = ?', [orderNo]);
+      if (order.length) await sendMessage(order[0].user_id, '订单进行中', `您的订单 ${orderNo} 已开始代练。`);
+    }
     res.json({ success: true });
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
+
 app.delete('/api/admin/orders/:orderNo', adminMiddleware, async (req, res) => {
   try { await pool.execute('DELETE FROM orders WHERE order_no = ?', [req.params.orderNo]); res.json({ success: true }); }
   catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
+
 app.put('/api/admin/orders/:orderNo/confirm-payment', adminMiddleware, async (req, res) => {
+  const { orderNo } = req.params;
   try {
-    await pool.execute('UPDATE orders SET payment_status = ?, status = ? WHERE order_no = ?', ['paid', 'playing', req.params.orderNo]);
+    const [orders] = await pool.execute('SELECT user_id FROM orders WHERE order_no = ?', [orderNo]);
+    await pool.execute('UPDATE orders SET payment_status = ?, status = ? WHERE order_no = ?', ['paid', 'playing', orderNo]);
+    if (orders.length) {
+      await sendMessage(orders[0].user_id, '支付已确认', `您的订单 ${orderNo} 已确认收款，代练即将开始。`);
+    }
     res.json({ success: true, message: '已确认支付' });
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
+
 app.put('/api/admin/orders/:orderNo/hall', adminMiddleware, async (req, res) => {
   try {
     await pool.execute('UPDATE orders SET hall_status = ? WHERE order_no = ?', ['open', req.params.orderNo]);
@@ -551,7 +749,6 @@ app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) =
     const order = rows[0];
     if (order.payment_status !== 'paid') { await conn.rollback(); return res.status(400).json({ error: '该订单尚未确认支付，无法完成' }); }
 
-    // 打手收益
     const earnings = order.total_price * 0.75;
     const pointsEarned = Math.floor(earnings * 100);
     await conn.execute('UPDATE orders SET status = ? WHERE order_no = ?', ['done', orderNo]);
@@ -559,14 +756,11 @@ app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) =
       [earnings, pointsEarned, boosterId]);
     await checkBoosterUpgrade(conn, boosterId);
 
-    // 积分返利：下单用户获得订单金额3%的QY积分
+    // 积分返利与VIP升级
     const creditsEarned = Math.floor(order.total_price * 0.03 * 100);
-    await conn.execute(
-      'UPDATE users SET qy_credits = qy_credits + ?, total_earned_credits = total_earned_credits + ? WHERE id = ?',
-      [creditsEarned, creditsEarned, order.user_id]
-    );
+    await conn.execute('UPDATE users SET qy_credits = qy_credits + ?, total_earned_credits = total_earned_credits + ? WHERE id = ?',
+      [creditsEarned, creditsEarned, order.user_id]);
 
-    // VIP 自动升级
     const [userRow] = await conn.execute('SELECT total_earned_credits FROM users WHERE id = ?', [order.user_id]);
     const totalCredits = userRow[0].total_earned_credits;
     let newVip = 0;
@@ -576,6 +770,9 @@ app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) =
     else if (totalCredits >= 1500) newVip = 2;
     else if (totalCredits >= 600) newVip = 1;
     await conn.execute('UPDATE users SET vip_level = ? WHERE id = ?', [newVip, order.user_id]);
+
+    // 发送站内信通知用户
+    await sendMessage(order.user_id, '订单已完成', `您的订单 ${orderNo} 已代练完成，感谢您的信任！`);
 
     await conn.commit();
     res.json({ success: true, message: '订单已完成', earnings });
@@ -723,7 +920,6 @@ app.post('/api/admin/leagues/:seasonId/scores', adminMiddleware, async (req, res
   finally { if (conn) conn.release(); }
 });
 
-// 公开积分榜
 app.get('/api/league/:seasonId/rankings', async (req, res) => {
   const { seasonId } = req.params;
   try {
@@ -779,53 +975,34 @@ app.put('/api/admin/boosters/:userId', adminMiddleware, async (req, res) => {
 });
 
 // ---------- 积分商城 ----------
-// 管理员获取所有商品
 app.get('/api/admin/shop/items', adminMiddleware, async (req, res) => {
-  try {
-    const [rows] = await pool.execute('SELECT * FROM qy_shop_items ORDER BY id');
-    res.json(rows);
-  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+  try { const [rows] = await pool.execute('SELECT * FROM qy_shop_items ORDER BY id'); res.json(rows); }
+  catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
-
-// 管理员新增/更新商品
 app.post('/api/admin/shop/items', adminMiddleware, async (req, res) => {
   const { id, name, description, image, price_credits, stock, is_active } = req.body;
   if (!name || price_credits == null) return res.status(400).json({ error: '名称和积分价格必填' });
   try {
     if (id) {
-      await pool.execute(
-        'UPDATE qy_shop_items SET name=?, description=?, image=?, price_credits=?, stock=?, is_active=? WHERE id=?',
-        [name, description, image, price_credits, stock ?? -1, is_active ?? 1, id]
-      );
+      await pool.execute('UPDATE qy_shop_items SET name=?, description=?, image=?, price_credits=?, stock=?, is_active=? WHERE id=?',
+        [name, description, image, price_credits, stock ?? -1, is_active ?? 1, id]);
     } else {
-      await pool.execute(
-        'INSERT INTO qy_shop_items (name, description, image, price_credits, stock, is_active) VALUES (?,?,?,?,?,?)',
-        [name, description, image, price_credits, stock ?? -1, is_active ?? 1]
-      );
+      await pool.execute('INSERT INTO qy_shop_items (name, description, image, price_credits, stock, is_active) VALUES (?,?,?,?,?,?)',
+        [name, description, image, price_credits, stock ?? -1, is_active ?? 1]);
     }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
-
-// 管理员删除商品
 app.delete('/api/admin/shop/items/:id', adminMiddleware, async (req, res) => {
-  try {
-    await pool.execute('DELETE FROM qy_shop_items WHERE id=?', [req.params.id]);
-    res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+  try { await pool.execute('DELETE FROM qy_shop_items WHERE id=?', [req.params.id]); res.json({ success: true }); }
+  catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
-
-// 用户获取可购买商品
 app.get('/api/shop/items', async (req, res) => {
   try {
-    const [rows] = await pool.execute(
-      'SELECT id, name, description, image, price_credits, stock FROM qy_shop_items WHERE is_active=1 AND (stock > 0 OR stock = -1)'
-    );
+    const [rows] = await pool.execute('SELECT id, name, description, image, price_credits, stock FROM qy_shop_items WHERE is_active=1 AND (stock > 0 OR stock = -1)');
     res.json(rows);
   } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
-
-// 用户购买商品
 app.post('/api/shop/buy/:itemId', authMiddleware, async (req, res) => {
   const itemId = req.params.itemId;
   const conn = await pool.getConnection();
@@ -835,29 +1012,18 @@ app.post('/api/shop/buy/:itemId', authMiddleware, async (req, res) => {
     if (items.length === 0) throw new Error('商品不存在或已下架');
     const item = items[0];
     if (item.stock === 0) throw new Error('商品库存不足');
-    
     const [user] = await conn.execute('SELECT qy_credits FROM users WHERE id=?', [req.userId]);
     if (user[0].qy_credits < item.price_credits) throw new Error('积分不足');
-    
-    // 扣积分
     await conn.execute('UPDATE users SET qy_credits = qy_credits - ? WHERE id=?', [item.price_credits, req.userId]);
-    // 扣库存
-    if (item.stock > 0) {
-      await conn.execute('UPDATE qy_shop_items SET stock = stock - 1 WHERE id=?', [itemId]);
-    }
-    // 记录购买
-    await conn.execute(
-      'INSERT INTO qy_purchases (user_id, item_id, item_name, price_credits) VALUES (?,?,?,?)',
-      [req.userId, item.id, item.name, item.price_credits]
-    );
+    if (item.stock > 0) await conn.execute('UPDATE qy_shop_items SET stock = stock - 1 WHERE id=?', [itemId]);
+    await conn.execute('INSERT INTO qy_purchases (user_id, item_id, item_name, price_credits) VALUES (?,?,?,?)',
+      [req.userId, item.id, item.name, item.price_credits]);
     await conn.commit();
     res.json({ success: true, message: '购买成功' });
   } catch (err) {
     await conn.rollback();
     res.status(400).json({ error: err.message });
-  } finally {
-    conn.release();
-  }
+  } finally { conn.release(); }
 });
 
 // ---------- 启动 ----------
