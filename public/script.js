@@ -1594,7 +1594,6 @@ async function loadShopItems() {
 
 
 // ==================== 设置面板核心 ====================
-const settingsBtn = getEl('settingsBtn');
 if (settingsBtn) settingsBtn.addEventListener('click', () => showSection('settings'));
 
 // 加载设置面板主框架
