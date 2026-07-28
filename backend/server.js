@@ -248,6 +248,8 @@ async function initDB() {
     try { await pool.execute(`ALTER TABLE users ADD COLUMN vip_level TINYINT DEFAULT 0`); } catch(e) {}
     try { await pool.execute(`ALTER TABLE orders ADD COLUMN required_identity ENUM('gold','silver','standard','budget') DEFAULT 'standard'`); } catch(e) {}
     try { await pool.execute(`ALTER TABLE orders ADD COLUMN client_type VARCHAR(10) DEFAULT 'Android'`); } catch(e) {}
+    // 为定制需求增加状态字段
+    try { await pool.execute(`ALTER TABLE custom_requests ADD COLUMN status VARCHAR(20) DEFAULT 'pending'`); } catch(e) {}
 
     console.log('✅ 数据库表已就绪');
   } catch (err) {
@@ -805,6 +807,31 @@ app.get('/api/admin/custom-requests', adminMiddleware, async (req, res) => {
     res.json(rows);
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
+
+// 修改定制需求状态（完成/取消）
+app.put('/api/admin/custom-requests/:id/status', adminMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  if (!['pending', 'completed', 'cancelled'].includes(status)) {
+    return res.status(400).json({ error: '无效状态' });
+  }
+  try {
+    const [result] = await pool.execute('UPDATE custom_requests SET status = ? WHERE id = ?', [status, id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: '需求不存在' });
+    res.json({ success: true, message: '状态已更新' });
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+// 删除定制需求
+app.delete('/api/admin/custom-requests/:id', adminMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [result] = await pool.execute('DELETE FROM custom_requests WHERE id = ?', [id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: '需求不存在' });
+    res.json({ success: true, message: '已删除' });
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
 
 // ---------- 联赛管理 ----------
 app.get('/api/admin/leagues', adminMiddleware, async (req, res) => {

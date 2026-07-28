@@ -89,13 +89,13 @@ const normalPool = [
 const normalTotalWeight = normalPool.reduce((s, i) => s + i.weight, 0);
 
 const rarePool = [
-    { name: 'T-54 原型',       weight: 5 },
-    { name: '狮式',            weight: 4 },
-    { name: 'AMX 30B',        weight: 3 },
-    { name: 'IS-6 无畏',       weight: 2 },
-    { name: '黑豹 88',         weight: 2 },
-    { name: 'M60',             weight: 2 },
-    { name: 'Strv 81',         weight: 1 },
+    { name: '概念型1B',       weight: 50 },
+    { name: '116F3',            weight: 40 },
+    { name: 'BZT70',        weight: 30 },
+    { name: '五式重战车',       weight: 20 },
+    { name: 'F1.0WT',         weight: 20 },
+    { name: 'GSOR坦克',             weight: 20 },
+    { name: 'SPHT',         weight: 10 },
     { name: '菲利斯',           weight: 10 }
 ];
 const rareTotalWeight = rarePool.reduce((s, i) => s + i.weight, 0);
@@ -783,6 +783,58 @@ document.addEventListener('click', async (e) => {
             if (res.ok) { showToast(`✅ 订单已完成，收益 ¥${data.earnings}`); loadMyBoosterOrders(); } else showToast('❌ ' + (data.error||'操作失败'));
         } catch (err) { showToast('❌ 网络错误'); }
     }
+    // 完成定制需求
+if (e.target.classList.contains('complete-custom-btn')) {
+  const id = e.target.dataset.id;
+  const token = safeGetItem('token');
+  if (!token) return;
+  try {
+    const res = await fetch(`${API_BASE}/admin/custom-requests/${id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ status: 'completed' })
+    });
+    const data = await res.json();
+    if (res.ok) { showToast('✅ 已标记为完成'); loadAdminCustomRequests(); }
+    else showToast('❌ ' + (data.error || '操作失败'));
+  } catch (err) { showToast('❌ 网络错误'); }
+}
+
+// 取消定制需求
+if (e.target.classList.contains('cancel-custom-btn')) {
+  const id = e.target.dataset.id;
+  const token = safeGetItem('token');
+  if (!token) return;
+  try {
+    const res = await fetch(`${API_BASE}/admin/custom-requests/${id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ status: 'cancelled' })
+    });
+    const data = await res.json();
+    if (res.ok) { showToast('✅ 已取消该需求'); loadAdminCustomRequests(); }
+    else showToast('❌ ' + (data.error || '操作失败'));
+  } catch (err) { showToast('❌ 网络错误'); }
+}
+
+// 删除定制需求
+if (e.target.classList.contains('delete-custom-btn')) {
+  const id = e.target.dataset.id;
+  if (!confirm('确定删除该需求吗？')) return;
+  const token = safeGetItem('token');
+  if (!token) return;
+  try {
+    const res = await fetch(`${API_BASE}/admin/custom-requests/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (res.ok) { showToast('🗑️ 已删除'); loadAdminCustomRequests(); }
+    else showToast('❌ ' + (data.error || '删除失败'));
+  } catch (err) { showToast('❌ 网络错误'); }
+}
+
+
 });
 if (statusFilter) statusFilter.addEventListener('change', loadAdminOrders);
 if (refreshOrdersBtn) refreshOrdersBtn.addEventListener('click', loadAdminOrders);
@@ -829,19 +881,35 @@ function bindUpdateRole() {
     });
 }
 async function loadAdminCustomRequests() {
-    const list = getEl('adminCustomList'); if (!list) return;
-    const token = safeGetItem('token');
-    try {
-        const res = await fetch(`${API_BASE}/admin/custom-requests`, { headers:{'Authorization':`Bearer ${token}`} });
-        const requests = await res.json();
-        if (!requests.length) { list.innerHTML = '<p>暂无定制需求</p>'; return; }
-        let html = '<table><tr><th>时间</th><th>用户</th><th>客户端</th><th>类型</th><th>详情</th><th>联系方式</th><th>预算</th><th>可联系时间</th><th>备注</th></tr>';
-        requests.forEach(r => {
-            html += `<tr><td>${new Date(r.created_at).toLocaleString()}</td><td>${r.username}</td><td>${r.client_type}</td><td>${r.request_type}</td><td>${r.description}</td><td>${r.contact}</td><td>${r.budget||'-'}</td><td>${r.available_time||'-'}</td><td>${r.remark||'-'}</td></tr>`;
-        });
-        html += '</table>';
-        list.innerHTML = html;
-    } catch (err) { list.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+  const list = getEl('adminCustomList');
+  if (!list) return;
+  const token = safeGetItem('token');
+  try {
+    const res = await fetch(`${API_BASE}/admin/custom-requests`, { headers: { 'Authorization': `Bearer ${token}` } });
+    const requests = await res.json();
+    if (!requests.length) { list.innerHTML = '<p>暂无定制需求</p>'; return; }
+
+    let html = '<table><tr><th>时间</th><th>用户</th><th>客户端</th><th>类型</th><th>详情</th><th>联系方式</th><th>预算</th><th>状态</th><th>操作</th></tr>';
+    requests.forEach(r => {
+      const statusText = { pending: '待处理', completed: '已完成', cancelled: '已取消' }[r.status] || r.status;
+      html += `<tr>
+        <td>${new Date(r.created_at).toLocaleString()}</td>
+        <td>${r.username}</td>
+        <td>${r.client_type}</td>
+        <td>${r.request_type}</td>
+        <td>${r.description}</td>
+        <td>${r.contact}</td>
+        <td>${r.budget || '-'}</td>
+        <td><span class="order-status status-${r.status === 'completed' ? 'done' : 'pending'}">${statusText}</span></td>
+        <td>
+          ${r.status === 'pending' ? `<button class="complete-custom-btn" data-id="${r.id}">完成</button> <button class="cancel-custom-btn" data-id="${r.id}">取消</button>` : ''}
+          <button class="delete-custom-btn" data-id="${r.id}">删除</button>
+        </td>
+      </tr>`;
+    });
+    html += '</table>';
+    list.innerHTML = html;
+  } catch (err) { list.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
 async function loadAdminBoosters() {
     const list = getEl('adminBoostersList'); if (!list) return;
