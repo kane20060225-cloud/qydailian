@@ -137,7 +137,8 @@ const sections = {
     booster: getEl('sectionBooster'),
     leagueAdmin: getEl('sectionLeagueAdmin'),
     qyshop: getEl('sectionQYShop'),
-    settings: getEl('sectionSettings')
+    settings: getEl('sectionSettings'),
+    rental: getEl('sectionRental')
 };
 
 // 代练相关
@@ -281,7 +282,17 @@ function showSection(target) {
         case 'boost':
             loadUserCreditsForBoost();
             break;
-        case 'rental':
+                case 'rental':
+            // 重置所有 rental 子视图为隐藏
+            document.querySelectorAll('.rental-view').forEach(v => v.style.display = 'none');
+            // 显示默认视图（租号大厅）
+            const hallView = getEl('rentalHallView');
+            if (hallView) hallView.style.display = 'block';
+            // 高亮第一个选项卡（大厅）
+            document.querySelectorAll('.rental-tab').forEach(t => t.classList.remove('active'));
+            const defaultTab = document.querySelector('.rental-tab[data-rentaltab="hall"]');
+            if (defaultTab) defaultTab.classList.add('active');
+            // 加载大厅数据
             loadRentalHall();
             break;        
     }
