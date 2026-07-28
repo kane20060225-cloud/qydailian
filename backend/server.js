@@ -255,6 +255,49 @@ async function initDB() {
   } catch (err) {
     console.error('❌ 建表失败:', err.message);
   }
+
+    // ========== 租号系统（新增） ==========
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS rental_accounts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        owner_id INT NOT NULL,
+        game_uid VARCHAR(50),
+        client_type VARCHAR(10) NOT NULL DEFAULT 'Android',
+        tank_list TEXT,
+        hourly_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        daily_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        available_time_desc VARCHAR(255) DEFAULT '',
+        screenshots JSON,
+        rules TEXT,
+        status ENUM('pending','active','suspended') DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS rental_orders (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        order_no VARCHAR(30) NOT NULL UNIQUE,
+        renter_id INT NOT NULL,
+        owner_id INT NOT NULL,
+        account_id INT NOT NULL,
+        rental_type ENUM('hour','day') NOT NULL DEFAULT 'hour',
+        quantity INT NOT NULL DEFAULT 1,
+        total_price DECIMAL(10,2) NOT NULL,
+        credits_used INT DEFAULT 0,
+        status ENUM('pending','active','completed','cancelled') DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (renter_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (account_id) REFERENCES rental_accounts(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 增加出租收益字段
+    try { await pool.execute(`ALTER TABLE users ADD COLUMN rental_earnings DECIMAL(10,2) DEFAULT 0.00`); } catch(e) {}
+
+
 }
 initDB();
 
@@ -1051,6 +1094,301 @@ app.post('/api/shop/buy/:itemId', authMiddleware, async (req, res) => {
     await conn.rollback();
     res.status(400).json({ error: err.message });
   } finally { conn.release(); }
+});
+
+// ==================== 租号系统 API ====================
+
+// 上传截图（单张，复用 uploads 目录）
+app.post('/api/rental/upload-screenshot', authMiddleware, async (req, res) => {
+  const { screenshot } = req.body;
+  if (!screenshot) return res.status(400).json({ error: '请提供截图' });
+  const uploadDir = path.join(__dirname, 'uploads');
+  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+  const filename = `rental_${req.userId}_${Date.now()}.png`;
+  try {
+    const base64Data = screenshot.replace(/^data:image\/\w+;base64,/, "");
+    fs.writeFileSync(path.join(uploadDir, filename), base64Data, 'base64');
+    res.json({ success: true, filename });
+  } catch (err) {
+    res.status(500).json({ error: '保存图片失败' });
+  }
+});
+
+// 获取可租账号列表（大厅）
+app.get('/api/rental/accounts', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT ra.*, u.username AS owner_name, u.reputation AS owner_reputation,
+              u.booster_identity AS owner_identity
+       FROM rental_accounts ra
+       JOIN users u ON ra.owner_id = u.id
+       WHERE ra.status = 'active'
+       ORDER BY ra.created_at DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('获取租号列表失败:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 获取单个账号详情
+app.get('/api/rental/accounts/:id', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT ra.*, u.username AS owner_name, u.reputation AS owner_reputation
+       FROM rental_accounts ra
+       JOIN users u ON ra.owner_id = u.id
+       WHERE ra.id = ?`,
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: '账号不存在' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('获取账号详情失败:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 发布出租（需登录）
+app.post('/api/rental/accounts', authMiddleware, async (req, res) => {
+  const { game_uid, client_type, tank_list, hourly_price, daily_price,
+          available_time_desc, screenshots, rules } = req.body;
+  if (!client_type) return res.status(400).json({ error: '请选择客户端类型' });
+  if (!hourly_price && !daily_price) return res.status(400).json({ error: '请设置租金' });
+
+  try {
+    await pool.execute(
+      `INSERT INTO rental_accounts (owner_id, game_uid, client_type, tank_list, hourly_price, daily_price,
+        available_time_desc, screenshots, rules, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      [req.userId, game_uid || null, client_type, tank_list || null,
+       hourly_price || 0, daily_price || 0, available_time_desc || '',
+       screenshots ? JSON.stringify(screenshots) : null, rules || '']
+    );
+    res.status(201).json({ success: true, message: '出租申请已提交，等待管理员审核' });
+  } catch (err) {
+    console.error('发布出租失败:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 我的出租账号列表
+app.get('/api/rental/my-accounts', authMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT * FROM rental_accounts WHERE owner_id = ? ORDER BY created_at DESC',
+      [req.userId]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 切换出租账号状态（上架/下架）
+app.put('/api/rental/accounts/:id/status', authMiddleware, async (req, res) => {
+  const { status } = req.body; // 'active' or 'suspended'
+  if (!['active','suspended'].includes(status)) return res.status(400).json({ error: '无效状态' });
+  try {
+    const [result] = await pool.execute(
+      'UPDATE rental_accounts SET status = ? WHERE id = ? AND owner_id = ?',
+      [status, req.params.id, req.userId]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: '账号不存在或无权操作' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 管理员审核出租申请（直接通过/拒绝）
+app.put('/api/admin/rental/accounts/:id/review', adminMiddleware, async (req, res) => {
+  const { approved } = req.body; // boolean
+  try {
+    const newStatus = approved ? 'active' : 'suspended';
+    await pool.execute('UPDATE rental_accounts SET status = ? WHERE id = ?', [newStatus, req.params.id]);
+    res.json({ success: true, message: approved ? '已上架' : '已拒绝/下架' });
+  } catch (err) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 获取所有出租账号（管理员用）
+app.get('/api/admin/rental/accounts', adminMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT ra.*, u.username AS owner_name FROM rental_accounts ra JOIN users u ON ra.owner_id = u.id ORDER BY ra.created_at DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 租用下单（支持积分抵扣）
+app.post('/api/rental/orders', authMiddleware, async (req, res) => {
+  const { account_id, rental_type, quantity, use_credits } = req.body;
+  if (!account_id || !rental_type || !quantity) return res.status(400).json({ error: '缺少必要参数' });
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [accounts] = await conn.execute(
+      'SELECT * FROM rental_accounts WHERE id = ? AND status = ?',
+      [account_id, 'active']
+    );
+    if (accounts.length === 0) throw new Error('账号不可租用');
+    const account = accounts[0];
+    if (account.owner_id === req.userId) throw new Error('不能租用自己的账号');
+
+    const unitPrice = rental_type === 'hour' ? account.hourly_price : account.daily_price;
+    if (unitPrice <= 0) throw new Error('价格设置有误');
+    let totalPrice = unitPrice * quantity;
+
+    let creditsUsed = 0;
+    if (use_credits && use_credits > 0) {
+      const [creditsRow] = await conn.execute('SELECT qy_credits FROM users WHERE id = ?', [req.userId]);
+      const available = creditsRow[0]?.qy_credits || 0;
+      creditsUsed = Math.min(use_credits, available);
+      const maxDiscount = creditsUsed / 100;
+      const actualDiscount = Math.min(maxDiscount, totalPrice);
+      creditsUsed = Math.floor(actualDiscount * 100);
+      if (creditsUsed > 0) {
+        await conn.execute('UPDATE users SET qy_credits = qy_credits - ? WHERE id = ?', [creditsUsed, req.userId]);
+      }
+      totalPrice -= actualDiscount;
+    }
+
+    const orderNo = 'RNT' + Date.now() + Math.random().toString(36).substring(2, 8).toUpperCase();
+    await conn.execute(
+      `INSERT INTO rental_orders (order_no, renter_id, owner_id, account_id, rental_type, quantity, total_price, credits_used, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      [orderNo, req.userId, account.owner_id, account_id, rental_type, quantity, totalPrice, creditsUsed]
+    );
+
+    await conn.commit();
+    res.status(201).json({ success: true, order_no: orderNo });
+  } catch (err) {
+    await conn.rollback();
+    res.status(400).json({ error: err.message });
+  } finally {
+    conn.release();
+  }
+});
+
+// 我的租用订单列表（作为租客）
+app.get('/api/rental/my-rented', authMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT ro.*, ra.game_uid, ra.client_type, u.username AS owner_name
+       FROM rental_orders ro
+       JOIN rental_accounts ra ON ro.account_id = ra.id
+       JOIN users u ON ro.owner_id = u.id
+       WHERE ro.renter_id = ?
+       ORDER BY ro.created_at DESC`,
+      [req.userId]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 我的出租订单列表（作为出租方）
+app.get('/api/rental/my-orders', authMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT ro.*, ra.game_uid, ra.client_type, u.username AS renter_name
+       FROM rental_orders ro
+       JOIN rental_accounts ra ON ro.account_id = ra.id
+       JOIN users u ON ro.renter_id = u.id
+       WHERE ro.owner_id = ?
+       ORDER BY ro.created_at DESC`,
+      [req.userId]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 确认租用（出租方确认）
+app.put('/api/rental/orders/:orderNo/confirm', authMiddleware, async (req, res) => {
+  const { orderNo } = req.params;
+  try {
+    const [result] = await pool.execute(
+      'UPDATE rental_orders SET status = ? WHERE order_no = ? AND owner_id = ? AND status = ?',
+      ['active', orderNo, req.userId, 'pending']
+    );
+    if (result.affectedRows === 0) return res.status(400).json({ error: '无法确认，订单不存在或状态不正确' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 完成租用（出租方标记完成）
+app.put('/api/rental/orders/:orderNo/complete', authMiddleware, async (req, res) => {
+  const { orderNo } = req.params;
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [orders] = await conn.execute(
+      'SELECT * FROM rental_orders WHERE order_no = ? AND owner_id = ? AND status = ?',
+      [orderNo, req.userId, 'active']
+    );
+    if (orders.length === 0) throw new Error('订单无法完成');
+
+    const order = orders[0];
+    // 更新出租方收益
+    await conn.execute(
+      'UPDATE users SET rental_earnings = rental_earnings + ? WHERE id = ?',
+      [order.total_price, order.owner_id]
+    );
+    await conn.execute(
+      'UPDATE rental_orders SET status = ? WHERE order_no = ?',
+      ['completed', orderNo]
+    );
+
+    await conn.commit();
+    res.json({ success: true });
+  } catch (err) {
+    await conn.rollback();
+    res.status(400).json({ error: err.message });
+  } finally {
+    conn.release();
+  }
+});
+
+// 取消租用（租客或出租方可取消）
+app.put('/api/rental/orders/:orderNo/cancel', authMiddleware, async (req, res) => {
+  const { orderNo } = req.params;
+  try {
+    // 允许 renter 或 owner 取消 pending 或 active 状态（已完成不可取消）
+    const [orders] = await pool.execute(
+      'SELECT * FROM rental_orders WHERE order_no = ? AND (renter_id = ? OR owner_id = ?) AND status IN (?, ?)',
+      [orderNo, req.userId, req.userId, 'pending', 'active']
+    );
+    if (orders.length === 0) return res.status(400).json({ error: '无法取消' });
+
+    await pool.execute('UPDATE rental_orders SET status = ? WHERE order_no = ?', ['cancelled', orderNo]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 获取出租收益
+app.get('/api/rental/earnings', authMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT rental_earnings FROM users WHERE id = ?', [req.userId]);
+    res.json({ earnings: rows[0]?.rental_earnings || 0 });
+  } catch (err) {
+    res.status(500).json({ error: '服务器错误' });
+  }
 });
 
 // ---------- 启动 ----------

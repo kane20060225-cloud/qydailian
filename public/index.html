@@ -61,6 +61,11 @@
                 <h3>联赛相关</h3>
                 <p>积分榜 & 赛事新闻</p>
             </div>
+                        <div class="menu-card" data-target="rental">
+                <span class="menu-icon">🎮</span>
+                <h3>账号租借</h3>
+                <p>租用/出租坦克账号，安全便捷</p>
+            </div>
         </div>
     </main>
 
@@ -324,6 +329,97 @@
 
             <div id="leagueNewsView" style="display:none;">
                 <div class="league-news-grid" id="leagueNewsGrid"></div>
+            </div>
+        </div>
+    </div>
+
+        <!-- ==================== 板块六：账号租借 ==================== -->
+    <div id="sectionRental" class="content-section" style="display: none;">
+        <div class="section-top">
+            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+            <h2 class="section-heading">🎮 账号租借</h2>
+        </div>
+        <div class="container">
+            <div class="rental-tabs" style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+                <button class="rental-tab active" data-rentaltab="hall">🔍 租号大厅</button>
+                <button class="rental-tab" data-rentaltab="publish">📤 发布出租</button>
+                <button class="rental-tab" data-rentaltab="rented">📋 我的租用</button>
+                <button class="rental-tab" data-rentaltab="my">📊 我的出租</button>
+            </div>
+
+            <!-- 租号大厅 -->
+            <div id="rentalHallView" class="rental-view">
+                <div id="rentalHallList" class="rental-grid">加载中...</div>
+            </div>
+
+            <!-- 发布出租 -->
+            <div id="rentalPublishView" class="rental-view" style="display:none;">
+                <section class="card">
+                    <h4 style="color:var(--accent); margin-bottom:16px;">📤 发布出租账号</h4>
+                    <div class="form-group">
+                        <label>客户端 <span style="color:var(--red)">*</span></label>
+                        <select id="rentalClientType">
+                            <option value="Android">🤖 安卓</option>
+                            <option value="iOS">🍎 iOS</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>游戏UID（选填）</label>
+                        <input type="text" id="rentalGameUid" placeholder="游戏内数字ID">
+                    </div>
+                    <div class="form-group">
+                        <label>坦克清单（选填，每行一个）</label>
+                        <textarea id="rentalTankList" rows="4" placeholder="例如：T-54 / IS-7 / ..."></textarea>
+                    </div>
+                    <div class="form-group" style="display:flex; gap:10px;">
+                        <div style="flex:1;">
+                            <label>时租价格（元/小时）</label>
+                            <input type="number" id="rentalHourly" step="0.01" min="0" value="0">
+                        </div>
+                        <div style="flex:1;">
+                            <label>日租价格（元/天）</label>
+                            <input type="number" id="rentalDaily" step="0.01" min="0" value="0">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>可用时段说明</label>
+                        <input type="text" id="rentalAvailableTime" placeholder="例如：全天 / 晚上8点后">
+                    </div>
+                    <div class="form-group">
+                        <label>出租说明/规则</label>
+                        <textarea id="rentalRules" rows="3" placeholder="比如禁止打排位、不得修改设置等"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>账号截图（最多3张）</label>
+                        <input type="file" id="rentalScreenshotFile" accept="image/*" multiple style="margin-bottom:8px;">
+                        <div id="rentalScreenshotPreview" style="display:flex; gap:10px; flex-wrap:wrap;"></div>
+                        <p style="font-size:0.75rem; color:var(--text-muted);">也可直接粘贴截图（Ctrl+V）</p>
+                    </div>
+                    <button id="submitRentalAccountBtn" class="submit-btn">🚀 提交申请</button>
+                    <p id="rentalPublishMsg" style="margin-top:8px; font-size:0.85rem;"></p>
+                </section>
+            </div>
+
+            <!-- 我的租用 -->
+            <div id="rentalRentedView" class="rental-view" style="display:none;">
+                <div id="rentalRentedList">加载中...</div>
+            </div>
+
+            <!-- 我的出租 -->
+            <div id="rentalMyView" class="rental-view" style="display:none;">
+                <!-- 账号管理 -->
+                <section class="card" style="margin-bottom:20px;">
+                    <h4 style="color:var(--accent);">📦 我的出租账号</h4>
+                    <div id="myRentalAccountsList"></div>
+                </section>
+                <!-- 出租订单与收益 -->
+                <section class="card">
+                    <h4 style="color:var(--accent);">📋 出租订单</h4>
+                    <div id="myRentalOrdersList"></div>
+                    <div style="margin-top:12px; padding:10px; background:#0f172a; border-radius:8px;">
+                        💰 累计出租收益：<strong id="rentalEarningsDisplay">0.00</strong> 元
+                    </div>
+                </section>
             </div>
         </div>
     </div>

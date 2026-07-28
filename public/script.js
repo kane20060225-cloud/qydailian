@@ -281,6 +281,9 @@ function showSection(target) {
         case 'boost':
             loadUserCreditsForBoost();
             break;
+        case 'rental':
+            loadRentalHall();
+            break;        
     }
 }
 
@@ -2017,6 +2020,381 @@ async function loadDevices() {
     content.innerHTML = html;
 }
 
+// ==================== 账号租借模块 ====================
+
+// 子标签切换
+document.querySelectorAll('.rental-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.rental-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.dataset.rentaltab;
+        document.querySelectorAll('.rental-view').forEach(v => v.style.display = 'none');
+        if (target === 'hall') { getEl('rentalHallView').style.display = 'block'; loadRentalHall(); }
+        else if (target === 'publish') { getEl('rentalPublishView').style.display = 'block'; }
+        else if (target === 'rented') { getEl('rentalRentedView').style.display = 'block'; loadRentedOrders(); }
+        else if (target === 'my') { getEl('rentalMyView').style.display = 'block'; loadMyRentalAccounts(); loadMyRentalOrders(); loadRentalEarnings(); }
+    });
+});
+
+// 加载租号大厅
+async function loadRentalHall() {
+    const container = getEl('rentalHallList');
+    if (!container) return;
+    container.innerHTML = '加载中...';
+    try {
+        const res = await fetch(`${API_BASE}/rental/accounts`);
+        const accounts = await res.json();
+        if (!accounts.length) { container.innerHTML = '<p>暂无可租账号</p>'; return; }
+        let html = '';
+        accounts.forEach(acc => {
+            const screenshots = acc.screenshots ? JSON.parse(acc.screenshots) : [];
+            const imgHtml = screenshots.length ? `<img src="/uploads/${screenshots[0]}" style="width:100%; height:140px; object-fit:cover; border-radius:8px;">` : '';
+            html += `
+            <div class="rental-account-card" data-id="${acc.id}">
+                ${imgHtml}
+                <h4>${acc.game_uid || '未知UID'}</h4>
+                <p>客户端：${acc.client_type} | 出租方：${acc.owner_name}</p>
+                <p>信誉：${acc.owner_reputation} | 身份：${acc.owner_identity || 'standard'}</p>
+                <p>时租：¥${acc.hourly_price} / 天租：¥${acc.daily_price}</p>
+                <p style="font-size:0.75rem; color:var(--text-muted);">可用时段：${acc.available_time_desc || '无限制'}</p>
+                <button class="rental-detail-btn" data-id="${acc.id}">查看详情</button>
+            </div>`;
+        });
+        container.innerHTML = html;
+        // 绑定详情按钮
+        document.querySelectorAll('.rental-detail-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showRentalAccountDetail(btn.dataset.id);
+            });
+        });
+    } catch (err) {
+        container.innerHTML = '<p style="color:var(--red)">加载失败</p>';
+    }
+}
+
+// 查看账号详情弹窗（含坦克清单和租用表单）
+async function showRentalAccountDetail(accountId) {
+    const token = safeGetItem('token');
+    if (!token) { showToast('请先登录'); return; }
+    try {
+        const res = await fetch(`${API_BASE}/rental/accounts/${accountId}`);
+        const account = await res.json();
+        const screenshots = account.screenshots ? JSON.parse(account.screenshots) : [];
+        const imgHtml = screenshots.map(s => `<img src="/uploads/${s}" style="max-width:100px; border-radius:6px;">`).join('');
+        let html = `
+            <p><strong>出租方：</strong>${account.owner_name}（信誉 ${account.owner_reputation}）</p>
+            <p><strong>客户端：</strong>${account.client_type}</p>
+            <p><strong>游戏UID：</strong>${account.game_uid || '未填写'}</p>
+            <p><strong>坦克清单：</strong></p>
+            <pre style="white-space:pre-wrap; max-height:200px; overflow-y:auto; background:#0f172a; padding:8px; border-radius:6px;">${account.tank_list || '未填写'}</pre>
+            <p><strong>可用时段：</strong>${account.available_time_desc || '无限制'}</p>
+            <p><strong>规则：</strong>${account.rules || '无'}</p>
+            <p><strong>截图：</strong></p><div style="display:flex; gap:6px; flex-wrap:wrap;">${imgHtml}</div>
+            <hr>
+            <p><strong>租用</strong></p>
+            <div style="display:flex; gap:10px; align-items:center;">
+                <select id="rentalType" onchange="updateRentalPrice()">
+                    <option value="hour">按时租</option>
+                    <option value="day">按天租</option>
+                </select>
+                <input type="number" id="rentalQuantity" value="1" min="1" step="1" style="width:80px;" onchange="updateRentalPrice()">
+                <span>单价：<span id="rentalUnitPrice">0</span>元</span>
+            </div>
+            <p>总价：<strong id="rentalTotalPrice">0.00</strong> 元</p>
+            <p>可用积分抵扣：<input type="number" id="rentalUseCredits" value="0" min="0" step="100" style="width:100px;" onchange="updateRentalPrice()"> <span id="rentalDiscountAmt">¥0.00</span></p>
+            <button id="submitRentBtn" class="submit-btn">确认租用</button>
+            <p id="rentDetailMsg" style="margin-top:4px; font-size:0.8rem;"></p>
+        `;
+
+        // 显示在通用弹窗中（复用 orderDetailModal，但标题改为“账号详情”）
+        const modal = getEl('orderDetailModal');
+        const content = getEl('orderDetailContent');
+        const title = modal.querySelector('h3');
+        if (title) title.textContent = '🎮 账号详情';
+        content.innerHTML = html;
+        modal.style.display = 'flex';
+
+        // 存储当前账号数据用于下单
+        window._currentRentalAccount = account;
+        updateRentalPrice(); // 首次计算
+
+        // 绑定下单按钮（仅一次）
+        const submitBtn = getEl('submitRentBtn');
+        if (submitBtn) {
+            submitBtn.onclick = async () => {
+                const rentalType = getEl('rentalType').value;
+                const quantity = parseInt(getEl('rentalQuantity').value) || 1;
+                const useCredits = parseInt(getEl('rentalUseCredits').value) || 0;
+                try {
+                    const res = await fetch(`${API_BASE}/rental/orders`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ account_id: account.id, rental_type: rentalType, quantity, use_credits: useCredits })
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        showToast('✅ 租用订单已创建');
+                        modal.style.display = 'none';
+                    } else {
+                        getEl('rentDetailMsg').textContent = data.error || '下单失败';
+                    }
+                } catch (err) {
+                    getEl('rentDetailMsg').textContent = '网络错误';
+                }
+            };
+        }
+    } catch (err) {
+        showToast('加载详情失败');
+    }
+}
+
+function updateRentalPrice() {
+    const account = window._currentRentalAccount;
+    if (!account) return;
+    const type = getEl('rentalType')?.value || 'hour';
+    const qty = parseInt(getEl('rentalQuantity')?.value) || 1;
+    const unitPrice = type === 'hour' ? account.hourly_price : account.daily_price;
+    const total = unitPrice * qty;
+    const credits = parseInt(getEl('rentalUseCredits')?.value) || 0;
+    const discount = Math.min(credits / 100, total);
+    const final = total - discount;
+    if (getEl('rentalUnitPrice')) getEl('rentalUnitPrice').textContent = unitPrice.toFixed(2);
+    if (getEl('rentalTotalPrice')) getEl('rentalTotalPrice').textContent = final.toFixed(2);
+    if (getEl('rentalDiscountAmt')) getEl('rentalDiscountAmt').textContent = `¥${discount.toFixed(2)}`;
+}
+
+// 关闭订单详情弹窗时重置（复用原有关闭按钮，但避免干扰）
+// 原有关闭逻辑已存在，无需额外处理。
+
+// 发布出租：上传截图预览
+(function() {
+    const fileInput = getEl('rentalScreenshotFile');
+    const previewDiv = getEl('rentalScreenshotPreview');
+    let uploadedFiles = [];
+
+    if (fileInput) {
+        fileInput.addEventListener('change', async () => {
+            const files = fileInput.files;
+            for (let i = 0; i < Math.min(files.length, 3); i++) {
+                const file = files[i];
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const base64 = e.target.result;
+                    const token = safeGetItem('token');
+                    const res = await fetch(`${API_BASE}/rental/upload-screenshot`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ screenshot: base64 })
+                    });
+                    const data = await res.json();
+                    if (data.filename) {
+                        uploadedFiles.push(data.filename);
+                        const img = document.createElement('img');
+                        img.src = `/uploads/${data.filename}`;
+                        img.style = 'width:80px; height:80px; object-fit:cover; border-radius:6px;';
+                        previewDiv.appendChild(img);
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    // 提交出租申请
+    getEl('submitRentalAccountBtn')?.addEventListener('click', async () => {
+        const token = safeGetItem('token');
+        if (!token) { showToast('请先登录'); return; }
+        const body = {
+            client_type: getEl('rentalClientType').value,
+            game_uid: getEl('rentalGameUid').value.trim(),
+            tank_list: getEl('rentalTankList').value.trim(),
+            hourly_price: parseFloat(getEl('rentalHourly').value) || 0,
+            daily_price: parseFloat(getEl('rentalDaily').value) || 0,
+            available_time_desc: getEl('rentalAvailableTime').value.trim(),
+            rules: getEl('rentalRules').value.trim(),
+            screenshots: uploadedFiles
+        };
+        try {
+            const res = await fetch(`${API_BASE}/rental/accounts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            const msgEl = getEl('rentalPublishMsg');
+            if (res.ok) {
+                msgEl.textContent = '✅ 申请已提交，等待审核';
+                // 清空表单
+                getEl('rentalGameUid').value = '';
+                getEl('rentalTankList').value = '';
+                getEl('rentalHourly').value = '0';
+                getEl('rentalDaily').value = '0';
+                getEl('rentalAvailableTime').value = '';
+                getEl('rentalRules').value = '';
+                previewDiv.innerHTML = '';
+                uploadedFiles = [];
+            } else {
+                msgEl.textContent = '❌ ' + (data.error || '提交失败');
+            }
+        } catch (err) {
+            getEl('rentalPublishMsg').textContent = '❌ 网络错误';
+        }
+    });
+})();
+
+// 我的租用订单
+async function loadRentedOrders() {
+    const container = getEl('rentalRentedList');
+    if (!container) return;
+    const token = safeGetItem('token');
+    if (!token) { container.innerHTML = '<p>请先登录</p>'; return; }
+    try {
+        const res = await fetch(`${API_BASE}/rental/my-rented`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const orders = await res.json();
+        if (!orders.length) { container.innerHTML = '<p>暂无租用记录</p>'; return; }
+        let html = '<table><tr><th>订单号</th><th>账号</th><th>出租方</th><th>类型</th><th>数量</th><th>金额</th><th>状态</th><th>操作</th></tr>';
+        orders.forEach(o => {
+            html += `<tr>
+                <td>${o.order_no}</td><td>${o.game_uid || '未知'}</td><td>${o.owner_name}</td>
+                <td>${o.rental_type}</td><td>${o.quantity}</td><td>¥${o.total_price}</td>
+                <td>${o.status}</td>
+                <td>${o.status === 'pending' || o.status === 'active' ? `<button class="cancel-rental-btn" data-order="${o.order_no}">取消</button>` : ''}</td>
+            </tr>`;
+        });
+        html += '</table>';
+        container.innerHTML = html;
+    } catch (err) { container.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+}
+
+// 我的出租：账号列表
+async function loadMyRentalAccounts() {
+    const container = getEl('myRentalAccountsList');
+    if (!container) return;
+    const token = safeGetItem('token');
+    if (!token) { container.innerHTML = '<p>请先登录</p>'; return; }
+    try {
+        const res = await fetch(`${API_BASE}/rental/my-accounts`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const accounts = await res.json();
+        if (!accounts.length) { container.innerHTML = '<p>你还没有发布出租账号</p>'; return; }
+        let html = '<table><tr><th>UID</th><th>客户端</th><th>时租/天租</th><th>状态</th><th>操作</th></tr>';
+        accounts.forEach(a => {
+            html += `<tr>
+                <td>${a.game_uid || '—'}</td><td>${a.client_type}</td>
+                <td>¥${a.hourly_price} / ¥${a.daily_price}</td>
+                <td>${a.status}</td>
+                <td>
+                    ${a.status === 'active' ? `<button class="shelve-btn" data-id="${a.id}" data-status="suspended">下架</button>` : ''}
+                    ${a.status === 'suspended' ? `<button class="shelve-btn" data-id="${a.id}" data-status="active">上架</button>` : ''}
+                </td>
+            </tr>`;
+        });
+        html += '</table>';
+        container.innerHTML = html;
+    } catch (err) { container.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+}
+
+// 我的出租：订单列表
+async function loadMyRentalOrders() {
+    const container = getEl('myRentalOrdersList');
+    if (!container) return;
+    const token = safeGetItem('token');
+    try {
+        const res = await fetch(`${API_BASE}/rental/my-orders`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const orders = await res.json();
+        if (!orders.length) { container.innerHTML = '<p>暂无出租订单</p>'; return; }
+        let html = '<table><tr><th>订单号</th><th>租客</th><th>类型</th><th>数量</th><th>金额</th><th>状态</th><th>操作</th></tr>';
+        orders.forEach(o => {
+            html += `<tr>
+                <td>${o.order_no}</td><td>${o.renter_name}</td>
+                <td>${o.rental_type}</td><td>${o.quantity}</td><td>¥${o.total_price}</td>
+                <td>${o.status}</td>
+                <td>
+                    ${o.status === 'pending' ? `<button class="confirm-rental-btn" data-order="${o.order_no}">确认</button>` : ''}
+                    ${o.status === 'active' ? `<button class="complete-rental-btn" data-order="${o.order_no}">完成</button>` : ''}
+                    ${o.status === 'pending' || o.status === 'active' ? `<button class="cancel-rental-btn" data-order="${o.order_no}">取消</button>` : ''}
+                </td>
+            </tr>`;
+        });
+        html += '</table>';
+        container.innerHTML = html;
+    } catch (err) { container.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+}
+
+async function loadRentalEarnings() {
+    const token = safeGetItem('token');
+    try {
+        const res = await fetch(`${API_BASE}/rental/earnings`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const data = await res.json();
+        const el = getEl('rentalEarningsDisplay');
+        if (el) el.textContent = data.earnings.toFixed(2);
+    } catch (e) {}
+}
+
+// 事件委托：租号相关按钮
+document.addEventListener('click', async (e) => {
+    const token = safeGetItem('token');
+    if (!token) return;
+
+    // 上下架账号
+    if (e.target.classList.contains('shelve-btn')) {
+        const id = e.target.dataset.id;
+        const status = e.target.dataset.status;
+        try {
+            const res = await fetch(`${API_BASE}/rental/accounts/${id}/status`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ status })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast(status === 'active' ? '已上架' : '已下架');
+                loadMyRentalAccounts();
+            } else {
+                showToast('❌ ' + (data.error || '操作失败'));
+            }
+        } catch (err) { showToast('网络错误'); }
+    }
+
+    // 确认租用
+    if (e.target.classList.contains('confirm-rental-btn')) {
+        const orderNo = e.target.dataset.order;
+        try {
+            const res = await fetch(`${API_BASE}/rental/orders/${orderNo}/confirm`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) { showToast('已确认租用'); loadMyRentalOrders(); }
+            else { const data = await res.json(); showToast('❌ ' + (data.error || '失败')); }
+        } catch (err) { showToast('网络错误'); }
+    }
+
+    // 完成租用
+    if (e.target.classList.contains('complete-rental-btn')) {
+        const orderNo = e.target.dataset.order;
+        try {
+            const res = await fetch(`${API_BASE}/rental/orders/${orderNo}/complete`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) { showToast('✅ 已完成，收益已计入'); loadMyRentalOrders(); loadRentalEarnings(); }
+            else { const data = await res.json(); showToast('❌ ' + (data.error || '失败')); }
+        } catch (err) { showToast('网络错误'); }
+    }
+
+    // 取消租用（通用）
+    if (e.target.classList.contains('cancel-rental-btn')) {
+        const orderNo = e.target.dataset.order;
+        try {
+            const res = await fetch(`${API_BASE}/rental/orders/${orderNo}/cancel`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) { showToast('已取消'); loadRentedOrders(); loadMyRentalOrders(); }
+            else { const data = await res.json(); showToast('❌ ' + (data.error || '失败')); }
+        } catch (err) { showToast('网络错误'); }
+    }
+});
 
 
 

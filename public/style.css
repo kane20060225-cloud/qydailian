@@ -984,3 +984,146 @@ input[type="text"], input[type="password"], input[type="email"], input[type="tel
 .cancel-custom-btn:hover { background: var(--red); color: white; border-color: var(--red); }
 .delete-custom-btn { border-color: var(--red); color: var(--red); }
 .delete-custom-btn:hover { background: var(--red); color: white; }
+
+
+/* ==================== 租号板块样式 ==================== */
+.rental-tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+.rental-tab {
+    padding: 6px 20px; border-radius: 20px; border: 1px solid var(--border);
+    background: transparent; color: var(--text-secondary); font-weight: 600; cursor: pointer;
+    transition: all var(--transition);
+}
+.rental-tab.active {
+    border-color: var(--accent); background: rgba(240,160,80,0.1); color: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.rental-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 18px;
+}
+.rental-account-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+.rental-account-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 14px var(--accent-glow);
+    transform: translateY(-2px);
+}
+.rental-account-card img {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    background: #0a0f1a;
+}
+.rental-account-card h4 {
+    color: var(--accent);
+    margin-bottom: 4px;
+}
+.rental-account-card p {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+.rental-detail-btn {
+    margin-top: 8px;
+    padding: 6px 12px;
+    border: 1px solid var(--accent);
+    background: rgba(240,160,80,0.1);
+    color: var(--accent);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+.rental-detail-btn:hover {
+    background: rgba(240,160,80,0.2);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* 租用详情弹窗内的表单元素 */
+#rentalType, #rentalQuantity, #rentalUseCredits {
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #111927;
+    color: var(--text);
+}
+#rentalType:focus, #rentalQuantity:focus, #rentalUseCredits:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+/* 出租表单中截图预览 */
+#rentalScreenshotPreview img {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+}
+
+/* 租号表格样式（复用通用表格） */
+.rental-view table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+.rental-view th {
+    background: rgba(240,160,80,0.1);
+    color: var(--accent);
+    padding: 8px;
+    text-align: left;
+    font-size: 0.85rem;
+}
+.rental-view td {
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.82rem;
+    color: var(--text);
+}
+.rental-view button {
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    border-radius: 4px;
+    border: 1px solid var(--accent);
+    background: rgba(240,160,80,0.1);
+    color: var(--accent);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+.rental-view button:hover {
+    background: rgba(240,160,80,0.2);
+}
+
+/* 移动端适配 */
+@media (max-width: 480px) {
+    .rental-grid {
+        grid-template-columns: 1fr;
+    }
+    .rental-tabs {
+        gap: 5px;
+    }
+    .rental-tab {
+        padding: 6px 12px;
+        font-size: 0.8rem;
+    }
+}
+
+/* 浅色主题适配 */
+body.theme-light .rental-account-card {
+    background: #ffffff;
+}
+body.theme-light .rental-account-card p {
+    color: #4b5563;
+}
+body.theme-light .rental-view table th {
+    background: rgba(224,123,48,0.1);
+}
