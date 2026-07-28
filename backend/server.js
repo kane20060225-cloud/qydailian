@@ -242,6 +242,36 @@ async function initDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+        // ========== 动态内容系统（新增） ==========
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS announcements (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(200) NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS game_news (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(200) NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS league_news (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(200) NOT NULL,
+        summary VARCHAR(500) DEFAULT '',
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
     // 兼容旧字段
     try { await pool.execute(`ALTER TABLE users ADD COLUMN qy_credits INT DEFAULT 0`); } catch(e) {}
     try { await pool.execute(`ALTER TABLE users ADD COLUMN total_earned_credits INT DEFAULT 0`); } catch(e) {}
@@ -1389,6 +1419,103 @@ app.get('/api/rental/earnings', authMiddleware, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: '服务器错误' });
   }
+});
+
+// ==================== 动态内容 API ====================
+
+// ---------- 公开读取 ----------
+app.get('/api/announcements', async (req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT * FROM announcements ORDER BY created_at DESC LIMIT 1');
+    res.json(rows.length ? rows[0] : null);
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+app.get('/api/game-news', async (req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT * FROM game_news ORDER BY created_at DESC LIMIT 10');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+app.get('/api/league-news', async (req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT * FROM league_news ORDER BY created_at DESC LIMIT 20');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+// ---------- 管理员 CRUD ----------
+
+// 通用：获取列表（用于管理界面）
+app.get('/api/admin/announcements', adminMiddleware, async (req, res) => {
+  try { const [rows] = await pool.execute('SELECT * FROM announcements ORDER BY created_at DESC'); res.json(rows); }
+  catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+app.get('/api/admin/game-news', adminMiddleware, async (req, res) => {
+  try { const [rows] = await pool.execute('SELECT * FROM game_news ORDER BY created_at DESC'); res.json(rows); }
+  catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+app.get('/api/admin/league-news', adminMiddleware, async (req, res) => {
+  try { const [rows] = await pool.execute('SELECT * FROM league_news ORDER BY created_at DESC'); res.json(rows); }
+  catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+// 新增/更新
+app.post('/api/admin/announcements', adminMiddleware, async (req, res) => {
+  const { id, title, content } = req.body;
+  if (!title || !content) return res.status(400).json({ error: '标题和内容必填' });
+  try {
+    if (id) {
+      await pool.execute('UPDATE announcements SET title=?, content=? WHERE id=?', [title, content, id]);
+      res.json({ success: true, message: '已更新' });
+    } else {
+      await pool.execute('INSERT INTO announcements (title, content) VALUES (?, ?)', [title, content]);
+      res.json({ success: true, message: '已创建' });
+    }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+app.post('/api/admin/game-news', adminMiddleware, async (req, res) => {
+  const { id, title, content } = req.body;
+  if (!title || !content) return res.status(400).json({ error: '标题和内容必填' });
+  try {
+    if (id) {
+      await pool.execute('UPDATE game_news SET title=?, content=? WHERE id=?', [title, content, id]);
+      res.json({ success: true, message: '已更新' });
+    } else {
+      await pool.execute('INSERT INTO game_news (title, content) VALUES (?, ?)', [title, content]);
+      res.json({ success: true, message: '已创建' });
+    }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+app.post('/api/admin/league-news', adminMiddleware, async (req, res) => {
+  const { id, title, summary, content } = req.body;
+  if (!title || !content) return res.status(400).json({ error: '标题和内容必填' });
+  try {
+    if (id) {
+      await pool.execute('UPDATE league_news SET title=?, summary=?, content=? WHERE id=?', [title, summary || '', content, id]);
+      res.json({ success: true, message: '已更新' });
+    } else {
+      await pool.execute('INSERT INTO league_news (title, summary, content) VALUES (?, ?, ?)', [title, summary || '', content]);
+      res.json({ success: true, message: '已创建' });
+    }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+
+// 删除
+app.delete('/api/admin/announcements/:id', adminMiddleware, async (req, res) => {
+  try { await pool.execute('DELETE FROM announcements WHERE id=?', [req.params.id]); res.json({ success: true }); }
+  catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+app.delete('/api/admin/game-news/:id', adminMiddleware, async (req, res) => {
+  try { await pool.execute('DELETE FROM game_news WHERE id=?', [req.params.id]); res.json({ success: true }); }
+  catch (err) { res.status(500).json({ error: '服务器错误' }); }
+});
+app.delete('/api/admin/league-news/:id', adminMiddleware, async (req, res) => {
+  try { await pool.execute('DELETE FROM league_news WHERE id=?', [req.params.id]); res.json({ success: true }); }
+  catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
 // ---------- 启动 ----------

@@ -454,6 +454,7 @@
                 <button class="admin-tab" data-admintab="custom">✏️ 定制需求</button>
                 <button class="admin-tab" data-admintab="boosters">👥 打手管理</button>
                 <button class="admin-tab" data-admintab="roles">👑 角色管理</button>
+                <button class="admin-tab" data-admintab="content">📰 内容管理</button>
             </div>
             <div id="adminOrdersSection">
                 <div class="admin-filter">
@@ -490,6 +491,15 @@
                     </div>
                     <p id="roleUpdateMsg" style="margin-top:6px; font-size:0.85rem; color:var(--green);"></p>
                 </div>
+            </div>
+            <div id="adminContentSection" style="display:none;">
+                <h4 style="margin-bottom:16px;">📰 动态内容管理</h4>
+                <div class="content-manager-tabs" style="display:flex; gap:10px; margin-bottom:16px;">
+                    <button class="content-mgr-tab active" data-ctype="announcements">📢 站内公告</button>
+                    <button class="content-mgr-tab" data-ctype="game-news">📰 游戏新闻</button>
+                    <button class="content-mgr-tab" data-ctype="league-news">🏆 联赛新闻</button>
+                </div>
+                <div id="contentManagerView" style="margin-top:12px;"></div>
             </div>
         </div>
     </div>

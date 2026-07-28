@@ -1127,3 +1127,44 @@ body.theme-light .rental-account-card p {
 body.theme-light .rental-view table th {
     background: rgba(224,123,48,0.1);
 }
+
+/* ==================== 内容管理样式 ==================== */
+.content-manager-tabs { display: flex; gap: 10px; flex-wrap: wrap; }
+.content-mgr-tab {
+    padding: 6px 16px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition);
+    font-weight: 600;
+}
+.content-mgr-tab.active {
+    border-color: var(--accent);
+    background: rgba(240,160,80,0.1);
+    color: var(--accent);
+}
+.content-item-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    margin-bottom: 12px;
+}
+.content-item-card button {
+    margin-left: 6px;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    border: 1px solid var(--accent);
+    background: rgba(240,160,80,0.1);
+    color: var(--accent);
+    border-radius: 4px;
+    cursor: pointer;
+}
+.content-item-card button:hover {
+    background: rgba(240,160,80,0.2);
+}
+body.theme-light .content-item-card {
+    background: #ffffff;
+}

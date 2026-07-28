@@ -115,14 +115,7 @@ const tankList = [
 ];
 while (tankList.length < 100) tankList.push("随机坦克" + (tankList.length + 1));
 
-const leagueData = [
-    { id: 1, title: '🏆 2026夏季联赛报名开启', time: '2026-07-01', summary: '夏季联赛正式启动，报名截止7月15日。', content: '2026夏季联赛现已开放报名...' },
-    { id: 2, title: '⚔️ 上周精彩比赛回顾', time: '2026-06-28', summary: 'TOP战队3:2险胜黑马队伍。', content: '上周末的焦点战中...' },
-    { id: 3, title: '📊 战队积分榜更新', time: '2026-06-25', summary: '最新积分排名：情谊战队暂居榜首。', content: '经过五轮比赛...' },
-    { id: 4, title: '🎙️ 选手专访：Hansza的坦克心得', time: '2026-06-20', summary: '银牌打手Hansza分享IS-7使用技巧。', content: '我们采访了...' },
-    { id: 5, title: '📢 赛事规则调整通知', time: '2026-06-15', summary: '本赛季起禁止使用某型号坦克参赛。', content: '根据玩家反馈...' },
-    { id: 6, title: '🎉 联赛竞猜活动上线', time: '2026-06-10', summary: '参与竞猜赢取专属头像和金币奖励。', content: '为增加赛事互动...' }
-];
+
 
 // ==================== DOM 元素引用 (带 null 检查) ====================
 const mainMenu = getEl('mainMenu');
@@ -211,7 +204,7 @@ function init() {
     checkLoginStatus();
     bindUpdateRole();
     initChestSimulator();
-    renderLeagueCards();
+    loadGameNews();
     applySavedTheme();
 }
 
@@ -261,6 +254,7 @@ function showSection(target) {
             loadLeagueConfig();
             break;
         case 'league':
+            // 原有：默认显示积分榜，隐藏新闻
             const standingsView = getEl('leagueStandingsView');
             const newsView = getEl('leagueNewsView');
             if (standingsView) standingsView.style.display = 'block';
@@ -269,6 +263,8 @@ function showSection(target) {
             const standingsTab = document.querySelector('.league-tab[data-league-view="standings"]');
             if (standingsTab) standingsTab.classList.add('active');
             loadLeagueStandings();
+            // 新增：预加载联赛新闻数据（若用户切换到新闻视图时可用）
+            loadLeagueNews();
             break;
         case 'tools':
             resetToolsOnEnter();
@@ -282,7 +278,7 @@ function showSection(target) {
         case 'boost':
             loadUserCreditsForBoost();
             break;
-                case 'rental':
+        case 'rental':
             // 重置所有 rental 子视图为隐藏
             document.querySelectorAll('.rental-view').forEach(v => v.style.display = 'none');
             // 显示默认视图（租号大厅）
@@ -294,7 +290,15 @@ function showSection(target) {
             if (defaultTab) defaultTab.classList.add('active');
             // 加载大厅数据
             loadRentalHall();
-            break;        
+            break;
+        // 新增：游戏新闻板块
+        case 'news':
+            loadGameNews();
+            break;
+        // 新增：站内公告板块
+        case 'announcement':
+            loadAnnouncement();
+            break;
     }
 }
 
@@ -484,16 +488,7 @@ getEl('calcBtn')?.addEventListener('click', () => {
     calcResultDiv.style.display = 'block';
 });
 
-// ==================== 新闻 ====================
-const newsData = [
-    { title:'🎉 夏季联赛预告', time:'2026-06-29', content:'2026夏季联赛即将开始，代练业务同步支持各类教学。' },
-    { title:'⚡ 周末优惠活动', time:'2026-06-29', content:'本周六日全场下单优惠10%，代练价格大幅下降，欢迎下单！' },
-    { title:'🛡️ 账号安全提醒', time:'2026-06-29', content:'近期出现第三方虚假代练，请认准本站唯一客服联系方式，谨防上当。' }
-];
-const newsContainer = getEl('newsContainer');
-if (newsContainer) {
-    newsContainer.innerHTML = newsData.map(n => `<div class="news-item"><div class="news-title">${n.title}</div><div class="news-time">${n.time}</div><div class="news-content">${n.content}</div></div>`).join('');
-}
+
 
 // ==================== 用户登录状态管理 ====================
 function checkLoginStatus() {
@@ -797,6 +792,11 @@ document.addEventListener('click', async (e) => {
             if (res.ok) { showToast(`✅ 订单已完成，收益 ¥${data.earnings}`); loadMyBoosterOrders(); } else showToast('❌ ' + (data.error||'操作失败'));
         } catch (err) { showToast('❌ 网络错误'); }
     }
+        // 内容管理子标签切换
+    if (e.target.classList.contains('content-mgr-tab')) {
+        const type = e.target.dataset.ctype;
+        switchContentManagerTab(type);
+    }
     // 完成定制需求
 if (e.target.classList.contains('complete-custom-btn')) {
   const id = e.target.dataset.id;
@@ -853,19 +853,47 @@ if (e.target.classList.contains('delete-custom-btn')) {
 if (statusFilter) statusFilter.addEventListener('change', loadAdminOrders);
 if (refreshOrdersBtn) refreshOrdersBtn.addEventListener('click', loadAdminOrders);
 
-// 管理面板标签切换
+// ========== 管理面板选项卡切换（修改后） ==========
 document.querySelectorAll('.admin-tab').forEach(tab => {
     tab.addEventListener('click', () => {
         document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         const target = tab.dataset.admintab;
+        // 隐藏所有子面板
         ['adminOrdersSection', 'adminCustomSection', 'adminBoostersSection', 'adminRolesSection'].forEach(id => {
             const el = getEl(id);
-            if (el) el.style.display = (id === `admin${target.charAt(0).toUpperCase() + target.slice(1)}Section`) ? 'block' : 'none';
+            if (el) el.style.display = 'none';
         });
-        if (target === 'custom') loadAdminCustomRequests();
-        else if (target === 'boosters') loadAdminBoosters();
-        else if (target === 'roles') loadUserList();
+        // 新增：内容管理面板的显示控制
+        const contentSection = getEl('adminContentSection');
+        if (contentSection) contentSection.style.display = 'none';
+
+        // 根据 target 显示对应面板
+        if (target === 'orders') {
+            const el = getEl('adminOrdersSection');
+            if (el) el.style.display = 'block';
+            loadAdminOrders();
+        } else if (target === 'custom') {
+            const el = getEl('adminCustomSection');
+            if (el) el.style.display = 'block';
+            loadAdminCustomRequests();
+        } else if (target === 'boosters') {
+            const el = getEl('adminBoostersSection');
+            if (el) el.style.display = 'block';
+            loadAdminBoosters();
+        } else if (target === 'roles') {
+            const el = getEl('adminRolesSection');
+            if (el) el.style.display = 'block';
+            loadUserList();
+        } else if (target === 'content') {
+            // 新增：显示内容管理面板
+            if (contentSection) contentSection.style.display = 'block';
+            // 默认选中“公告”子标签并加载
+            document.querySelectorAll('.content-mgr-tab').forEach(t => t.classList.remove('active'));
+            const defaultMgrTab = document.querySelector('.content-mgr-tab[data-ctype="announcements"]');
+            if (defaultMgrTab) defaultMgrTab.classList.add('active');
+            switchContentManagerTab('announcements');
+        }
     });
 });
 async function loadUserList() {
@@ -1325,6 +1353,7 @@ function renderLeagueCards() {
     });
 }
 function showLeagueDetail(item) {
+    item.time = item.time || item.created_at;
     if (getEl('leagueDetailTitle')) getEl('leagueDetailTitle').textContent = item.title;
     if (getEl('leagueDetailTime')) getEl('leagueDetailTime').textContent = `发布时间：${item.time}`;
     if (getEl('leagueDetailContent')) getEl('leagueDetailContent').textContent = item.content;
@@ -1346,6 +1375,7 @@ document.querySelectorAll('.league-tab').forEach(tab => {
             const sv = getEl('leagueStandingsView'), nv = getEl('leagueNewsView');
             if (sv) sv.style.display = 'none';
             if (nv) nv.style.display = 'block';
+            loadLeagueNews();
         }
     });
 });
@@ -2407,6 +2437,198 @@ document.addEventListener('click', async (e) => {
     }
 });
 
+// ==================== 动态内容加载（新增） ====================
+
+async function loadAnnouncement() {
+  const container = document.querySelector('.announcement-content');
+  if (!container) return;
+  try {
+    const res = await fetch(`${API_BASE}/announcements`);
+    const ann = await res.json();
+    if (ann && ann.title) {
+      container.innerHTML = `
+        <h3>${ann.title}</h3>
+        <p style="white-space: pre-wrap;">${ann.content}</p>
+        <hr style="border-color: var(--border); margin: 20px 0;">
+        <h3>💳 收款码</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 16px;">请使用微信或支付宝扫描下方二维码付款</p>
+        <img src="payment-qr.png" alt="收款码" style="max-width: 260px; border-radius: 12px; border: 2px solid var(--border);">
+        <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 8px;">付款后请截图并联系客服确认</p>
+      `;
+    }
+    // 若数据库无公告则保留原静态内容（无需改动）
+  } catch (e) { /* 忽略，保持原有内容 */ }
+}
+
+async function loadGameNews() {
+  const container = getEl('newsContainer');
+  if (!container) return;
+  try {
+    const res = await fetch(`${API_BASE}/game-news`);
+    const news = await res.json();
+    if (news && news.length) {
+      container.innerHTML = news.map(n => `
+        <div class="news-item">
+          <div class="news-title">${n.title}</div>
+          <div class="news-time">${new Date(n.created_at).toLocaleString()}</div>
+          <div class="news-content" style="white-space: pre-wrap;">${n.content}</div>
+        </div>
+      `).join('');
+    } else {
+      container.innerHTML = '<p>暂无新闻</p>';
+    }
+  } catch (e) { container.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+}
+
+async function loadLeagueNews() {
+  const grid = getEl('leagueNewsGrid');
+  if (!grid) return;
+  try {
+    const res = await fetch(`${API_BASE}/league-news`);
+    const items = await res.json();
+    if (items && items.length) {
+      grid.innerHTML = items.map(item => `
+        <div class="league-news-card" data-league-id="${item.id}">
+          <h4>${item.title}</h4>
+          <p class="league-card-time">${new Date(item.created_at).toLocaleString()}</p>
+          <p class="league-card-summary">${item.summary || ''}</p>
+        </div>
+      `).join('');
+      document.querySelectorAll('.league-news-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const id = parseInt(card.dataset.leagueId);
+          const data = items.find(d => d.id === id);
+          if (data) showLeagueDetail(data);
+        });
+      });
+    } else {
+      grid.innerHTML = '<p>暂无联赛新闻</p>';
+    }
+  } catch (e) { grid.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+}
+
+// ==================== 内容管理（管理员） ====================
+
+function getEndpointForType(type) {
+  const map = {
+    'announcements': '/admin/announcements',
+    'game-news': '/admin/game-news',
+    'league-news': '/admin/league-news'
+  };
+  return map[type] || '';
+}
+
+async function loadContentManager(type) {
+  const view = getEl('contentManagerView');
+  const token = safeGetItem('token');
+  if (!token) { view.innerHTML = '<p>请先登录</p>'; return; }
+  const endpoint = getEndpointForType(type);
+  if (!endpoint) return;
+  try {
+    const res = await fetch(`${API_BASE}${endpoint}`, { headers: { 'Authorization': `Bearer ${token}` } });
+    const items = await res.json();
+    window._contentItems = items;  // 缓存，方便编辑
+    view.innerHTML = renderContentEditor(type, items);
+    bindContentEditorEvents(type);
+  } catch (err) {
+    view.innerHTML = '<p style="color:var(--red)">加载失败</p>';
+  }
+}
+
+function renderContentEditor(type, items) {
+  let html = `
+    <div style="margin-bottom: 16px;">
+      <button class="submit-btn new-content-btn" data-type="${type}" style="width:auto; padding:8px 20px;">+ 新增</button>
+    </div>`;
+  if (items && items.length) {
+    items.forEach(item => {
+      html += `
+      <div class="content-item-card" data-id="${item.id}">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <strong>${item.title}</strong>
+          <div>
+            <button class="edit-content-btn" data-type="${type}" data-id="${item.id}">编辑</button>
+            <button class="delete-content-btn" data-type="${type}" data-id="${item.id}">删除</button>
+          </div>
+        </div>
+        <p style="font-size:0.8rem; color: var(--text-muted);">${new Date(item.created_at).toLocaleString()}</p>
+        ${item.summary !== undefined ? `<p style="font-size:0.85rem; color: var(--text-secondary);">摘要: ${item.summary || '无'}</p>` : ''}
+        <pre style="white-space: pre-wrap; font-family: inherit; margin-top: 8px;">${item.content.substring(0, 100)}...</pre>
+      </div>`;
+    });
+  } else {
+    html += '<p>暂无内容</p>';
+  }
+  return html;
+}
+
+function bindContentEditorEvents(type) {
+  document.querySelector('.new-content-btn')?.addEventListener('click', () => showContentForm(type, null));
+
+  document.querySelectorAll('.edit-content-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const item = window._contentItems?.find(i => i.id == id);
+      if (item) showContentForm(type, item);
+    });
+  });
+
+  document.querySelectorAll('.delete-content-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      if (!confirm('确定删除吗？')) return;
+      const token = safeGetItem('token');
+      const endpoint = getEndpointForType(type);
+      try {
+        const res = await fetch(`${API_BASE}${endpoint}/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          showToast('已删除');
+          loadContentManager(type);
+        } else {
+          const data = await res.json();
+          showToast('❌ ' + (data.error || '删除失败'));
+        }
+      } catch (err) { showToast('网络错误'); }
+    });
+  });
+}
+
+function showContentForm(type, item) {
+  const isEdit = item !== null;
+  const title = prompt('标题', item ? item.title : '');
+  if (title === null) return;
+  const summary = (type === 'league-news') ? prompt('摘要（可选）', item ? (item.summary || '') : '') : '';
+  const content = prompt('内容（换行用\\n）', item ? item.content : '');
+  if (content === null) return;
+
+  const token = safeGetItem('token');
+  const endpoint = getEndpointForType(type);
+  const body = { id: isEdit ? item.id : null, title, content };
+  if (type === 'league-news') body.summary = summary;
+
+  fetch(`${API_BASE}${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify(body)
+  }).then(res => res.json()).then(data => {
+    if (data.success) {
+      showToast(isEdit ? '已更新' : '已创建');
+      loadContentManager(type);
+    } else {
+      showToast('❌ ' + (data.error || '操作失败'));
+    }
+  }).catch(() => showToast('网络错误'));
+}
+
+function switchContentManagerTab(type) {
+  document.querySelectorAll('.content-mgr-tab').forEach(t => t.classList.remove('active'));
+  const activeTab = document.querySelector(`.content-mgr-tab[data-ctype="${type}"]`);
+  if (activeTab) activeTab.classList.add('active');
+  loadContentManager(type);
+}
 
 
 // ==================== 启动 ====================
