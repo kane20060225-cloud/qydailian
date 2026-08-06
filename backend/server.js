@@ -1518,6 +1518,23 @@ app.delete('/api/admin/league-news/:id', adminMiddleware, async (req, res) => {
   catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
+// 通用图片上传（用于内容编辑等）
+app.post('/api/upload-image', authMiddleware, async (req, res) => {
+  const { image } = req.body; // base64 图片数据
+  if (!image) return res.status(400).json({ error: '请提供图片数据' });
+  const uploadDir = path.join(__dirname, 'uploads');
+  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+  const filename = `content_${req.userId}_${Date.now()}.png`;
+  try {
+    const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+    fs.writeFileSync(path.join(uploadDir, filename), base64Data, 'base64');
+    res.json({ success: true, url: `/uploads/${filename}` });
+  } catch (err) {
+    res.status(500).json({ error: '图片保存失败' });
+  }
+});
+
+
 // ---------- 启动 ----------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

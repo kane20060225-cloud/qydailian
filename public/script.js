@@ -1356,7 +1356,7 @@ function showLeagueDetail(item) {
     item.time = item.time || item.created_at;
     if (getEl('leagueDetailTitle')) getEl('leagueDetailTitle').textContent = item.title;
     if (getEl('leagueDetailTime')) getEl('leagueDetailTime').textContent = `发布时间：${item.time}`;
-    if (getEl('leagueDetailContent')) getEl('leagueDetailContent').textContent = item.content;
+    if (getEl('leagueDetailContent')) getEl('leagueDetailContent').innerHTML = renderContentWithImages(item.content);
     const modal = getEl('leagueDetailModal'); if (modal) modal.style.display = 'flex';
 }
 getEl('closeLeagueDetailBtn')?.addEventListener('click', () => { const m = getEl('leagueDetailModal'); if (m) m.style.display = 'none'; });
@@ -2448,7 +2448,7 @@ async function loadAnnouncement() {
     if (ann && ann.title) {
       container.innerHTML = `
         <h3>${ann.title}</h3>
-        <p style="white-space: pre-wrap;">${ann.content}</p>
+        <p>${renderContentWithImages(ann.content)}</p>
         <hr style="border-color: var(--border); margin: 20px 0;">
         <h3>💳 收款码</h3>
         <p style="color: var(--text-secondary); margin-bottom: 16px;">请使用微信或支付宝扫描下方二维码付款</p>
@@ -2471,7 +2471,7 @@ async function loadGameNews() {
         <div class="news-item">
           <div class="news-title">${n.title}</div>
           <div class="news-time">${new Date(n.created_at).toLocaleString()}</div>
-          <div class="news-content" style="white-space: pre-wrap;">${n.content}</div>
+          <div class="news-content">${renderContentWithImages(n.content)}</div>
         </div>
       `).join('');
     } else {
@@ -2596,31 +2596,144 @@ function bindContentEditorEvents(type) {
   });
 }
 
+// -------------------- 新编辑器逻辑 --------------------
+let currentEditType = null;
+let currentEditItem = null;
+
 function showContentForm(type, item) {
-  const isEdit = item !== null;
-  const title = prompt('标题', item ? item.title : '');
-  if (title === null) return;
-  const summary = (type === 'league-news') ? prompt('摘要（可选）', item ? (item.summary || '') : '') : '';
-  const content = prompt('内容（换行用\\n）', item ? item.content : '');
-  if (content === null) return;
+  currentEditType = type;
+  currentEditItem = item;
+  getEl('contentEditorTitle').textContent = item ? '编辑内容' : '新增内容';
+  getEl('contentEditorInputTitle').value = item ? item.title : '';
+  getEl('contentEditorTextarea').value = item ? item.content : '';
+  getEl('contentEditorError').textContent = '';
+  getEl('contentEditorPreview').innerHTML = '';
+  getEl('contentEditorModal').style.display = 'flex';
+}
 
-  const token = safeGetItem('token');
-  const endpoint = getEndpointForType(type);
-  const body = { id: isEdit ? item.id : null, title, content };
-  if (type === 'league-news') body.summary = summary;
+// 编辑器初始化（立即执行，因为 script 在 body 底部）
+(function initContentEditor() {
+  const saveBtn = getEl('contentEditorSaveBtn');
+  const closeBtn = getEl('closeContentEditorBtn');
+  const modal = getEl('contentEditorModal');
+  const uploadBtn = getEl('contentEditorUploadBtn');
+  const fileInput = getEl('contentEditorFileInput');
+  const textarea = getEl('contentEditorTextarea');
+  const preview = getEl('contentEditorPreview');
+  const msgEl = getEl('contentEditorUploadMsg');
 
-  fetch(`${API_BASE}${endpoint}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-    body: JSON.stringify(body)
-  }).then(res => res.json()).then(data => {
-    if (data.success) {
-      showToast(isEdit ? '已更新' : '已创建');
-      loadContentManager(type);
-    } else {
-      showToast('❌ ' + (data.error || '操作失败'));
+  if (!saveBtn || !modal) return; // 弹窗还未加载则退出（初次加载时可能无）
+
+  saveBtn.addEventListener('click', async () => {
+    const title = getEl('contentEditorInputTitle').value.trim();
+    const content = textarea.value.trim();
+    const errorEl = getEl('contentEditorError');
+    if (!title || !content) {
+      errorEl.textContent = '标题和内容不能为空';
+      return;
     }
-  }).catch(() => showToast('网络错误'));
+    const token = safeGetItem('token');
+    const endpoint = getEndpointForType(currentEditType);
+    const body = { title, content };
+    if (currentEditItem) body.id = currentEditItem.id;
+    if (currentEditType === 'league-news') {
+      body.summary = content.replace(/!\[.*?\]\(.*?\)/g, '').replace(/\n/g, ' ').substring(0, 100);
+    }
+    try {
+      const res = await fetch(`${API_BASE}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(currentEditItem ? '已更新' : '已创建');
+        modal.style.display = 'none';
+        loadContentManager(currentEditType);
+      } else {
+        errorEl.textContent = data.error || '保存失败';
+      }
+    } catch (err) {
+      errorEl.textContent = '网络错误';
+    }
+  });
+
+  closeBtn.addEventListener('click', () => { modal.style.display = 'none'; });
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+
+  uploadBtn.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64 = e.target.result;
+      const token = safeGetItem('token');
+      const res = await fetch(`${API_BASE}/upload-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ image: base64 })
+      });
+      const data = await res.json();
+      if (data.url) {
+        const imgMd = `![图片](${data.url})`;
+        const start = textarea.selectionStart;
+        textarea.value = textarea.value.substring(0, start) + imgMd + textarea.value.substring(textarea.selectionEnd);
+        textarea.focus();
+        const img = document.createElement('img');
+        img.src = data.url;
+        img.style = 'width:80px; height:80px; object-fit:cover; border-radius:6px; margin:4px;';
+        preview.appendChild(img);
+        msgEl.textContent = '图片已插入';
+        setTimeout(() => msgEl.textContent = '', 2000);
+      } else {
+        msgEl.textContent = '上传失败';
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // 支持粘贴图片
+  document.addEventListener('paste', async (e) => {
+    if (modal.style.display !== 'flex') return;
+    const items = e.clipboardData.items;
+    for (let item of items) {
+      if (item.type.indexOf('image') !== -1) {
+        const blob = item.getAsFile();
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+          const base64 = ev.target.result;
+          const token = safeGetItem('token');
+          const res = await fetch(`${API_BASE}/upload-image`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ image: base64 })
+          });
+          const data = await res.json();
+          if (data.url) {
+            const imgMd = `![图片](${data.url})`;
+            const start = textarea.selectionStart;
+            textarea.value = textarea.value.substring(0, start) + imgMd + textarea.value.substring(textarea.selectionEnd);
+            textarea.focus();
+          }
+        };
+        reader.readAsDataURL(blob);
+        e.preventDefault();
+        break;
+      }
+    }
+  });
+})();
+
+// 简单的 Markdown 图片渲染（用于展示）
+function renderContentWithImages(text) {
+  if (!text) return '';
+  let html = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%; border-radius:8px; margin:8px 0;">');
+  html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  html = html.replace(/&lt;img\s/g, '<img ').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+  html = html.replace(/\n/g, '<br>');
+  return html;
 }
 
 function switchContentManagerTab(type) {
@@ -2629,7 +2742,6 @@ function switchContentManagerTab(type) {
   if (activeTab) activeTab.classList.add('active');
   loadContentManager(type);
 }
-
 
 // ==================== 启动 ====================
 init();

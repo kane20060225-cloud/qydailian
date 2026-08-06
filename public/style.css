@@ -1168,3 +1168,26 @@ body.theme-light .rental-view table th {
 body.theme-light .content-item-card {
     background: #ffffff;
 }
+
+/* 内容编辑模态 */
+#contentEditorModal .modal-card {
+  max-width: 700px;
+}
+#contentEditorTextarea {
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  background: #111927;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  resize: vertical;
+}
+#contentEditorPreview img {
+  border: 1px solid var(--border);
+}
+body.theme-light #contentEditorTextarea {
+  background: #f9fafb;
+  color: #1f2937;
+}
