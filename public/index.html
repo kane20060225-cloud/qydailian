@@ -25,6 +25,7 @@
                    <button id="adminPanelBtn" style="display:none;">管理面板</button>
                    <button id="boosterPanelBtn" style="display:none;">打手面板</button>
                    <button id="leagueAdminBtn" style="display:none;">联赛管理</button>
+                   <button id="thirdPartyOrdersBtn">📦 三方订单</button>
                    <button id="settingsBtn">⚙️ 设置</button>
                    <button id="logoutBtn">退出登录</button>
                 </div>
@@ -744,6 +745,44 @@
         <p class="modal-footer-text">提示：图片上传后可复制生成的地址插入到内容中</p>
     </div>
 </div>
+
+    <!-- ==================== 板块：三方订单 ==================== -->
+    <div id="sectionThirdParty" class="content-section" style="display: none;">
+        <div class="section-top">
+            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+            <h2 class="section-heading">📦 三方订单管理</h2>
+        </div>
+        <div class="container">
+            <!-- 添加订单表单（仅管理员和打手可见） -->
+            <section class="card" id="tpAddCard">
+                <h4 style="color:var(--accent); margin-bottom:12px;">➕ 添加三方订单</h4>
+                <div class="form-group">
+                    <label>来源平台</label>
+                    <input type="text" id="tpPlatform" placeholder="如：闲鱼、贴吧、微信...">
+                </div>
+                <div class="form-group">
+                    <label>代练内容 <span style="color:var(--red)">*</span></label>
+                    <textarea id="tpContent" rows="2" placeholder="详细描述代练需求"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>账号信息（手机/邮箱） <span style="color:var(--red)">*</span></label>
+                    <input type="text" id="tpAccount" placeholder="用于登录的账号">
+                </div>
+                <div class="form-group">
+                    <label>价格 (元) <span style="color:var(--red)">*</span></label>
+                    <input type="number" id="tpPrice" step="0.01" min="0">
+                </div>
+                <button id="tpSubmitBtn" class="submit-btn">🚀 提交</button>
+                <p id="tpMsg" style="margin-top:8px; font-size:0.85rem;"></p>
+            </section>
+
+            <!-- 订单列表 -->
+            <section class="card">
+                <h4 style="color:var(--accent); margin-bottom:12px;">📋 三方订单列表</h4>
+                <div id="tpOrderList">加载中...</div>
+            </section>
+        </div>
+    </div>
 
     <script src="script.js"></script>
 </body>

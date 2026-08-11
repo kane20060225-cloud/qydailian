@@ -326,7 +326,24 @@ async function initDB() {
 
     // 增加出租收益字段
     try { await pool.execute(`ALTER TABLE users ADD COLUMN rental_earnings DECIMAL(10,2) DEFAULT 0.00`); } catch(e) {}
-
+    // ========== 三方订单系统（新增） ==========
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS third_party_orders (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        order_no VARCHAR(30) NOT NULL UNIQUE,
+        creator_id INT NOT NULL,
+        platform VARCHAR(50) DEFAULT '其他',
+        content TEXT NOT NULL COMMENT '代练内容',
+        account_info VARCHAR(200) NOT NULL COMMENT '账号信息(手机/邮箱)',
+        price DECIMAL(10,2) NOT NULL,
+        status ENUM('pending','approved','rejected') DEFAULT 'pending',
+        reviewer_id INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (reviewer_id) REFERENCES users(id) ON DELETE SET NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
 
 }
 initDB();
@@ -1533,6 +1550,118 @@ app.post('/api/upload-image', authMiddleware, async (req, res) => {
     res.status(500).json({ error: '图片保存失败' });
   }
 });
+
+// ==================== 三方订单 API ====================
+
+// 创建订单（admin 或 booster 可创建）
+app.post('/api/third-party-orders', async (req, res, next) => {
+  // 使用自定义中间件检查角色
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) return res.status(401).json({ error: '未提供令牌' });
+  try {
+    const token = header.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.userId = decoded.userId;
+  } catch (err) {
+    return res.status(401).json({ error: '令牌无效' });
+  }
+
+  const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
+  if (userRows.length === 0 || (userRows[0].role !== 'admin' && userRows[0].role !== 'booster')) {
+    return res.status(403).json({ error: '无权限，仅管理员或打手可创建' });
+  }
+
+  const { platform, content, account_info, price } = req.body;
+  if (!content || !account_info || !price) {
+    return res.status(400).json({ error: '请填写完整信息（内容、账号、价格）' });
+  }
+
+  const orderNo = 'TP' + Date.now() + Math.random().toString(36).substring(2, 6).toUpperCase();
+  try {
+    await pool.execute(
+      'INSERT INTO third_party_orders (order_no, creator_id, platform, content, account_info, price) VALUES (?,?,?,?,?,?)',
+      [orderNo, req.userId, platform || '其他', content, account_info, price]
+    );
+    res.status(201).json({ success: true, order_no: orderNo });
+  } catch (err) {
+    res.status(500).json({ error: '创建失败' });
+  }
+});
+
+// 获取列表（管理员看全部，打手看自己创建的）
+app.get('/api/third-party-orders', async (req, res, next) => {
+  // 验证登录
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) return res.status(401).json({ error: '未提供令牌' });
+  try {
+    const token = header.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.userId = decoded.userId;
+  } catch (err) {
+    return res.status(401).json({ error: '令牌无效' });
+  }
+
+  const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
+  if (userRows.length === 0) return res.status(401).json({ error: '用户不存在' });
+
+  const role = userRows[0].role;
+  let sql, params;
+  if (role === 'admin') {
+    sql = 'SELECT t.*, u.username AS creator_name FROM third_party_orders t JOIN users u ON t.creator_id = u.id ORDER BY t.created_at DESC';
+    params = [];
+  } else if (role === 'booster') {
+    sql = 'SELECT t.*, u.username AS creator_name FROM third_party_orders t JOIN users u ON t.creator_id = u.id WHERE t.creator_id = ? ORDER BY t.created_at DESC';
+    params = [req.userId];
+  } else {
+    return res.status(403).json({ error: '无权限访问' });
+  }
+
+  try {
+    const [rows] = await pool.execute(sql, params);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 管理员审核订单
+app.put('/api/third-party-orders/:orderNo/review', adminMiddleware, async (req, res) => {
+  const { status } = req.body; // 'approved' or 'rejected'
+  if (!['approved','rejected'].includes(status)) return res.status(400).json({ error: '无效状态' });
+  try {
+    const [result] = await pool.execute(
+      'UPDATE third_party_orders SET status = ?, reviewer_id = ? WHERE order_no = ?',
+      [status, req.userId, req.params.orderNo]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: '订单不存在' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 删除订单（管理员或创建者）
+app.delete('/api/third-party-orders/:orderNo', authMiddleware, async (req, res) => {
+  const { orderNo } = req.params;
+  const [orderRows] = await pool.execute('SELECT * FROM third_party_orders WHERE order_no = ?', [orderNo]);
+  if (orderRows.length === 0) return res.status(404).json({ error: '订单不存在' });
+
+  const order = orderRows[0];
+  const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
+  const role = userRows[0]?.role;
+
+  if (role !== 'admin' && order.creator_id !== req.userId) {
+    return res.status(403).json({ error: '无权删除' });
+  }
+
+  try {
+    await pool.execute('DELETE FROM third_party_orders WHERE order_no = ?', [orderNo]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+ 
 
 
 // ---------- 启动 ----------

@@ -131,7 +131,8 @@ const sections = {
     leagueAdmin: getEl('sectionLeagueAdmin'),
     qyshop: getEl('sectionQYShop'),
     settings: getEl('sectionSettings'),
-    rental: getEl('sectionRental')
+    rental: getEl('sectionRental'),
+    thirdparty: getEl('sectionThirdParty')
 };
 
 // 代练相关
@@ -299,6 +300,14 @@ function showSection(target) {
         case 'announcement':
             loadAnnouncement();
             break;
+        case 'thirdparty':
+            loadThirdPartyOrders();
+            const role = safeGetItem('role');
+            const addCard = getEl('tpAddCard');
+            if (addCard) {
+                addCard.style.display = (role === 'admin' || role === 'booster') ? 'block' : 'none';
+            }
+            break;    
     }
 }
 
@@ -2742,6 +2751,127 @@ function switchContentManagerTab(type) {
   if (activeTab) activeTab.classList.add('active');
   loadContentManager(type);
 }
+
+// ==================== 三方订单模块 ====================
+
+// 菜单按钮点击
+document.getElementById('thirdPartyOrdersBtn')?.addEventListener('click', () => showSection('thirdparty'));
+
+// 提交新订单
+document.getElementById('tpSubmitBtn')?.addEventListener('click', async () => {
+    const token = safeGetItem('token');
+    if (!token) { showToast('请先登录'); return; }
+    const platform = getEl('tpPlatform').value.trim();
+    const content = getEl('tpContent').value.trim();
+    const account_info = getEl('tpAccount').value.trim();
+    const price = parseFloat(getEl('tpPrice').value);
+    const msgEl = getEl('tpMsg');
+    if (!content || !account_info || isNaN(price)) {
+        msgEl.textContent = '请填写内容、账号和价格';
+        return;
+    }
+    try {
+        const res = await fetch(`${API_BASE}/third-party-orders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ platform, content, account_info, price })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            msgEl.textContent = '✅ 订单已提交，等待审核';
+            getEl('tpContent').value = '';
+            getEl('tpAccount').value = '';
+            getEl('tpPrice').value = '';
+            loadThirdPartyOrders();
+        } else {
+            msgEl.textContent = '❌ ' + (data.error || '提交失败');
+        }
+    } catch (err) {
+        msgEl.textContent = '❌ 网络错误';
+    }
+});
+
+// 加载订单列表
+async function loadThirdPartyOrders() {
+    const container = getEl('tpOrderList');
+    const token = safeGetItem('token');
+    if (!token) { container.innerHTML = '<p>请先登录</p>'; return; }
+    try {
+        const res = await fetch(`${API_BASE}/third-party-orders`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const orders = await res.json();
+        const role = safeGetItem('role');
+        if (!orders.length) {
+            container.innerHTML = '<p>暂无三方订单</p>';
+            return;
+        }
+        let html = '<table><tr><th>订单号</th><th>平台</th><th>内容</th><th>账号</th><th>价格</th><th>创建者</th><th>状态</th><th>操作</th></tr>';
+        orders.forEach(o => {
+            const statusMap = { pending: '待审核', approved: '已通过', rejected: '已拒绝' };
+            html += `<tr>
+                <td>${o.order_no}</td><td>${o.platform || '其他'}</td><td>${o.content}</td><td>${o.account_info}</td>
+                <td>¥${o.price}</td><td>${o.creator_name || '—'}</td>
+                <td>${statusMap[o.status] || o.status}</td>
+                <td>`;
+            if (role === 'admin' && o.status === 'pending') {
+                html += `<button class="tp-approve-btn" data-order="${o.order_no}">通过</button>
+                         <button class="tp-reject-btn" data-order="${o.order_no}">拒绝</button>`;
+            }
+            if (role === 'admin' || o.creator_id == safeGetItem('userId')) {
+                html += `<button class="tp-delete-btn" data-order="${o.order_no}">删除</button>`;
+            }
+            html += `</td></tr>`;
+        });
+        html += '</table>';
+        container.innerHTML = html;
+    } catch (err) {
+        container.innerHTML = '<p style="color:var(--red)">加载失败</p>';
+    }
+}
+
+// 事件委托：审核与删除（如果已有全局 click 事件，可将以下逻辑合并进去，以免重复）
+document.addEventListener('click', async (e) => {
+    const token = safeGetItem('token');
+    if (!token) return;
+
+    if (e.target.classList.contains('tp-approve-btn') || e.target.classList.contains('tp-reject-btn')) {
+        const orderNo = e.target.dataset.order;
+        const status = e.target.classList.contains('tp-approve-btn') ? 'approved' : 'rejected';
+        try {
+            const res = await fetch(`${API_BASE}/third-party-orders/${orderNo}/review`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ status })
+            });
+            if (res.ok) {
+                showToast('已' + (status === 'approved' ? '通过' : '拒绝'));
+                loadThirdPartyOrders();
+            } else {
+                const data = await res.json();
+                showToast('❌ ' + (data.error || '操作失败'));
+            }
+        } catch (err) { showToast('网络错误'); }
+    }
+
+    if (e.target.classList.contains('tp-delete-btn')) {
+        const orderNo = e.target.dataset.order;
+        if (!confirm('确定删除该订单？')) return;
+        try {
+            const res = await fetch(`${API_BASE}/third-party-orders/${orderNo}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                showToast('已删除');
+                loadThirdPartyOrders();
+            } else {
+                const data = await res.json();
+                showToast('❌ ' + (data.error || '删除失败'));
+            }
+        } catch (err) { showToast('网络错误'); }
+    }
+});
 
 // ==================== 启动 ====================
 init();
