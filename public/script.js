@@ -2884,5 +2884,152 @@ document.addEventListener('click', function(e) {
   }
 });
 
+
+// ==================== 积分商城管理（管理员） ====================
+
+let editingShopItemId = null;
+
+// 加载商品列表
+async function loadAdminShopItems() {
+  const container = getEl('adminShopList');
+  const token = safeGetItem('token');
+  if (!token) { container.innerHTML = '<p>请先登录</p>'; return; }
+  try {
+    const res = await fetch(`${API_BASE}/admin/shop/items`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const items = await res.json();
+    if (!items.length) {
+      container.innerHTML = '<p>暂无商品，点击右上角新增</p>';
+      return;
+    }
+    let html = '<table><tr><th>ID</th><th>名称</th><th>价格</th><th>库存</th><th>状态</th><th>操作</th></tr>';
+    items.forEach(item => {
+      html += `<tr>
+        <td>${item.id}</td>
+        <td>${item.name}</td>
+        <td>${item.price_credits} 积分</td>
+        <td>${item.stock === -1 ? '无限' : item.stock}</td>
+        <td>${item.is_active ? '✅ 上架' : '⛔ 下架'}</td>
+        <td>
+          <button class="edit-shop-item-btn" data-id="${item.id}">编辑</button>
+          <button class="delete-shop-item-btn" data-id="${item.id}">删除</button>
+        </td>
+      </tr>`;
+    });
+    html += '</table>';
+    container.innerHTML = html;
+  } catch (err) {
+    container.innerHTML = '<p style="color:var(--red)">加载失败</p>';
+  }
+}
+
+// 打开新增/编辑弹窗
+function openShopModal(item = null) {
+  editingShopItemId = item ? item.id : null;
+  getEl('adminShopModalTitle').textContent = item ? '编辑商品' : '新增商品';
+  getEl('shopItemName').value = item ? item.name : '';
+  getEl('shopItemDesc').value = item ? (item.description || '') : '';
+  getEl('shopItemImage').value = item ? (item.image || '') : '';
+  getEl('shopItemPrice').value = item ? item.price_credits : '';
+  getEl('shopItemStock').value = item ? (item.stock !== undefined ? item.stock : -1) : -1;
+  getEl('shopItemActive').checked = item ? (item.is_active == 1) : true;
+  getEl('shopModalError').textContent = '';
+  getEl('adminShopModal').style.display = 'flex';
+}
+
+// 关闭弹窗事件
+getEl('closeShopModalBtn')?.addEventListener('click', () => {
+  getEl('adminShopModal').style.display = 'none';
+});
+getEl('adminShopModal')?.addEventListener('click', (e) => {
+  if (e.target === getEl('adminShopModal')) getEl('adminShopModal').style.display = 'none';
+});
+
+// 保存商品（新增/更新）
+getEl('saveShopItemBtn')?.addEventListener('click', async () => {
+  const name = getEl('shopItemName').value.trim();
+  const description = getEl('shopItemDesc').value.trim();
+  const image = getEl('shopItemImage').value.trim();
+  const price_credits = parseInt(getEl('shopItemPrice').value);
+  const stock = parseInt(getEl('shopItemStock').value);
+  const is_active = getEl('shopItemActive').checked ? 1 : 0;
+  const errorEl = getEl('shopModalError');
+
+  if (!name || isNaN(price_credits) || price_credits < 1) {
+    errorEl.textContent = '请填写名称和有效的积分价格';
+    return;
+  }
+
+  const token = safeGetItem('token');
+  const body = { name, description, image, price_credits, stock, is_active };
+  if (editingShopItemId) body.id = editingShopItemId;
+
+  try {
+    const res = await fetch(`${API_BASE}/admin/shop/items`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(editingShopItemId ? '商品已更新' : '商品已创建');
+      getEl('adminShopModal').style.display = 'none';
+      loadAdminShopItems(); // 刷新列表
+    } else {
+      errorEl.textContent = data.error || '保存失败';
+    }
+  } catch (err) {
+    errorEl.textContent = '网络错误';
+  }
+});
+
+// 全局事件委托：处理新增、编辑、删除按钮
+document.addEventListener('click', async (e) => {
+  const token = safeGetItem('token');
+  if (!token) return;
+
+  // 新增商品按钮
+  if (e.target.id === 'adminShopAddBtn') {
+    openShopModal();
+  }
+
+  // 编辑按钮
+  if (e.target.classList.contains('edit-shop-item-btn')) {
+    const id = e.target.dataset.id;
+    try {
+      const res = await fetch(`${API_BASE}/admin/shop/items`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const items = await res.json();
+      const item = items.find(i => i.id == id);
+      if (item) openShopModal(item);
+    } catch (err) {
+      showToast('无法获取商品信息');
+    }
+  }
+
+  // 删除按钮
+  if (e.target.classList.contains('delete-shop-item-btn')) {
+    const id = e.target.dataset.id;
+    if (!confirm('确定删除该商品吗？')) return;
+    try {
+      const res = await fetch(`${API_BASE}/admin/shop/items/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        showToast('商品已删除');
+        loadAdminShopItems();
+      } else {
+        const data = await res.json();
+        showToast('❌ ' + (data.error || '删除失败'));
+      }
+    } catch (err) {
+      showToast('网络错误');
+    }
+  }
+});
+
 // ==================== 启动 ====================
 init();
