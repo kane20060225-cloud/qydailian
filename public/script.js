@@ -302,27 +302,32 @@ function showSection(target) {
             break;
         case 'thirdparty':
     loadThirdPartyOrders();
-    // 实时从服务器获取用户角色，避免 localStorage 过期
-    const token = safeGetItem('token');
-    if (token) {
-        fetch(`${API_BASE}/user/profile`, { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(res => res.json())
-            .then(user => {
-                const addCard = getEl('tpAddCard');
-                if (addCard) {
-                    addCard.style.display = (user.role === 'admin' || user.role === 'booster') ? 'block' : 'none';
-                }
-            })
-            .catch(() => {
-                // 如果请求失败，降级使用 localStorage 中的角色
-                const role = safeGetItem('role');
-                const addCard = getEl('tpAddCard');
-                if (addCard) addCard.style.display = (role === 'admin' || role === 'booster') ? 'block' : 'none';
-            });
-    } else {
+    // 立即显示/隐藏添加表单（先用本地缓存角色，再异步更新）
+    (() => {
         const addCard = getEl('tpAddCard');
-        if (addCard) addCard.style.display = 'none';
-    }
+        if (!addCard) return;
+
+        // 先用 localStorage 中的角色快速显示，防止空白
+        const cachedRole = safeGetItem('role');
+        addCard.style.display = (cachedRole === 'admin' || cachedRole === 'booster') ? 'block' : 'none';
+
+        // 再从服务器获取最新角色，确保权限准确
+        const token = safeGetItem('token');
+        if (token) {
+            fetch(`${API_BASE}/user/profile`, { headers: { 'Authorization': `Bearer ${token}` } })
+                .then(res => res.json())
+                .then(user => {
+                    if (addCard) {
+                        addCard.style.display = (user.role === 'admin' || user.role === 'booster') ? 'block' : 'none';
+                    }
+                })
+                .catch(() => {
+                    // 请求失败时仍保留本地角色显示，不更改
+                });
+        } else {
+            addCard.style.display = 'none';
+        }
+    })();
     break;
     }
 }
