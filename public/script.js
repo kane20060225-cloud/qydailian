@@ -870,14 +870,12 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
         document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         const target = tab.dataset.admintab;
-        // 隐藏所有子面板
-        ['adminOrdersSection', 'adminCustomSection', 'adminBoostersSection', 'adminRolesSection'].forEach(id => {
+
+        // 隐藏所有子面板（包括新增的 adminShopSection）
+        ['adminOrdersSection', 'adminCustomSection', 'adminBoostersSection', 'adminRolesSection', 'adminContentSection', 'adminShopSection'].forEach(id => {
             const el = getEl(id);
             if (el) el.style.display = 'none';
         });
-        // 新增：内容管理面板的显示控制
-        const contentSection = getEl('adminContentSection');
-        if (contentSection) contentSection.style.display = 'none';
 
         // 根据 target 显示对应面板
         if (target === 'orders') {
@@ -897,13 +895,22 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
             if (el) el.style.display = 'block';
             loadUserList();
         } else if (target === 'content') {
-            // 新增：显示内容管理面板
-            if (contentSection) contentSection.style.display = 'block';
+            const el = getEl('adminContentSection');
+            if (el) el.style.display = 'block';
             // 默认选中“公告”子标签并加载
             document.querySelectorAll('.content-mgr-tab').forEach(t => t.classList.remove('active'));
             const defaultMgrTab = document.querySelector('.content-mgr-tab[data-ctype="announcements"]');
             if (defaultMgrTab) defaultMgrTab.classList.add('active');
             switchContentManagerTab('announcements');
+        } else if (target === 'shop') {
+            const el = getEl('adminShopSection');
+            if (el) el.style.display = 'block';
+            // 加载积分商城商品列表（需确保 loadAdminShopItems 函数已定义）
+            if (typeof loadAdminShopItems === 'function') {
+                loadAdminShopItems();
+            } else {
+                console.error('loadAdminShopItems 函数未定义，请检查脚本加载顺序');
+            }
         }
     });
 });
