@@ -301,34 +301,15 @@ function showSection(target) {
             loadAnnouncement();
             break;
         case 'thirdparty':
-    loadThirdPartyOrders();
-    // 立即显示/隐藏添加表单（先用本地缓存角色，再异步更新）
-    (() => {
-        const addCard = getEl('tpAddCard');
-        if (!addCard) return;
-
-        // 先用 localStorage 中的角色快速显示，防止空白
-        const cachedRole = safeGetItem('role');
-        addCard.style.display = (cachedRole === 'admin' || cachedRole === 'booster') ? 'block' : 'none';
-
-        // 再从服务器获取最新角色，确保权限准确
-        const token = safeGetItem('token');
-        if (token) {
-            fetch(`${API_BASE}/user/profile`, { headers: { 'Authorization': `Bearer ${token}` } })
-                .then(res => res.json())
-                .then(user => {
-                    if (addCard) {
-                        addCard.style.display = (user.role === 'admin' || user.role === 'booster') ? 'block' : 'none';
-                    }
-                })
-                .catch(() => {
-                    // 请求失败时仍保留本地角色显示，不更改
-                });
-        } else {
-            addCard.style.display = 'none';
-        }
-    })();
-    break;
+            loadThirdPartyOrders();
+            // 直接使用本地缓存的角色显示/隐藏添加表单
+            (() => {
+                const addCard = getEl('tpAddCard');
+                if (!addCard) return;
+                const role = safeGetItem('role');
+                addCard.style.display = (role === 'admin' || role === 'booster') ? 'block' : 'none';
+            })();
+            break;
     }
 }
 
