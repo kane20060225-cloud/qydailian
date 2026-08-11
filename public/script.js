@@ -2873,5 +2873,14 @@ document.addEventListener('click', async (e) => {
     }
 });
 
+
+
+// 三方订单菜单按钮点击（事件委托，永久有效）
+document.addEventListener('click', function(e) {
+  if (e.target && e.target.id === 'thirdPartyOrdersBtn') {
+    showSection('thirdparty');
+  }
+});
+
 // ==================== 启动 ====================
 init();
