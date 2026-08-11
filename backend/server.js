@@ -438,7 +438,7 @@ app.post('/api/auth/login', async (req, res) => {
       role: user.role, created_at: user.created_at, booster_identity: user.booster_identity,
       booster_points: user.booster_points, qy_credits: user.qy_credits, vip_level: user.vip_level
     }});
-  } catch(err) { console.error('登录错误:', err); res.status(500).json({ error: '服务器内部错误' }); }
+  } catch(err) { console.error('登录错误:', err); res.status(500).json({ error: '服务器内部错误',detail: err.message }); }
   finally { if (connection) connection.release(); }
 });
 
