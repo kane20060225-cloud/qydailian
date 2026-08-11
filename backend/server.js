@@ -115,12 +115,12 @@ async function initDB() {
     `);
 
     // 登录设备记录表
-    await pool.execute(`
+        await pool.execute(`
       CREATE TABLE IF NOT EXISTS login_devices (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
-        device_info VARCHAR(255),
-        ip_address VARCHAR(45),
+        device_info TEXT,
+        ip_address VARCHAR(100),
         login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -425,12 +425,24 @@ app.post('/api/auth/login', async (req, res) => {
     if (!validPassword) return res.status(401).json({ error: '用户名或密码错误' });
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
 
-    // 记录登录设备
-    await connection.execute('INSERT INTO login_devices (user_id, device_info, ip_address) VALUES (?, ?, ?)',
-      [user.id, req.headers['user-agent'] || '', req.ip || '']);
+        // 安全记录登录设备（截断超长字段，失败不影响登录）
+    try {
+      const ua = (req.headers['user-agent'] || '').substring(0, 65535);
+      const ip = (req.ip || req.connection.remoteAddress || '').substring(0, 100);
+      await connection.execute(
+        'INSERT INTO login_devices (user_id, device_info, ip_address) VALUES (?, ?, ?)',
+        [user.id, ua, ip]
+      );
+    } catch (e) {
+      console.error('记录登录设备失败:', e.message);
+    }
 
-    // 确保设置存在
-    await connection.execute('INSERT IGNORE INTO user_settings (user_id) VALUES (?)', [user.id]);
+    // 确保用户设置存在（失败不影响登录）
+    try {
+      await connection.execute('INSERT IGNORE INTO user_settings (user_id) VALUES (?)', [user.id]);
+    } catch (e) {
+      console.error('创建设置失败:', e.message);
+    }
 
     res.json({ success: true, token, user: {
       id: user.id, username: user.username, email: user.email, phone: user.phone,
@@ -438,8 +450,10 @@ app.post('/api/auth/login', async (req, res) => {
       role: user.role, created_at: user.created_at, booster_identity: user.booster_identity,
       booster_points: user.booster_points, qy_credits: user.qy_credits, vip_level: user.vip_level
     }});
-  } catch(err) { console.error('登录错误:', err); res.status(500).json({ error: '服务器内部错误',detail: err.message }); }
-  finally { if (connection) connection.release(); }
+  } catch(err) {
+    console.error('登录错误:', err);
+    res.status(500).json({ error: '服务器内部错误' });
+}
 });
 
 // ---------- JWT 中间件 ----------
