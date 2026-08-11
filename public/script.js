@@ -301,13 +301,29 @@ function showSection(target) {
             loadAnnouncement();
             break;
         case 'thirdparty':
-            loadThirdPartyOrders();
-            const role = safeGetItem('role');
-            const addCard = getEl('tpAddCard');
-            if (addCard) {
-                addCard.style.display = (role === 'admin' || role === 'booster') ? 'block' : 'none';
-            }
-            break;    
+    loadThirdPartyOrders();
+    // 实时从服务器获取用户角色，避免 localStorage 过期
+    const token = safeGetItem('token');
+    if (token) {
+        fetch(`${API_BASE}/user/profile`, { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(res => res.json())
+            .then(user => {
+                const addCard = getEl('tpAddCard');
+                if (addCard) {
+                    addCard.style.display = (user.role === 'admin' || user.role === 'booster') ? 'block' : 'none';
+                }
+            })
+            .catch(() => {
+                // 如果请求失败，降级使用 localStorage 中的角色
+                const role = safeGetItem('role');
+                const addCard = getEl('tpAddCard');
+                if (addCard) addCard.style.display = (role === 'admin' || role === 'booster') ? 'block' : 'none';
+            });
+    } else {
+        const addCard = getEl('tpAddCard');
+        if (addCard) addCard.style.display = 'none';
+    }
+    break;
     }
 }
 
