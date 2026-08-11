@@ -525,6 +525,8 @@ if (logoutBtn) logoutBtn.addEventListener('click', () => {
     showToast('👋 已退出登录');
 });
 if (userMenuBtn) userMenuBtn.addEventListener('click', (e) => { e.stopPropagation(); if (userDropdown) userDropdown.style.display = userDropdown.style.display === 'block' ? 'none' : 'block'; });
+// ✅ 新增这一行：阻止下拉菜单内的点击冒泡到 document
+if (userDropdown) userDropdown.addEventListener('click', (e) => e.stopPropagation());
 document.addEventListener('click', () => { if (userDropdown) userDropdown.style.display = 'none'; });
 
 // ==================== 注册/登录弹窗 ====================
