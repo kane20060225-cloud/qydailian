@@ -1290,3 +1290,42 @@ body.theme-light #contentEditorTextarea {
   background: var(--accent);
   color: #fff;
 }
+
+
+/* ========== 三方订单表格溢出修复 ========== */
+#tpOrderList table {
+  min-width: 800px;           /* 保证表格最小宽度，触发横向滚动 */
+  table-layout: auto;         /* 让列宽根据内容自动调整 */
+}
+#tpOrderList th, #tpOrderList td {
+  max-width: 200px;           /* 限制每列最大宽度 */
+  overflow: hidden;
+  text-overflow: ellipsis;    /* 文本超出显示省略号 */
+  white-space: nowrap;        /* 禁止换行 */
+  padding: 8px;
+}
+/* 鼠标悬停时显示完整内容 */
+#tpOrderList td:hover {
+  overflow: visible;
+  white-space: normal;
+  word-break: break-all;
+  background-color: var(--card-bg);
+  position: relative;
+  z-index: 10;
+  box-shadow: 0 0 10px rgba(0,0,0,0.3);
+  border-radius: 4px;
+}
+/* 确保操作列不截断 */
+#tpOrderList td:last-child {
+  max-width: none;
+  white-space: nowrap;
+}
+/* 移动端适配 */
+@media (max-width: 600px) {
+  #tpOrderList table {
+    min-width: 600px;
+  }
+  #tpOrderList th, #tpOrderList td {
+    max-width: 150px;
+  }
+}
