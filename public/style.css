@@ -1252,3 +1252,41 @@ body.theme-light #contentEditorTextarea {
 }
 .edit-shop-item-btn:hover { background: var(--accent); color: #fff; }
 .delete-shop-item-btn:hover { background: var(--red); color: #fff; border-color: var(--red); }
+
+
+.tp-request-complete-btn {
+  background: rgba(72,187,120,0.1); color: var(--green); border-color: var(--green);
+}
+.tp-request-complete-btn:hover { background: var(--green); color: #fff; }
+.tp-mark-paid-btn {
+  background: rgba(240,160,80,0.1); color: var(--accent); border-color: var(--accent);
+}
+.tp-mark-paid-btn:hover { background: var(--accent); color: #fff; }
+
+/* 三方订单完单/支付按钮 */
+.tp-request-complete-btn {
+  background: rgba(72,187,120,0.1);
+  color: var(--green);
+  border: 1px solid var(--green);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.tp-request-complete-btn:hover {
+  background: var(--green);
+  color: #fff;
+}
+.tp-mark-paid-btn {
+  background: rgba(240,160,80,0.1);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.tp-mark-paid-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}

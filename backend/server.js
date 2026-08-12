@@ -724,7 +724,14 @@ app.post('/api/orders/:orderNo/payment', authMiddleware, async (req, res) => {
 // ---------- 管理端订单 ----------
 app.get('/api/admin/orders', adminMiddleware, async (req, res) => {
   try {
-    const [rows] = await pool.execute(`SELECT o.*, u.username FROM orders o JOIN users u ON o.user_id = u.id ORDER BY o.created_at DESC`);
+    const [rows] = await pool.execute(`
+      SELECT o.*, u.username AS customer_name,
+             b.username AS booster_name
+      FROM orders o
+      JOIN users u ON o.user_id = u.id
+      LEFT JOIN users b ON o.booster_id = b.id
+      ORDER BY o.created_at DESC
+    `);
     res.json(rows);
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
@@ -1088,9 +1095,15 @@ app.get('/api/league/:seasonId/rankings', async (req, res) => {
 // ---------- 打手管理（管理员） ----------
 app.get('/api/admin/boosters', adminMiddleware, async (req, res) => {
   try {
-    const [rows] = await pool.execute(
-      'SELECT id, username, booster_identity, booster_points FROM users WHERE role IN (\'booster\',\'admin\') ORDER BY booster_identity DESC'
-    );
+    const [rows] = await pool.execute(`
+      SELECT u.id, u.username, u.booster_identity, u.booster_points,
+             COUNT(CASE WHEN o.status = 'playing' AND o.booster_id = u.id THEN 1 END) AS active_orders
+      FROM users u
+      LEFT JOIN orders o ON o.booster_id = u.id
+      WHERE u.role IN ('booster','admin')
+      GROUP BY u.id
+      ORDER BY u.booster_identity DESC
+    `);
     res.json(rows);
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
@@ -1676,6 +1689,29 @@ app.delete('/api/third-party-orders/:orderNo', authMiddleware, async (req, res) 
   }
 });
  
+// 打手申请完单
+app.put('/api/third-party-orders/:orderNo/request-complete', authMiddleware, async (req, res) => {
+  const { orderNo } = req.params;
+  const [orders] = await pool.execute('SELECT * FROM third_party_orders WHERE order_no = ?', [orderNo]);
+  if (orders.length === 0) return res.status(404).json({ error: '订单不存在' });
+  const order = orders[0];
+  
+  const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
+  if (order.creator_id !== req.userId && userRows[0]?.role !== 'admin') {
+    return res.status(403).json({ error: '无权操作' });
+  }
+  
+  await pool.execute('UPDATE third_party_orders SET complete_requested = 1 WHERE order_no = ?', [orderNo]);
+  res.json({ success: true, message: '已申请完单' });
+});
+
+
+// 管理员标记已支付
+app.put('/api/third-party-orders/:orderNo/mark-paid', adminMiddleware, async (req, res) => {
+  await pool.execute('UPDATE third_party_orders SET payment_status = ? WHERE order_no = ?', ['paid', req.params.orderNo]);
+  res.json({ success: true, message: '已标记为已支付' });
+});
+
 
 
 // ---------- 启动 ----------

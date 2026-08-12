@@ -727,14 +727,15 @@ function renderAdminOrders(orders) {
     const statusText = { pending: '待接单', playing: '代练中', done: '已完成' };
     const paymentStatusMap = { unpaid: '未支付', pending: '待确认', paid: '已支付' };
     if (!orders.length) { adminOrderList.innerHTML = '<p>暂无订单</p>'; return; }
-    let html = '<table><tr><th>订单号</th><th>用户</th><th>项目</th><th>数量</th><th>客户端</th><th>要求打手</th><th>金额</th><th>状态</th><th>支付</th><th>操作</th><th>时间</th></tr>';
+    let html = '<table><tr><th>订单号</th><th>用户</th><th>项目</th><th>数量</th><th>客户端</th><th>要求打手</th><th>金额</th><th>状态</th><th>支付</th><th>接单人</th><th>操作</th><th>时间</th></tr>';
     orders.forEach(o => {
         const identityMap = { gold:'金牌', silver:'银牌', standard:'标准', budget:'特惠' };
         const screenshotLink = o.payment_screenshot ? ` <a href="/uploads/${o.payment_screenshot}" target="_blank" style="font-size:0.7rem;">截图</a>` : '';
         html += `<tr>
-            <td>${o.order_no}</td><td>${o.username}</td><td>${o.project} - ${o.detail}</td><td>${o.quantity}</td><td>${o.client_type||'Android'}</td><td>${identityMap[o.required_identity]||'标准'}</td><td>¥${o.total_price}</td>
+            <td>${o.order_no}</td><td>${o.customer_name || o.username}</td><td>${o.project} - ${o.detail}</td><td>${o.quantity}</td><td>${o.client_type||'Android'}</td><td>${identityMap[o.required_identity]||'标准'}</td><td>¥${o.total_price}</td>
             <td><span class="order-status status-${o.status}">${statusText[o.status]||o.status}</span></td>
             <td><span class="payment-status payment-${o.payment_status}">${paymentStatusMap[o.payment_status]||'未知'}</span></td>
+            <td>${o.booster_name || '—'}</td>
             <td>
                 <select class="status-select" data-order="${o.order_no}" onchange="updateOrderStatus(this)">
                     ${statusOptions.map(s => `<option value="${s}" ${s===o.status?'selected':''}>${statusText[s]}</option>`).join('')}
@@ -862,6 +863,36 @@ if (e.target.classList.contains('delete-custom-btn')) {
 }
 
 
+    // 申请完单（三方订单）
+    if (e.target.classList.contains('tp-request-complete-btn')) {
+        const orderNo = e.target.dataset.order;
+        const token = safeGetItem('token');
+        try {
+            const res = await fetch(`${API_BASE}/third-party-orders/${orderNo}/request-complete`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) { showToast('已申请完单'); loadThirdPartyOrders(); }
+            else { const data = await res.json(); showToast('❌ ' + (data.error || '失败')); }
+        } catch (err) { showToast('网络错误'); }
+    }
+
+    // 标记已支付（三方订单）
+    if (e.target.classList.contains('tp-mark-paid-btn')) {
+        const orderNo = e.target.dataset.order;
+        const token = safeGetItem('token');
+        try {
+            const res = await fetch(`${API_BASE}/third-party-orders/${orderNo}/mark-paid`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) { showToast('已标记为已支付'); loadThirdPartyOrders(); }
+            else { const data = await res.json(); showToast('❌ ' + (data.error || '失败')); }
+        } catch (err) { showToast('网络错误'); }
+    }
+
+
+
 });
 if (statusFilter) statusFilter.addEventListener('change', loadAdminOrders);
 if (refreshOrdersBtn) refreshOrdersBtn.addEventListener('click', loadAdminOrders);
@@ -980,12 +1011,13 @@ async function loadAdminBoosters() {
         const res = await fetch(`${API_BASE}/admin/boosters`, { headers: { 'Authorization': `Bearer ${token}` } });
         const boosters = await res.json();
         if (!boosters.length) { list.innerHTML = '<p>暂无打手</p>'; return; }
-        let html = '<table><tr><th>用户名</th><th>身份组</th><th>积分</th><th>操作</th></tr>';
+        let html = '<table><tr><th>用户名</th><th>身份组</th><th>积分</th><th>当前接单</th><th>操作</th></tr>';
         boosters.forEach(b => {
             html += `<tr>
                 <td>${b.username}</td>
                 <td>${b.booster_identity}</td>
                 <td>${b.booster_points}</td>
+                <td>${b.active_orders || 0} 单</td>
                 <td>
                     <select class="booster-identity-select" data-userid="${b.id}">
                         <option value="gold" ${b.booster_identity==='gold'?'selected':''}>金牌</option>
@@ -2813,23 +2845,41 @@ async function loadThirdPartyOrders() {
         });
         const orders = await res.json();
         const role = safeGetItem('role');
+        const userId = safeGetItem('userId');
         if (!orders.length) {
             container.innerHTML = '<p>暂无三方订单</p>';
             return;
         }
-        let html = '<table><tr><th>订单号</th><th>平台</th><th>内容</th><th>账号</th><th>价格</th><th>创建者</th><th>状态</th><th>操作</th></tr>';
+        let html = '<table><tr><th>订单号</th><th>平台</th><th>内容</th><th>账号</th><th>价格</th><th>创建者</th><th>状态</th><th>完单</th><th>支付</th><th>操作</th></tr>';
         orders.forEach(o => {
             const statusMap = { pending: '待审核', approved: '已通过', rejected: '已拒绝' };
+            let completeCell = '';
+            if (o.status === 'approved') {
+                if (o.complete_requested) completeCell = '✅ 已申请';
+                else if (role === 'admin' || o.creator_id == userId) {
+                    completeCell = `<button class="tp-request-complete-btn" data-order="${o.order_no}">申请完单</button>`;
+                }
+            } else {
+                completeCell = '—';
+            }
+
+            let payCell = '';
+            if (o.payment_status === 'paid') payCell = '✅ 已支付';
+            else if (role === 'admin') payCell = `<button class="tp-mark-paid-btn" data-order="${o.order_no}">标记已支付</button>`;
+            else payCell = '未支付';
+
             html += `<tr>
                 <td>${o.order_no}</td><td>${o.platform || '其他'}</td><td>${o.content}</td><td>${o.account_info}</td>
                 <td>¥${o.price}</td><td>${o.creator_name || '—'}</td>
                 <td>${statusMap[o.status] || o.status}</td>
+                <td>${completeCell}</td>
+                <td>${payCell}</td>
                 <td>`;
             if (role === 'admin' && o.status === 'pending') {
                 html += `<button class="tp-approve-btn" data-order="${o.order_no}">通过</button>
                          <button class="tp-reject-btn" data-order="${o.order_no}">拒绝</button>`;
             }
-            if (role === 'admin' || o.creator_id == safeGetItem('userId')) {
+            if (role === 'admin' || o.creator_id == userId) {
                 html += `<button class="tp-delete-btn" data-order="${o.order_no}">删除</button>`;
             }
             html += `</td></tr>`;
