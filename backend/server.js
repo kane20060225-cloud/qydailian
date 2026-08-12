@@ -1691,18 +1691,26 @@ app.delete('/api/third-party-orders/:orderNo', authMiddleware, async (req, res) 
  
 // 打手申请完单
 app.put('/api/third-party-orders/:orderNo/request-complete', authMiddleware, async (req, res) => {
-  const { orderNo } = req.params;
-  const [orders] = await pool.execute('SELECT * FROM third_party_orders WHERE order_no = ?', [orderNo]);
-  if (orders.length === 0) return res.status(404).json({ error: '订单不存在' });
-  const order = orders[0];
-  
-  const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
-  if (order.creator_id !== req.userId && userRows[0]?.role !== 'admin') {
-    return res.status(403).json({ error: '无权操作' });
+  try {
+    const [orders] = await pool.execute('SELECT * FROM third_party_orders WHERE order_no = ?', [req.params.orderNo]);
+    if (orders.length === 0) return res.status(404).json({ error: '订单不存在' });
+    const order = orders[0];
+    
+    // 从数据库查询当前用户角色（后端不能使用 localStorage）
+    const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
+    if (!userRows.length) return res.status(401).json({ error: '用户不存在' });
+    
+    // 只有该订单的创建者或管理员可以申请完单
+    if (order.creator_id !== req.userId && userRows[0].role !== 'admin') {
+      return res.status(403).json({ error: '无权操作' });
+    }
+    
+    await pool.execute('UPDATE third_party_orders SET complete_requested = 1 WHERE order_no = ?', [req.params.orderNo]);
+    res.json({ success: true, message: '已申请完单' });
+  } catch (err) {
+    console.error('申请完单失败:', err);
+    res.status(500).json({ error: '服务器内部错误', detail: err.message });
   }
-  
-  await pool.execute('UPDATE third_party_orders SET complete_requested = 1 WHERE order_no = ?', [orderNo]);
-  res.json({ success: true, message: '已申请完单' });
 });
 
 
