@@ -1292,40 +1292,67 @@ body.theme-light #contentEditorTextarea {
 }
 
 
-/* ========== 三方订单表格溢出修复 ========== */
+/* ========== 三方订单表格溢出修复（完整版） ========== */
+#tpOrderList {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius-sm);
+}
+
 #tpOrderList table {
-  min-width: 800px;           /* 保证表格最小宽度，触发横向滚动 */
-  table-layout: auto;         /* 让列宽根据内容自动调整 */
+  width: 100%;
+  min-width: 900px;                  /* 保证内容不挤压 */
+  table-layout: fixed;               /* 固定列宽，便于控制 */
+  border-collapse: collapse;
 }
-#tpOrderList th, #tpOrderList td {
-  max-width: 200px;           /* 限制每列最大宽度 */
+
+#tpOrderList th,
+#tpOrderList td {
+  padding: 8px 6px;
+  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;    /* 文本超出显示省略号 */
-  white-space: nowrap;        /* 禁止换行 */
-  padding: 8px;
+  text-overflow: ellipsis;
+  font-size: 0.82rem;
+  border-bottom: 1px solid var(--border);
 }
-/* 鼠标悬停时显示完整内容 */
+
+/* 设置每列的大致宽度（可根据实际调整） */
+#tpOrderList th:nth-child(1),
+#tpOrderList td:nth-child(1) { width: 12%; } /* 订单号 */
+#tpOrderList th:nth-child(2),
+#tpOrderList td:nth-child(2) { width: 10%; } /* 平台 */
+#tpOrderList th:nth-child(3),
+#tpOrderList td:nth-child(3) { width: 20%; } /* 内容 */
+#tpOrderList th:nth-child(4),
+#tpOrderList td:nth-child(4) { width: 15%; } /* 账号 */
+#tpOrderList th:nth-child(5),
+#tpOrderList td:nth-child(5) { width: 8%; }  /* 价格 */
+#tpOrderList th:nth-child(6),
+#tpOrderList td:nth-child(6) { width: 10%; } /* 创建者 */
+#tpOrderList th:nth-child(7),
+#tpOrderList td:nth-child(7) { width: 8%; }  /* 状态 */
+#tpOrderList th:nth-child(8),
+#tpOrderList td:nth-child(8) { width: 8%; }  /* 完单 */
+#tpOrderList th:nth-child(9),
+#tpOrderList td:nth-child(9) { width: 9%; }  /* 支付 */
+#tpOrderList th:nth-child(10),
+#tpOrderList td:nth-child(10) { width: auto; } /* 操作列自适应 */
+
+/* 鼠标悬停显示完整内容 */
 #tpOrderList td:hover {
   overflow: visible;
   white-space: normal;
   word-break: break-all;
   background-color: var(--card-bg);
   position: relative;
-  z-index: 10;
-  box-shadow: 0 0 10px rgba(0,0,0,0.3);
+  z-index: 20;
+  box-shadow: 0 0 12px rgba(0,0,0,0.4);
   border-radius: 4px;
 }
-/* 确保操作列不截断 */
-#tpOrderList td:last-child {
-  max-width: none;
-  white-space: nowrap;
-}
-/* 移动端适配 */
+
+/* 移动端缩小最小宽度 */
 @media (max-width: 600px) {
   #tpOrderList table {
-    min-width: 600px;
-  }
-  #tpOrderList th, #tpOrderList td {
-    max-width: 150px;
+    min-width: 700px;
   }
 }
