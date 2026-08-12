@@ -1356,3 +1356,19 @@ body.theme-light #contentEditorTextarea {
     min-width: 700px;
   }
 }
+
+/* 确保三方订单操作按钮可见 */
+#tpOrderList td:last-child {
+  width: 130px;                /* 足够容纳三个按钮 */
+  min-width: 130px;
+  white-space: normal;         /* 允许换行 */
+}
+#tpOrderList td:last-child button {
+  display: inline-block;
+  margin: 2px 1px;
+  white-space: nowrap;
+}
+/* 鼠标悬停时按钮保持可见 */
+#tpOrderList td:last-child:hover {
+  overflow: visible;
+}
