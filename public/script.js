@@ -569,6 +569,7 @@ if (loginForm) loginForm.addEventListener('submit', async (e) => {
             safeSetItem('username', data.user.username);
             safeSetItem('role', data.user.role);
             safeSetItem('boosterIdentity', data.user.booster_identity || 'standard');
+            safeSetItem('userId', data.user.id);
             checkLoginStatus();
             if (loginModal) loginModal.style.display = 'none';
             if (loginError) loginError.textContent = '';

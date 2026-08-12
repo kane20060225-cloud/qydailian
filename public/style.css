@@ -1192,38 +1192,6 @@ body.theme-light #contentEditorTextarea {
   color: #1f2937;
 }
 
-/* 三方订单表格 */
-#tpOrderList table {
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 700px;
-}
-#tpOrderList th {
-    background: rgba(240,160,80,0.1);
-    color: var(--accent);
-    padding: 8px;
-    text-align: left;
-}
-#tpOrderList td {
-    padding: 8px;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.85rem;
-}
-.tp-approve-btn, .tp-reject-btn, .tp-delete-btn {
-    padding: 4px 10px;
-    margin: 2px;
-    font-size: 0.75rem;
-    border-radius: 4px;
-    border: 1px solid var(--accent);
-    background: rgba(240,160,80,0.1);
-    color: var(--accent);
-    cursor: pointer;
-}
-.tp-approve-btn:hover { background: var(--green); color: white; border-color: var(--green); }
-.tp-reject-btn:hover { background: var(--red); color: white; border-color: var(--red); }
-.tp-delete-btn:hover { background: var(--red); color: white; }
-
-
 /* 商城管理表格 */
 #adminShopList table {
     width: 100%;
@@ -1263,36 +1231,9 @@ body.theme-light #contentEditorTextarea {
 }
 .tp-mark-paid-btn:hover { background: var(--accent); color: #fff; }
 
-/* 三方订单完单/支付按钮 */
-.tp-request-complete-btn {
-  background: rgba(72,187,120,0.1);
-  color: var(--green);
-  border: 1px solid var(--green);
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  cursor: pointer;
-}
-.tp-request-complete-btn:hover {
-  background: var(--green);
-  color: #fff;
-}
-.tp-mark-paid-btn {
-  background: rgba(240,160,80,0.1);
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  cursor: pointer;
-}
-.tp-mark-paid-btn:hover {
-  background: var(--accent);
-  color: #fff;
-}
 
 
-/* ========== 三方订单表格溢出修复（完整版） ========== */
+/* ========== 三方订单表格（最终版） ========== */
 #tpOrderList {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -1301,8 +1242,8 @@ body.theme-light #contentEditorTextarea {
 
 #tpOrderList table {
   width: 100%;
-  min-width: 900px;                  /* 保证内容不挤压 */
-  table-layout: fixed;               /* 固定列宽，便于控制 */
+  min-width: 1000px;         /* 保证内容不挤压，出现横向滚动条 */
+  table-layout: auto;        /* 自动列宽，避免 fixed 导致的宽度分配问题 */
   border-collapse: collapse;
 }
 
@@ -1314,32 +1255,29 @@ body.theme-light #contentEditorTextarea {
   text-overflow: ellipsis;
   font-size: 0.82rem;
   border-bottom: 1px solid var(--border);
+  max-width: 180px;          /* 限制最大宽度，超出显示省略号 */
 }
 
-/* 设置每列的大致宽度（可根据实际调整） */
-#tpOrderList th:nth-child(1),
-#tpOrderList td:nth-child(1) { width: 12%; } /* 订单号 */
-#tpOrderList th:nth-child(2),
-#tpOrderList td:nth-child(2) { width: 10%; } /* 平台 */
-#tpOrderList th:nth-child(3),
-#tpOrderList td:nth-child(3) { width: 20%; } /* 内容 */
-#tpOrderList th:nth-child(4),
-#tpOrderList td:nth-child(4) { width: 15%; } /* 账号 */
-#tpOrderList th:nth-child(5),
-#tpOrderList td:nth-child(5) { width: 8%; }  /* 价格 */
-#tpOrderList th:nth-child(6),
-#tpOrderList td:nth-child(6) { width: 10%; } /* 创建者 */
-#tpOrderList th:nth-child(7),
-#tpOrderList td:nth-child(7) { width: 8%; }  /* 状态 */
-#tpOrderList th:nth-child(8),
-#tpOrderList td:nth-child(8) { width: 8%; }  /* 完单 */
-#tpOrderList th:nth-child(9),
-#tpOrderList td:nth-child(9) { width: 9%; }  /* 支付 */
-#tpOrderList th:nth-child(10),
-#tpOrderList td:nth-child(10) { width: auto; } /* 操作列自适应 */
+/* 操作列（最后一列）特殊处理：不省略，按钮完全可见 */
+#tpOrderList td:last-child,
+#tpOrderList th:last-child {
+  overflow: visible;
+  white-space: nowrap;
+  max-width: none;
+  width: 170px;              /* 足够容纳三个按钮 */
+  min-width: 170px;
+}
 
-/* 鼠标悬停显示完整内容 */
-#tpOrderList td:hover {
+#tpOrderList td:last-child button {
+  display: inline-block;
+  margin: 2px 1px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+/* 鼠标悬停其他单元格显示完整内容 */
+#tpOrderList td:not(:last-child):hover {
   overflow: visible;
   white-space: normal;
   word-break: break-all;
@@ -1350,25 +1288,14 @@ body.theme-light #contentEditorTextarea {
   border-radius: 4px;
 }
 
-/* 移动端缩小最小宽度 */
+/* 移动端 */
 @media (max-width: 600px) {
   #tpOrderList table {
-    min-width: 700px;
+    min-width: 800px;
   }
-}
-
-/* 确保三方订单操作按钮可见 */
-#tpOrderList td:last-child {
-  width: 130px;                /* 足够容纳三个按钮 */
-  min-width: 130px;
-  white-space: normal;         /* 允许换行 */
-}
-#tpOrderList td:last-child button {
-  display: inline-block;
-  margin: 2px 1px;
-  white-space: nowrap;
-}
-/* 鼠标悬停时按钮保持可见 */
-#tpOrderList td:last-child:hover {
-  overflow: visible;
+  #tpOrderList td:last-child,
+  #tpOrderList th:last-child {
+    width: 150px;
+    min-width: 150px;
+  }
 }
