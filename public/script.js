@@ -7,23 +7,34 @@ function showToast(msg) {
     setTimeout(() => toast.remove(), 2500);
 }
 
-// ==================== 安全 localStorage 封装 ====================
-function safeGetItem(key, fallback = null) {
-    try {
-        const val = localStorage.getItem(key);
-        return val !== null ? val : fallback;
-    } catch (e) {
-        return fallback;
-    }
-}
+// ==================== 安全 localStorage 封装（增强版） ====================
 function safeSetItem(key, value) {
     try {
         localStorage.setItem(key, value);
-        return true;
     } catch (e) {
         showToast('⚠️ 浏览器存储异常，请检查空间或隐私设置');
         return false;
     }
+    // 额外将 token 写入 Cookie，兼容 QQ 等 localStorage 异常的环境
+    if (key === 'token') {
+        try {
+            document.cookie = 'token=' + encodeURIComponent(value) + '; path=/; max-age=' + (7*24*60*60) + '; SameSite=Lax';
+        } catch (e2) {}
+    }
+    return true;
+}
+
+function safeGetItem(key, fallback = null) {
+    try {
+        const val = localStorage.getItem(key);
+        if (val !== null) return val;
+    } catch (e) {}
+    // 如果 localStorage 取不到且是 token，则尝试从 Cookie 读取
+    if (key === 'token') {
+        const match = document.cookie.match(/(?:^|;\s*)token=([^;]*)/);
+        if (match) return decodeURIComponent(match[1]);
+    }
+    return fallback;
 }
 
 // ==================== 快捷获取 DOM 元素 ====================
