@@ -1727,6 +1727,10 @@ app.put('/api/third-party-orders/:orderNo/mark-paid', adminMiddleware, async (re
 
 
 
+    // 自动确保三方订单表字段存在
+    try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN complete_requested TINYINT(1) DEFAULT 0`); } catch(e) {}
+    try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN payment_status ENUM('unpaid','paid') DEFAULT 'unpaid'`); } catch(e) {}
+
 // ---------- 启动 ----------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
