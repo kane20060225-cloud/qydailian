@@ -326,7 +326,7 @@ async function initDB() {
 
     // 增加出租收益字段
     try { await pool.execute(`ALTER TABLE users ADD COLUMN rental_earnings DECIMAL(10,2) DEFAULT 0.00`); } catch(e) {}
-    // ========== 三方订单系统（新增） ==========
+        // ========== 三方订单系统（新增） ==========
     await pool.execute(`
       CREATE TABLE IF NOT EXISTS third_party_orders (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -337,6 +337,8 @@ async function initDB() {
         account_info VARCHAR(200) NOT NULL COMMENT '账号信息(手机/邮箱)',
         price DECIMAL(10,2) NOT NULL,
         status ENUM('pending','approved','rejected') DEFAULT 'pending',
+        complete_requested TINYINT(1) DEFAULT 0 COMMENT '打手是否申请完单',
+        payment_status ENUM('unpaid','paid') DEFAULT 'unpaid' COMMENT '支付状态',
         reviewer_id INT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -344,6 +346,9 @@ async function initDB() {
         FOREIGN KEY (reviewer_id) REFERENCES users(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+    // 兼容已有的表，保证字段存在
+    try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN complete_requested TINYINT(1) DEFAULT 0 COMMENT '打手是否申请完单'`); } catch(e) {}
+    try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN payment_status ENUM('unpaid','paid') DEFAULT 'unpaid' COMMENT '支付状态'`); } catch(e) {}
 
 }
 initDB();
