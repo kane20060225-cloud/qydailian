@@ -54,7 +54,7 @@ async function sendMessage(userId, title, content) {
 // ---------- 初始化数据库 ----------
 async function initDB() {
   try {
-    // 用户表（增加语言和主题字段）
+    // 用户表
     await pool.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -115,7 +115,7 @@ async function initDB() {
     `);
 
     // 登录设备记录表
-        await pool.execute(`
+    await pool.execute(`
       CREATE TABLE IF NOT EXISTS login_devices (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
@@ -242,7 +242,7 @@ async function initDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-        // ========== 动态内容系统（新增） ==========
+    // 动态内容系统
     await pool.execute(`
       CREATE TABLE IF NOT EXISTS announcements (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -272,21 +272,7 @@ async function initDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-    // 兼容旧字段
-    try { await pool.execute(`ALTER TABLE users ADD COLUMN qy_credits INT DEFAULT 0`); } catch(e) {}
-    try { await pool.execute(`ALTER TABLE users ADD COLUMN total_earned_credits INT DEFAULT 0`); } catch(e) {}
-    try { await pool.execute(`ALTER TABLE users ADD COLUMN vip_level TINYINT DEFAULT 0`); } catch(e) {}
-    try { await pool.execute(`ALTER TABLE orders ADD COLUMN required_identity ENUM('gold','silver','standard','budget') DEFAULT 'standard'`); } catch(e) {}
-    try { await pool.execute(`ALTER TABLE orders ADD COLUMN client_type VARCHAR(10) DEFAULT 'Android'`); } catch(e) {}
-    // 为定制需求增加状态字段
-    try { await pool.execute(`ALTER TABLE custom_requests ADD COLUMN status VARCHAR(20) DEFAULT 'pending'`); } catch(e) {}
-
-    console.log('✅ 数据库表已就绪');
-  } catch (err) {
-    console.error('❌ 建表失败:', err.message);
-  }
-
-    // ========== 租号系统（新增） ==========
+    // 租号系统
     await pool.execute(`
       CREATE TABLE IF NOT EXISTS rental_accounts (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -304,7 +290,6 @@ async function initDB() {
         FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
-
     await pool.execute(`
       CREATE TABLE IF NOT EXISTS rental_orders (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -324,9 +309,7 @@ async function initDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-    // 增加出租收益字段
-    try { await pool.execute(`ALTER TABLE users ADD COLUMN rental_earnings DECIMAL(10,2) DEFAULT 0.00`); } catch(e) {}
-        // ========== 三方订单系统（新增） ==========
+    // 三方订单系统
     await pool.execute(`
       CREATE TABLE IF NOT EXISTS third_party_orders (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -346,10 +329,22 @@ async function initDB() {
         FOREIGN KEY (reviewer_id) REFERENCES users(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
-    // 兼容已有的表，保证字段存在
-    try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN complete_requested TINYINT(1) DEFAULT 0 COMMENT '打手是否申请完单'`); } catch(e) {}
-    try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN payment_status ENUM('unpaid','paid') DEFAULT 'unpaid' COMMENT '支付状态'`); } catch(e) {}
 
+    // 兼容旧字段 / 确保字段存在
+    try { await pool.execute(`ALTER TABLE users ADD COLUMN qy_credits INT DEFAULT 0`); } catch(e) {}
+    try { await pool.execute(`ALTER TABLE users ADD COLUMN total_earned_credits INT DEFAULT 0`); } catch(e) {}
+    try { await pool.execute(`ALTER TABLE users ADD COLUMN vip_level TINYINT DEFAULT 0`); } catch(e) {}
+    try { await pool.execute(`ALTER TABLE orders ADD COLUMN required_identity ENUM('gold','silver','standard','budget') DEFAULT 'standard'`); } catch(e) {}
+    try { await pool.execute(`ALTER TABLE orders ADD COLUMN client_type VARCHAR(10) DEFAULT 'Android'`); } catch(e) {}
+    try { await pool.execute(`ALTER TABLE custom_requests ADD COLUMN status VARCHAR(20) DEFAULT 'pending'`); } catch(e) {}
+    try { await pool.execute(`ALTER TABLE users ADD COLUMN rental_earnings DECIMAL(10,2) DEFAULT 0.00`); } catch(e) {}
+    try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN complete_requested TINYINT(1) DEFAULT 0`); } catch(e) {}
+    try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN payment_status ENUM('unpaid','paid') DEFAULT 'unpaid'`); } catch(e) {}
+
+    console.log('✅ 数据库表已就绪');
+  } catch (err) {
+    console.error('❌ 建表失败:', err.message);
+  }
 }
 initDB();
 
@@ -391,10 +386,8 @@ app.post('/api/auth/register', ipRegisterLimit, async (req, res) => {
       [username, password_hash, email || null, phone || null, referrer_id, referral_code]
     );
 
-    // 创建设置记录
     await connection.execute('INSERT INTO user_settings (user_id) VALUES (?)', [result.insertId]);
 
-    // 推荐奖励
     if (referrer_id) {
       await connection.execute(
         'UPDATE users SET qy_credits = qy_credits + 300, total_earned_credits = total_earned_credits + 300 WHERE id = ?',
@@ -430,7 +423,6 @@ app.post('/api/auth/login', async (req, res) => {
     if (!validPassword) return res.status(401).json({ error: '用户名或密码错误' });
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
 
-        // 安全记录登录设备（截断超长字段，失败不影响登录）
     try {
       const ua = (req.headers['user-agent'] || '').substring(0, 65535);
       const ip = (req.ip || req.connection.remoteAddress || '').substring(0, 100);
@@ -438,16 +430,11 @@ app.post('/api/auth/login', async (req, res) => {
         'INSERT INTO login_devices (user_id, device_info, ip_address) VALUES (?, ?, ?)',
         [user.id, ua, ip]
       );
-    } catch (e) {
-      console.error('记录登录设备失败:', e.message);
-    }
+    } catch (e) { console.error('记录登录设备失败:', e.message); }
 
-    // 确保用户设置存在（失败不影响登录）
     try {
       await connection.execute('INSERT IGNORE INTO user_settings (user_id) VALUES (?)', [user.id]);
-    } catch (e) {
-      console.error('创建设置失败:', e.message);
-    }
+    } catch (e) { console.error('创建设置失败:', e.message); }
 
     res.json({ success: true, token, user: {
       id: user.id, username: user.username, email: user.email, phone: user.phone,
@@ -458,7 +445,9 @@ app.post('/api/auth/login', async (req, res) => {
   } catch(err) {
     console.error('登录错误:', err);
     res.status(500).json({ error: '服务器内部错误' });
-}
+  } finally {
+    if (connection) connection.release();
+  }
 });
 
 // ---------- JWT 中间件 ----------
@@ -484,7 +473,6 @@ function boosterMiddleware(req, res, next) {
   });
 }
 
-// ---------- 打手身份权限工具 ----------
 const identityWeights = { gold: 4, silver: 3, standard: 2, budget: 1 };
 function canTakeOrder(boosterIdentity, requiredIdentity) {
   return (identityWeights[boosterIdentity] || 0) >= (identityWeights[requiredIdentity] || 0);
@@ -503,7 +491,7 @@ async function checkBoosterUpgrade(conn, userId) {
   }
 }
 
-// ---------- 订单创建（支持积分抵扣） ----------
+// ---------- 订单创建 ----------
 app.post('/api/orders', authMiddleware, async (req, res) => {
   const { project, detail, quantity, player_name, price, urgent, total_price, remark,
           game_uid, game_account, game_password, client_type, player_type, use_credits } = req.body;
@@ -874,7 +862,6 @@ app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) =
       [earnings, pointsEarned, boosterId]);
     await checkBoosterUpgrade(conn, boosterId);
 
-    // 积分返利与VIP升级
     const creditsEarned = Math.floor(order.total_price * 0.03 * 100);
     await conn.execute('UPDATE users SET qy_credits = qy_credits + ?, total_earned_credits = total_earned_credits + ? WHERE id = ?',
       [creditsEarned, creditsEarned, order.user_id]);
@@ -889,7 +876,6 @@ app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) =
     else if (totalCredits >= 600) newVip = 1;
     await conn.execute('UPDATE users SET vip_level = ? WHERE id = ?', [newVip, order.user_id]);
 
-    // 发送站内信通知用户
     await sendMessage(order.user_id, '订单已完成', `您的订单 ${orderNo} 已代练完成，感谢您的信任！`);
 
     await conn.commit();
@@ -923,31 +909,19 @@ app.get('/api/admin/custom-requests', adminMiddleware, async (req, res) => {
     res.json(rows);
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
-
-// 修改定制需求状态（完成/取消）
 app.put('/api/admin/custom-requests/:id/status', adminMiddleware, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
-  if (!['pending', 'completed', 'cancelled'].includes(status)) {
-    return res.status(400).json({ error: '无效状态' });
-  }
+  if (!['pending', 'completed', 'cancelled'].includes(status)) return res.status(400).json({ error: '无效状态' });
   try {
-    const [result] = await pool.execute('UPDATE custom_requests SET status = ? WHERE id = ?', [status, id]);
-    if (result.affectedRows === 0) return res.status(404).json({ error: '需求不存在' });
+    await pool.execute('UPDATE custom_requests SET status = ? WHERE id = ?', [status, id]);
     res.json({ success: true, message: '状态已更新' });
   } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
-
-// 删除定制需求
 app.delete('/api/admin/custom-requests/:id', adminMiddleware, async (req, res) => {
-  const { id } = req.params;
-  try {
-    const [result] = await pool.execute('DELETE FROM custom_requests WHERE id = ?', [id]);
-    if (result.affectedRows === 0) return res.status(404).json({ error: '需求不存在' });
-    res.json({ success: true, message: '已删除' });
-  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+  try { await pool.execute('DELETE FROM custom_requests WHERE id = ?', [req.params.id]); res.json({ success: true }); }
+  catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
-
 
 // ---------- 联赛管理 ----------
 app.get('/api/admin/leagues', adminMiddleware, async (req, res) => {
@@ -995,7 +969,6 @@ app.post('/api/admin/leagues/:id/rules', adminMiddleware, async (req, res) => {
   } catch(err) { if (conn) await conn.rollback(); res.status(500).json({ error: '服务器错误' }); }
   finally { if (conn) conn.release(); }
 });
-
 app.get('/api/admin/teams', adminMiddleware, async (req, res) => {
   try { const [rows] = await pool.execute('SELECT * FROM league_teams ORDER BY id'); res.json(rows); }
   catch(err) { res.status(500).json({ error: '服务器错误' }); }
@@ -1062,7 +1035,6 @@ app.post('/api/admin/leagues/:seasonId/scores', adminMiddleware, async (req, res
   } catch(err) { if (conn) await conn.rollback(); res.status(500).json({ error: '服务器错误' }); }
   finally { if (conn) conn.release(); }
 });
-
 app.get('/api/league/:seasonId/rankings', async (req, res) => {
   const { seasonId } = req.params;
   try {
@@ -1097,7 +1069,7 @@ app.get('/api/league/:seasonId/rankings', async (req, res) => {
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-// ---------- 打手管理（管理员） ----------
+// ---------- 打手管理 ----------
 app.get('/api/admin/boosters', adminMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(`
@@ -1114,13 +1086,9 @@ app.get('/api/admin/boosters', adminMiddleware, async (req, res) => {
 });
 app.put('/api/admin/boosters/:userId', adminMiddleware, async (req, res) => {
   const { booster_identity } = req.body;
-  if (!['gold','silver','standard','budget'].includes(booster_identity)) {
-    return res.status(400).json({ error: '无效身份组' });
-  }
-  try {
-    await pool.execute('UPDATE users SET booster_identity = ? WHERE id = ?', [booster_identity, req.params.userId]);
-    res.json({ success: true, message: '身份已更新' });
-  } catch(err) { res.status(500).json({ error: '服务器错误' }); }
+  if (!['gold','silver','standard','budget'].includes(booster_identity)) return res.status(400).json({ error: '无效身份组' });
+  try { await pool.execute('UPDATE users SET booster_identity = ? WHERE id = ?', [booster_identity, req.params.userId]); res.json({ success: true }); }
+  catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
 // ---------- 积分商城 ----------
@@ -1176,8 +1144,6 @@ app.post('/api/shop/buy/:itemId', authMiddleware, async (req, res) => {
 });
 
 // ==================== 租号系统 API ====================
-
-// 上传截图（单张，复用 uploads 目录）
 app.post('/api/rental/upload-screenshot', authMiddleware, async (req, res) => {
   const { screenshot } = req.body;
   if (!screenshot) return res.status(400).json({ error: '请提供截图' });
@@ -1193,7 +1159,6 @@ app.post('/api/rental/upload-screenshot', authMiddleware, async (req, res) => {
   }
 });
 
-// 获取可租账号列表（大厅）
 app.get('/api/rental/accounts', async (req, res) => {
   try {
     const [rows] = await pool.execute(
@@ -1211,7 +1176,6 @@ app.get('/api/rental/accounts', async (req, res) => {
   }
 });
 
-// 获取单个账号详情
 app.get('/api/rental/accounts/:id', async (req, res) => {
   try {
     const [rows] = await pool.execute(
@@ -1229,7 +1193,6 @@ app.get('/api/rental/accounts/:id', async (req, res) => {
   }
 });
 
-// 发布出租（需登录）
 app.post('/api/rental/accounts', authMiddleware, async (req, res) => {
   const { game_uid, client_type, tank_list, hourly_price, daily_price,
           available_time_desc, screenshots, rules } = req.body;
@@ -1252,7 +1215,6 @@ app.post('/api/rental/accounts', authMiddleware, async (req, res) => {
   }
 });
 
-// 我的出租账号列表
 app.get('/api/rental/my-accounts', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
@@ -1265,9 +1227,8 @@ app.get('/api/rental/my-accounts', authMiddleware, async (req, res) => {
   }
 });
 
-// 切换出租账号状态（上架/下架）
 app.put('/api/rental/accounts/:id/status', authMiddleware, async (req, res) => {
-  const { status } = req.body; // 'active' or 'suspended'
+  const { status } = req.body;
   if (!['active','suspended'].includes(status)) return res.status(400).json({ error: '无效状态' });
   try {
     const [result] = await pool.execute(
@@ -1281,9 +1242,8 @@ app.put('/api/rental/accounts/:id/status', authMiddleware, async (req, res) => {
   }
 });
 
-// 管理员审核出租申请（直接通过/拒绝）
 app.put('/api/admin/rental/accounts/:id/review', adminMiddleware, async (req, res) => {
-  const { approved } = req.body; // boolean
+  const { approved } = req.body;
   try {
     const newStatus = approved ? 'active' : 'suspended';
     await pool.execute('UPDATE rental_accounts SET status = ? WHERE id = ?', [newStatus, req.params.id]);
@@ -1293,7 +1253,6 @@ app.put('/api/admin/rental/accounts/:id/review', adminMiddleware, async (req, re
   }
 });
 
-// 获取所有出租账号（管理员用）
 app.get('/api/admin/rental/accounts', adminMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
@@ -1305,7 +1264,6 @@ app.get('/api/admin/rental/accounts', adminMiddleware, async (req, res) => {
   }
 });
 
-// 租用下单（支持积分抵扣）
 app.post('/api/rental/orders', authMiddleware, async (req, res) => {
   const { account_id, rental_type, quantity, use_credits } = req.body;
   if (!account_id || !rental_type || !quantity) return res.status(400).json({ error: '缺少必要参数' });
@@ -1357,7 +1315,6 @@ app.post('/api/rental/orders', authMiddleware, async (req, res) => {
   }
 });
 
-// 我的租用订单列表（作为租客）
 app.get('/api/rental/my-rented', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
@@ -1370,12 +1327,9 @@ app.get('/api/rental/my-rented', authMiddleware, async (req, res) => {
       [req.userId]
     );
     res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: '服务器错误' });
-  }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-// 我的出租订单列表（作为出租方）
 app.get('/api/rental/my-orders', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
@@ -1388,12 +1342,9 @@ app.get('/api/rental/my-orders', authMiddleware, async (req, res) => {
       [req.userId]
     );
     res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: '服务器错误' });
-  }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-// 确认租用（出租方确认）
 app.put('/api/rental/orders/:orderNo/confirm', authMiddleware, async (req, res) => {
   const { orderNo } = req.params;
   try {
@@ -1403,12 +1354,9 @@ app.put('/api/rental/orders/:orderNo/confirm', authMiddleware, async (req, res) 
     );
     if (result.affectedRows === 0) return res.status(400).json({ error: '无法确认，订单不存在或状态不正确' });
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: '服务器错误' });
-  }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-// 完成租用（出租方标记完成）
 app.put('/api/rental/orders/:orderNo/complete', authMiddleware, async (req, res) => {
   const { orderNo } = req.params;
   const conn = await pool.getConnection();
@@ -1422,7 +1370,6 @@ app.put('/api/rental/orders/:orderNo/complete', authMiddleware, async (req, res)
     if (orders.length === 0) throw new Error('订单无法完成');
 
     const order = orders[0];
-    // 更新出租方收益
     await conn.execute(
       'UPDATE users SET rental_earnings = rental_earnings + ? WHERE id = ?',
       [order.total_price, order.owner_id]
@@ -1442,11 +1389,9 @@ app.put('/api/rental/orders/:orderNo/complete', authMiddleware, async (req, res)
   }
 });
 
-// 取消租用（租客或出租方可取消）
 app.put('/api/rental/orders/:orderNo/cancel', authMiddleware, async (req, res) => {
   const { orderNo } = req.params;
   try {
-    // 允许 renter 或 owner 取消 pending 或 active 状态（已完成不可取消）
     const [orders] = await pool.execute(
       'SELECT * FROM rental_orders WHERE order_no = ? AND (renter_id = ? OR owner_id = ?) AND status IN (?, ?)',
       [orderNo, req.userId, req.userId, 'pending', 'active']
@@ -1455,24 +1400,17 @@ app.put('/api/rental/orders/:orderNo/cancel', authMiddleware, async (req, res) =
 
     await pool.execute('UPDATE rental_orders SET status = ? WHERE order_no = ?', ['cancelled', orderNo]);
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: '服务器错误' });
-  }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-// 获取出租收益
 app.get('/api/rental/earnings', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT rental_earnings FROM users WHERE id = ?', [req.userId]);
     res.json({ earnings: rows[0]?.rental_earnings || 0 });
-  } catch (err) {
-    res.status(500).json({ error: '服务器错误' });
-  }
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
 // ==================== 动态内容 API ====================
-
-// ---------- 公开读取 ----------
 app.get('/api/announcements', async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT * FROM announcements ORDER BY created_at DESC LIMIT 1');
@@ -1494,9 +1432,6 @@ app.get('/api/league-news', async (req, res) => {
   } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-// ---------- 管理员 CRUD ----------
-
-// 通用：获取列表（用于管理界面）
 app.get('/api/admin/announcements', adminMiddleware, async (req, res) => {
   try { const [rows] = await pool.execute('SELECT * FROM announcements ORDER BY created_at DESC'); res.json(rows); }
   catch (err) { res.status(500).json({ error: '服务器错误' }); }
@@ -1510,7 +1445,6 @@ app.get('/api/admin/league-news', adminMiddleware, async (req, res) => {
   catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-// 新增/更新
 app.post('/api/admin/announcements', adminMiddleware, async (req, res) => {
   const { id, title, content } = req.body;
   if (!title || !content) return res.status(400).json({ error: '标题和内容必填' });
@@ -1553,7 +1487,6 @@ app.post('/api/admin/league-news', adminMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-// 删除
 app.delete('/api/admin/announcements/:id', adminMiddleware, async (req, res) => {
   try { await pool.execute('DELETE FROM announcements WHERE id=?', [req.params.id]); res.json({ success: true }); }
   catch (err) { res.status(500).json({ error: '服务器错误' }); }
@@ -1567,9 +1500,8 @@ app.delete('/api/admin/league-news/:id', adminMiddleware, async (req, res) => {
   catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-// 通用图片上传（用于内容编辑等）
 app.post('/api/upload-image', authMiddleware, async (req, res) => {
-  const { image } = req.body; // base64 图片数据
+  const { image } = req.body;
   if (!image) return res.status(400).json({ error: '请提供图片数据' });
   const uploadDir = path.join(__dirname, 'uploads');
   if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
@@ -1584,10 +1516,7 @@ app.post('/api/upload-image', authMiddleware, async (req, res) => {
 });
 
 // ==================== 三方订单 API ====================
-
-// 创建订单（admin 或 booster 可创建）
 app.post('/api/third-party-orders', async (req, res, next) => {
-  // 使用自定义中间件检查角色
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) return res.status(401).json({ error: '未提供令牌' });
   try {
@@ -1620,9 +1549,7 @@ app.post('/api/third-party-orders', async (req, res, next) => {
   }
 });
 
-// 获取列表（管理员看全部，打手看自己创建的）
 app.get('/api/third-party-orders', async (req, res, next) => {
-  // 验证登录
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) return res.status(401).json({ error: '未提供令牌' });
   try {
@@ -1656,9 +1583,8 @@ app.get('/api/third-party-orders', async (req, res, next) => {
   }
 });
 
-// 管理员审核订单
 app.put('/api/third-party-orders/:orderNo/review', adminMiddleware, async (req, res) => {
-  const { status } = req.body; // 'approved' or 'rejected'
+  const { status } = req.body;
   if (!['approved','rejected'].includes(status)) return res.status(400).json({ error: '无效状态' });
   try {
     const [result] = await pool.execute(
@@ -1672,7 +1598,6 @@ app.put('/api/third-party-orders/:orderNo/review', adminMiddleware, async (req, 
   }
 });
 
-// 删除订单（管理员或创建者）
 app.delete('/api/third-party-orders/:orderNo', authMiddleware, async (req, res) => {
   const { orderNo } = req.params;
   const [orderRows] = await pool.execute('SELECT * FROM third_party_orders WHERE order_no = ?', [orderNo]);
@@ -1693,19 +1618,16 @@ app.delete('/api/third-party-orders/:orderNo', authMiddleware, async (req, res) 
     res.status(500).json({ error: '服务器错误' });
   }
 });
- 
-// 打手申请完单
+
 app.put('/api/third-party-orders/:orderNo/request-complete', authMiddleware, async (req, res) => {
   try {
     const [orders] = await pool.execute('SELECT * FROM third_party_orders WHERE order_no = ?', [req.params.orderNo]);
     if (orders.length === 0) return res.status(404).json({ error: '订单不存在' });
     const order = orders[0];
     
-    // 从数据库查询当前用户角色（后端不能使用 localStorage）
     const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
     if (!userRows.length) return res.status(401).json({ error: '用户不存在' });
     
-    // 只有该订单的创建者或管理员可以申请完单
     if (order.creator_id !== req.userId && userRows[0].role !== 'admin') {
       return res.status(403).json({ error: '无权操作' });
     }
@@ -1718,18 +1640,10 @@ app.put('/api/third-party-orders/:orderNo/request-complete', authMiddleware, asy
   }
 });
 
-
-// 管理员标记已支付
 app.put('/api/third-party-orders/:orderNo/mark-paid', adminMiddleware, async (req, res) => {
   await pool.execute('UPDATE third_party_orders SET payment_status = ? WHERE order_no = ?', ['paid', req.params.orderNo]);
   res.json({ success: true, message: '已标记为已支付' });
 });
-
-
-
-    // 自动确保三方订单表字段存在
-    try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN complete_requested TINYINT(1) DEFAULT 0`); } catch(e) {}
-    try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN payment_status ENUM('unpaid','paid') DEFAULT 'unpaid'`); } catch(e) {}
 
 // ---------- 启动 ----------
 const PORT = process.env.PORT || 3000;
