@@ -1790,9 +1790,11 @@ app.post('/api/chest/checkin', authMiddleware, async (req, res) => {
     const [todayRows] = await conn.execute('SELECT DATE(NOW()) AS today');
     const today = todayRows[0].today;  // 格式 YYYY-MM-DD
 
-    // 查询并锁定用户行，防止并发
+    // 查询并锁定用户行，防止并发；直接返回格式化日期字符串，避免时区问题
     const [userRows] = await conn.execute(
-      'SELECT last_chest_checkin_date, chest_tickets FROM users WHERE id = ? FOR UPDATE',
+      `SELECT chest_tickets, 
+              DATE_FORMAT(last_chest_checkin_date, '%Y-%m-%d') AS last_date
+       FROM users WHERE id = ? FOR UPDATE`,
       [req.userId]
     );
     if (!userRows.length) {
@@ -1800,11 +1802,9 @@ app.post('/api/chest/checkin', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '用户不存在' });
     }
 
-    const lastCheckin = userRows[0].last_chest_checkin_date;
+    const lastDate = userRows[0].last_date;  // 例如 '2026-08-14' 或 null
     const tickets = userRows[0].chest_tickets;
 
-    // 将数据库返回的日期转为 YYYY-MM-DD 字符串进行比较
-    const lastDate = lastCheckin ? new Date(lastCheckin).toISOString().slice(0,10) : null;
     if (lastDate === today) {
       await conn.rollback();
       return res.status(400).json({ error: '今日已签到' });
