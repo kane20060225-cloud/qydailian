@@ -1924,28 +1924,27 @@ app.post('/api/chest/recharge', authMiddleware, async (req, res) => {
       [outTradeNo, userId, totalAmount]
     );
 
+    // 支付宝业务参数：必须放在 bizContent 内部，使用下划线字段名
     const params = {
-      outTradeNo: outTradeNo,
-      totalAmount: totalAmount,
-      subject: 'Game currency recharge 6 yuan',
-      productCode: 'FAST_INSTANT_TRADE_PAY',
-      notifyUrl: process.env.ALIPAY_NOTIFY_URL,
-      returnUrl: process.env.ALIPAY_RETURN_URL,
+      bizContent: {
+        out_trade_no: outTradeNo,
+        total_amount: totalAmount,
+        subject: 'Game currency recharge 6 yuan',
+        product_code: 'FAST_INSTANT_TRADE_PAY',
+        notify_url: process.env.ALIPAY_NOTIFY_URL,
+        return_url: process.env.ALIPAY_RETURN_URL,
+      },
     };
 
     console.log('=== 支付宝请求参数 ===');
     console.log(JSON.stringify(params, null, 2));
-    console.log('APP_ID:', process.env.ALIPAY_APP_ID);
-    console.log('网关:', process.env.ALIPAY_GATEWAY);
 
     const result = await alipaySdk.pageExecute('alipay.trade.page.pay', params);
 
     console.log('=== 支付宝返回结果 ===');
     console.log(result);
 
-    // 返回支付宝支付页面 HTML
     res.send(result);
-
   } catch (err) {
     console.error('创建支付宝订单失败:', err);
 
