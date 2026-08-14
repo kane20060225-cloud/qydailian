@@ -1831,7 +1831,7 @@ app.post('/api/chest/checkin', authMiddleware, async (req, res) => {
 app.post('/api/chest/recharge', authMiddleware, async (req, res) => {
   try {
     // 6元 = 10000军需券，后续接入真实支付时在此处调用支付接口
-    const amount = 10000;
+    const amount = 1;
     await pool.execute('UPDATE users SET chest_tickets = chest_tickets + ? WHERE id = ?', [amount, req.userId]);
     const [rows] = await pool.execute('SELECT chest_tickets FROM users WHERE id = ?', [req.userId]);
     res.json({ success: true, tickets: rows[0].chest_tickets, message: '充值成功，获得10000军需券' });
