@@ -229,7 +229,7 @@ async function initDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-        // ========== 开箱模拟器系统 ==========
+    // ========== 开箱模拟器系统 ==========
     await pool.execute(`
       CREATE TABLE IF NOT EXISTS chest_configs (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -276,6 +276,19 @@ async function initDB() {
         rarity ENUM('normal','rare') DEFAULT 'normal',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (chest_id) REFERENCES chest_configs(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 普通奖励配置表（新增）
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS chest_common_rewards (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        chest_id INT NOT NULL,
+        item_name VARCHAR(100) NOT NULL,
+        min_quantity INT NOT NULL DEFAULT 1,
+        max_quantity INT NOT NULL DEFAULT 1,
+        drop_chance DECIMAL(5,2) NOT NULL DEFAULT 100.00 COMMENT '掉落概率百分比',
         FOREIGN KEY (chest_id) REFERENCES chest_configs(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
@@ -396,9 +409,7 @@ async function initDB() {
     try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN complete_requested TINYINT(1) DEFAULT 0`); } catch(e) {}
     try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN payment_status ENUM('unpaid','paid') DEFAULT 'unpaid'`); } catch(e) {}
 
-
-
-        // 如果箱子表为空，插入默认数据
+    // 如果箱子表为空，插入默认箱子数据
     const [chestCount] = await pool.execute('SELECT COUNT(*) AS cnt FROM chest_configs');
     if (chestCount[0].cnt === 0) {
       const chests = [
@@ -420,7 +431,7 @@ async function initDB() {
         );
         const chestId = result.insertId;
 
-        // 每个箱子独立奖池（普通和稀有各5个，权重不同）
+        // 每个箱子独立奖池（这里初始化普通和稀有，但开箱普通奖励已改用 chest_common_rewards，这里保留普通物品不影响）
         const normalItems = [
           `银币 x50000`, `银币强化剂 x10`, `战斗经验强化剂 x10`, `全局经验强化剂 x10`, `金币 x500`
         ];
@@ -430,7 +441,7 @@ async function initDB() {
         for (const item of normalItems) {
           await pool.execute(
             'INSERT INTO chest_items (chest_id, rarity, item_name, weight) VALUES (?,?,?,?)',
-            [chestId, 'normal', item, 20 + i * 5] // 权重略有差异
+            [chestId, 'normal', item, 20 + i * 5]
           );
         }
         for (const item of rareItems) {
@@ -443,12 +454,45 @@ async function initDB() {
       console.log('✅ 箱子数据已初始化');
     }
 
+    // 如果普通奖励配置表为空，为每个箱子插入默认普通奖励
+    const [commonCount] = await pool.execute('SELECT COUNT(*) AS cnt FROM chest_common_rewards');
+    if (commonCount[0].cnt === 0) {
+      const [chests] = await pool.execute('SELECT id FROM chest_configs');
+      for (const chest of chests) {
+        // 常规全局经验嘉奖令
+        await pool.execute(
+          'INSERT INTO chest_common_rewards (chest_id, item_name, min_quantity, max_quantity, drop_chance) VALUES (?,?,?,?,?)',
+          [chest.id, '常规全局经验嘉奖令', 10, 25, 100]
+        );
+        // 银币
+        await pool.execute(
+          'INSERT INTO chest_common_rewards (chest_id, item_name, min_quantity, max_quantity, drop_chance) VALUES (?,?,?,?,?)',
+          [chest.id, '银币', 250000, 500000, 100]
+        );
+        // 银币强化剂
+        await pool.execute(
+          'INSERT INTO chest_common_rewards (chest_id, item_name, min_quantity, max_quantity, drop_chance) VALUES (?,?,?,?,?)',
+          [chest.id, '银币强化剂', 1, 5, 50]
+        );
+        // 战斗经验强化剂
+        await pool.execute(
+          'INSERT INTO chest_common_rewards (chest_id, item_name, min_quantity, max_quantity, drop_chance) VALUES (?,?,?,?,?)',
+          [chest.id, '战斗经验强化剂', 1, 5, 50]
+        );
+        // 全局经验强化剂
+        await pool.execute(
+          'INSERT INTO chest_common_rewards (chest_id, item_name, min_quantity, max_quantity, drop_chance) VALUES (?,?,?,?,?)',
+          [chest.id, '全局经验强化剂', 1, 5, 50]
+        );
+      }
+      console.log('✅ 默认普通奖励配置已初始化');
+    }
+
     console.log('✅ 数据库表已就绪');
   } catch (err) {
     console.error('❌ 建表失败:', err.message);
   }
 }
-initDB();
 
 // ---------- 注册/登录 ----------
 app.post('/api/auth/register', ipRegisterLimit, async (req, res) => {
@@ -1868,7 +1912,7 @@ app.post('/api/chest/open', authMiddleware, async (req, res) => {
     const isRare = Math.random() < 0.05;
     const rarity = isRare ? 'rare' : 'normal';
 
-    const rewards = []; // 最终奖励列表 [{ item_name, quantity, rarity }]
+    const rewards = [];
 
     if (isRare) {
       // 从稀有池按权重抽一个
@@ -1890,29 +1934,28 @@ app.post('/api/chest/open', authMiddleware, async (req, res) => {
       }
       rewards.push({ item_name: selectedItem.item_name, quantity: 1, rarity: 'rare' });
     } else {
-      // 普通奖励：生成组合
-      // 1) 全局经验嘉奖令：10-25 个
-      const expBonusCount = 10 + Math.floor(Math.random() * 16); // 10-25
-      rewards.push({ item_name: '常规全局经验嘉奖令', quantity: expBonusCount, rarity: 'normal' });
+      // 普通奖励：从数据库读取配置
+      const [commonRewards] = await conn.execute(
+        'SELECT * FROM chest_common_rewards WHERE chest_id = ?',
+        [chestId]
+      );
+      if (!commonRewards.length) throw new Error('箱子普通奖励未配置');
 
-      // 2) 银币：250000-500000
-      const silverAmount = 250000 + Math.floor(Math.random() * 250001); // 250000-500000
-      rewards.push({ item_name: '银币', quantity: silverAmount, rarity: 'normal' });
-
-      // 3) 强化剂：随机 1 或 2 种，每种数量 1-5
-      const boosters = ['银币强化剂', '战斗经验强化剂', '全局经验强化剂'];
-      const boosterCount = Math.random() < 0.5 ? 1 : 2; // 1或2种
-      const selectedBoosters = [];
-      while (selectedBoosters.length < boosterCount) {
-        const randomBooster = boosters[Math.floor(Math.random() * boosters.length)];
-        if (!selectedBoosters.includes(randomBooster)) {
-          selectedBoosters.push(randomBooster);
+      let atLeastOneDropped = false;
+      for (const rewardConfig of commonRewards) {
+        const dropRoll = Math.random() * 100;
+        if (dropRoll <= parseFloat(rewardConfig.drop_chance)) {
+          const qty = rewardConfig.min_quantity + Math.floor(Math.random() * (rewardConfig.max_quantity - rewardConfig.min_quantity + 1));
+          rewards.push({ item_name: rewardConfig.item_name, quantity: qty, rarity: 'normal' });
+          atLeastOneDropped = true;
         }
       }
-      selectedBoosters.forEach(booster => {
-        const qty = 1 + Math.floor(Math.random() * 5); // 1-5
-        rewards.push({ item_name: booster, quantity: qty, rarity: 'normal' });
-      });
+      // 保底
+      if (!atLeastOneDropped && commonRewards.length > 0) {
+        const first = commonRewards[0];
+        const qty = first.min_quantity + Math.floor(Math.random() * (first.max_quantity - first.min_quantity + 1));
+        rewards.push({ item_name: first.item_name, quantity: qty, rarity: 'normal' });
+      }
     }
 
     // 写入开箱记录和仓库
@@ -1946,6 +1989,7 @@ app.post('/api/chest/open', authMiddleware, async (req, res) => {
   }
 });
 
+
 // 获取个人仓库
 app.get('/api/chest/inventory', authMiddleware, async (req, res) => {
   try {
@@ -1965,31 +2009,39 @@ app.get('/api/chest/inventory', authMiddleware, async (req, res) => {
 // 保存箱子配置（整体更新：更新基本信息 + 替换奖池物品）
 app.put('/api/admin/chest/configs/:id', adminMiddleware, async (req, res) => {
   const { id } = req.params;
-  const { name, price, image, description, items } = req.body;
+  const { name, price, image, description, rare_items, common_rewards } = req.body;
 
-  if (!name || price == null || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ error: '名称、价格和至少一个物品必填' });
+  if (!name || price == null || !Array.isArray(rare_items) || rare_items.length === 0) {
+    return res.status(400).json({ error: '名称、价格和至少一个稀有物品必填' });
+  }
+  if (!Array.isArray(common_rewards) || common_rewards.length === 0) {
+    return res.status(400).json({ error: '至少需要配置一条普通奖励' });
   }
 
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
 
-    // 更新箱子基本信息
     await conn.execute(
       'UPDATE chest_configs SET name = ?, price = ?, image = ?, description = ? WHERE id = ?',
       [name, price, image || null, description || '', id]
     );
 
-    // 删除旧物品
-    await conn.execute('DELETE FROM chest_items WHERE chest_id = ?', [id]);
-
-    // 插入新物品
-    for (const item of items) {
-      if (!item.item_name || !item.weight || !['normal','rare'].includes(item.rarity)) continue;
+    await conn.execute('DELETE FROM chest_items WHERE chest_id = ? AND rarity = ?', [id, 'rare']);
+    for (const item of rare_items) {
+      if (!item.item_name || !item.weight) continue;
       await conn.execute(
         'INSERT INTO chest_items (chest_id, rarity, item_name, weight) VALUES (?,?,?,?)',
-        [id, item.rarity, item.item_name, item.weight]
+        [id, 'rare', item.item_name, item.weight]
+      );
+    }
+
+    await conn.execute('DELETE FROM chest_common_rewards WHERE chest_id = ?', [id]);
+    for (const reward of common_rewards) {
+      if (!reward.item_name) continue;
+      await conn.execute(
+        'INSERT INTO chest_common_rewards (chest_id, item_name, min_quantity, max_quantity, drop_chance) VALUES (?,?,?,?,?)',
+        [id, reward.item_name, reward.min_quantity || 1, reward.max_quantity || 1, reward.drop_chance ?? 100]
       );
     }
 
@@ -2004,6 +2056,25 @@ app.put('/api/admin/chest/configs/:id', adminMiddleware, async (req, res) => {
   }
 });
 
+
+app.get('/api/admin/chest/configs/:id', adminMiddleware, async (req, res) => {
+  try {
+    const [chestRows] = await pool.execute('SELECT * FROM chest_configs WHERE id = ?', [req.params.id]);
+    if (!chestRows.length) return res.status(404).json({ error: '箱子不存在' });
+
+    const [rareItems] = await pool.execute('SELECT * FROM chest_items WHERE chest_id = ? AND rarity = ?', [req.params.id, 'rare']);
+    const [commonRewards] = await pool.execute('SELECT * FROM chest_common_rewards WHERE chest_id = ?', [req.params.id]);
+
+    res.json({
+      ...chestRows[0],
+      rare_items: rareItems,
+      common_rewards: commonRewards
+    });
+  } catch (err) {
+    console.error('获取箱子配置失败:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
 
 // ---------- 启动 ----------
 const PORT = process.env.PORT || 3000;

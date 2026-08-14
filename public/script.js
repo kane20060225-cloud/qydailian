@@ -3297,7 +3297,7 @@ document.addEventListener('click', async (e) => {
 
 let editingChestId = null;
 
-// 加载所有箱子配置
+// 加载所有箱子配置列表
 async function loadAdminChests() {
     const container = getEl('adminChestList');
     if (!container) return;
@@ -3308,15 +3308,16 @@ async function loadAdminChests() {
             container.innerHTML = '<p>暂无箱子配置</p>';
             return;
         }
-        let html = '<table><tr><th>ID</th><th>名称</th><th>价格</th><th>物品数</th><th>操作</th></tr>';
+        let html = '<table><tr><th>ID</th><th>名称</th><th>价格</th><th>稀有物品数</th><th>普通奖励数</th><th>操作</th></tr>';
         chests.forEach(chest => {
-            const normalCount = chest.items.filter(i => i.rarity === 'normal').length;
-            const rareCount = chest.items.filter(i => i.rarity === 'rare').length;
+            const rareCount = chest.rare_items ? chest.rare_items.length : (chest.items ? chest.items.filter(i => i.rarity === 'rare').length : 0);
+            const commonCount = chest.common_rewards ? chest.common_rewards.length : 0;
             html += `<tr>
                 <td>${chest.id}</td>
                 <td>${chest.name}</td>
                 <td>${chest.price}</td>
-                <td>普通 ${normalCount} / 稀有 ${rareCount}</td>
+                <td>${rareCount}</td>
+                <td>${commonCount}</td>
                 <td><button class="edit-chest-btn" data-id="${chest.id}">编辑</button></td>
             </tr>`;
         });
@@ -3327,12 +3328,14 @@ async function loadAdminChests() {
     }
 }
 
-// 打开编辑弹窗
+// 打开编辑弹窗（获取完整配置：基本信息 + 稀有物品 + 普通奖励）
 async function openChestEditor(chestId) {
     try {
-        const res = await fetch(`${API_BASE}/chest/configs`);
-        const chests = await res.json();
-        const chest = chests.find(c => c.id == chestId);
+        const token = safeGetItem('token');
+        const res = await fetch(`${API_BASE}/admin/chest/configs/${chestId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const chest = await res.json();
         if (!chest) return;
 
         editingChestId = chestId;
@@ -3343,24 +3346,23 @@ async function openChestEditor(chestId) {
         getEl('chestEditorDesc').value = chest.description || '';
         getEl('chestEditorError').textContent = '';
 
-        renderChestItemsEditor(chest.items);
+        // 渲染稀有物品编辑区
+        const rareItemsEditor = getEl('chestItemsEditor');
+        rareItemsEditor.innerHTML = '';
+        chest.rare_items.forEach(item => addChestItemRow(item));
+
+        // 渲染普通奖励编辑区
+        const commonEditor = getEl('chestCommonRewardsEditor');
+        commonEditor.innerHTML = '';
+        chest.common_rewards.forEach(reward => addCommonRewardRow(reward));
+
         getEl('chestEditorModal').style.display = 'flex';
     } catch (err) {
         showToast('加载箱子信息失败');
     }
 }
 
-// 渲染奖池物品编辑器
-function renderChestItemsEditor(items) {
-    const container = getEl('chestItemsEditor');
-    if (!container) return;
-    container.innerHTML = '';
-    items.forEach((item, index) => {
-        addChestItemRow(item);
-    });
-}
-
-// 添加一行物品编辑
+// 添加一行稀有物品编辑
 function addChestItemRow(item = {}) {
     const container = getEl('chestItemsEditor');
     if (!container) return;
@@ -3371,8 +3373,7 @@ function addChestItemRow(item = {}) {
 
     row.innerHTML = `
         <select class="chest-item-rarity" style="width:90px;">
-            <option value="normal" ${item.rarity === 'normal' ? 'selected' : ''}>普通</option>
-            <option value="rare" ${item.rarity === 'rare' ? 'selected' : ''}>稀有</option>
+            <option value="rare" selected>稀有</option>
         </select>
         <input type="text" class="chest-item-name" placeholder="物品名称" value="${item.item_name || ''}" style="flex:1;">
         <input type="number" class="chest-item-weight" placeholder="权重" value="${item.weight || ''}" min="1" step="1" style="width:80px;">
@@ -3381,16 +3382,44 @@ function addChestItemRow(item = {}) {
     container.appendChild(row);
 }
 
-// 绑定添加物品按钮
-getEl('addChestItemBtn')?.addEventListener('click', () => {
-    addChestItemRow();
-});
+// 添加一行普通奖励编辑
+function addCommonRewardRow(reward = {}) {
+    const container = getEl('chestCommonRewardsEditor');
+    if (!container) return;
 
-// 事件委托：删除物品行
+    const row = document.createElement('div');
+    row.className = 'chest-common-reward-row';
+    row.style.cssText = 'display:flex; gap:8px; margin-bottom:8px; align-items:center;';
+
+    row.innerHTML = `
+        <input type="text" class="common-reward-name" placeholder="物品名称" value="${reward.item_name || ''}" style="flex:1;">
+        <input type="number" class="common-reward-min" placeholder="最小数量" value="${reward.min_quantity || 1}" min="1" step="1" style="width:80px;">
+        <input type="number" class="common-reward-max" placeholder="最大数量" value="${reward.max_quantity || 1}" min="1" step="1" style="width:80px;">
+        <input type="number" class="common-reward-chance" placeholder="概率%" value="${reward.drop_chance ?? 100}" min="0" max="100" step="1" style="width:80px;">
+        <button type="button" class="remove-common-reward-btn" style="border:1px solid var(--red); color:var(--red); background:transparent; padding:4px 8px; border-radius:4px; cursor:pointer;">删除</button>
+    `;
+    container.appendChild(row);
+}
+
+// 事件委托：添加按钮、删除行、编辑按钮
 document.addEventListener('click', (e) => {
+    // 添加稀有物品
+    if (e.target.id === 'addChestItemBtn') {
+        addChestItemRow();
+    }
+    // 添加普通奖励
+    if (e.target.id === 'addCommonRewardBtn') {
+        addCommonRewardRow();
+    }
+    // 删除稀有物品行
     if (e.target.classList.contains('remove-chest-item-btn')) {
         e.target.closest('.chest-item-edit-row').remove();
     }
+    // 删除普通奖励行
+    if (e.target.classList.contains('remove-common-reward-btn')) {
+        e.target.closest('.chest-common-reward-row').remove();
+    }
+    // 打开编辑弹窗
     if (e.target.classList.contains('edit-chest-btn')) {
         openChestEditor(e.target.dataset.id);
     }
@@ -3407,20 +3436,36 @@ getEl('saveChestConfigBtn')?.addEventListener('click', async () => {
     const image = getEl('chestEditorImage').value.trim();
     const description = getEl('chestEditorDesc').value.trim();
 
-    // 收集所有物品
+    // 收集稀有物品
     const itemRows = document.querySelectorAll('.chest-item-edit-row');
-    const items = [];
+    const rare_items = [];
     itemRows.forEach(row => {
-        const rarity = row.querySelector('.chest-item-rarity').value;
         const item_name = row.querySelector('.chest-item-name').value.trim();
         const weight = parseInt(row.querySelector('.chest-item-weight').value);
-        if (item_name && weight && ['normal','rare'].includes(rarity)) {
-            items.push({ rarity, item_name, weight });
+        if (item_name && weight) {
+            rare_items.push({ item_name, weight });
         }
     });
 
-    if (!name || isNaN(price) || items.length === 0) {
-        getEl('chestEditorError').textContent = '请填写名称、价格和至少一个有效物品';
+    // 收集普通奖励
+    const commonRows = document.querySelectorAll('.chest-common-reward-row');
+    const common_rewards = [];
+    commonRows.forEach(row => {
+        const item_name = row.querySelector('.common-reward-name').value.trim();
+        const min_quantity = parseInt(row.querySelector('.common-reward-min').value);
+        const max_quantity = parseInt(row.querySelector('.common-reward-max').value);
+        const drop_chance = parseFloat(row.querySelector('.common-reward-chance').value);
+        if (item_name && min_quantity && max_quantity) {
+            common_rewards.push({ item_name, min_quantity, max_quantity, drop_chance });
+        }
+    });
+
+    if (!name || isNaN(price) || rare_items.length === 0) {
+        getEl('chestEditorError').textContent = '请填写名称、价格和至少一个稀有物品';
+        return;
+    }
+    if (common_rewards.length === 0) {
+        getEl('chestEditorError').textContent = '请至少配置一条普通奖励';
         return;
     }
 
@@ -3428,7 +3473,7 @@ getEl('saveChestConfigBtn')?.addEventListener('click', async () => {
         const res = await fetch(`${API_BASE}/admin/chest/configs/${editingChestId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ name, price, image, description, items })
+            body: JSON.stringify({ name, price, image, description, rare_items, common_rewards })
         });
         const data = await res.json();
         if (res.ok) {
@@ -3444,7 +3489,9 @@ getEl('saveChestConfigBtn')?.addEventListener('click', async () => {
 });
 
 // 关闭编辑弹窗
-getEl('closeChestEditorBtn')?.addEventListener('click', () => getEl('chestEditorModal').style.display = 'none');
+getEl('closeChestEditorBtn')?.addEventListener('click', () => {
+    getEl('chestEditorModal').style.display = 'none';
+});
 getEl('chestEditorModal')?.addEventListener('click', (e) => {
     if (e.target === getEl('chestEditorModal')) getEl('chestEditorModal').style.display = 'none';
 });
