@@ -32,7 +32,7 @@ const { AlipaySdk } = require('alipay-sdk');
 
 const alipaySdk = new AlipaySdk({
   appId: process.env.ALIPAY_APP_ID,
-  privateKey: process.env.ALIPAY_PRIVATE_KEY,
+  privateKey: fs.readFileSync(path.join(__dirname, 'alipay_private_key.pem'), 'utf8'),
   alipayPublicKey: process.env.ALIPAY_PUBLIC_KEY,
   gateway: process.env.ALIPAY_GATEWAY || 'https://openapi-sandbox.dl.alipaydev.com/gateway.do',
   timeout: 10000,
