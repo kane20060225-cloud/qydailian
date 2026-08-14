@@ -1928,6 +1928,49 @@ app.get('/api/chest/inventory', authMiddleware, async (req, res) => {
 });
 
 
+// ==================== 开箱配置管理（管理员） ====================
+
+// 保存箱子配置（整体更新：更新基本信息 + 替换奖池物品）
+app.put('/api/admin/chest/configs/:id', adminMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { name, price, image, description, items } = req.body;
+
+  if (!name || price == null || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: '名称、价格和至少一个物品必填' });
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // 更新箱子基本信息
+    await conn.execute(
+      'UPDATE chest_configs SET name = ?, price = ?, image = ?, description = ? WHERE id = ?',
+      [name, price, image || null, description || '', id]
+    );
+
+    // 删除旧物品
+    await conn.execute('DELETE FROM chest_items WHERE chest_id = ?', [id]);
+
+    // 插入新物品
+    for (const item of items) {
+      if (!item.item_name || !item.weight || !['normal','rare'].includes(item.rarity)) continue;
+      await conn.execute(
+        'INSERT INTO chest_items (chest_id, rarity, item_name, weight) VALUES (?,?,?,?)',
+        [id, item.rarity, item.item_name, item.weight]
+      );
+    }
+
+    await conn.commit();
+    res.json({ success: true, message: '箱子配置已更新' });
+  } catch (err) {
+    await conn.rollback();
+    console.error('保存箱子配置失败:', err);
+    res.status(500).json({ error: '服务器错误' });
+  } finally {
+    conn.release();
+  }
+});
 
 
 // ---------- 启动 ----------

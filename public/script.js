@@ -935,8 +935,8 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
         tab.classList.add('active');
         const target = tab.dataset.admintab;
 
-        // 隐藏所有子面板（包括新增的 adminShopSection）
-        ['adminOrdersSection', 'adminCustomSection', 'adminBoostersSection', 'adminRolesSection', 'adminContentSection', 'adminShopSection'].forEach(id => {
+        // 隐藏所有子面板（包括新增的 adminChestSection）
+        ['adminOrdersSection', 'adminCustomSection', 'adminBoostersSection', 'adminRolesSection', 'adminContentSection', 'adminShopSection', 'adminChestSection'].forEach(id => {
             const el = getEl(id);
             if (el) el.style.display = 'none';
         });
@@ -961,7 +961,6 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
         } else if (target === 'content') {
             const el = getEl('adminContentSection');
             if (el) el.style.display = 'block';
-            // 默认选中“公告”子标签并加载
             document.querySelectorAll('.content-mgr-tab').forEach(t => t.classList.remove('active'));
             const defaultMgrTab = document.querySelector('.content-mgr-tab[data-ctype="announcements"]');
             if (defaultMgrTab) defaultMgrTab.classList.add('active');
@@ -969,12 +968,15 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
         } else if (target === 'shop') {
             const el = getEl('adminShopSection');
             if (el) el.style.display = 'block';
-            // 加载积分商城商品列表（需确保 loadAdminShopItems 函数已定义）
             if (typeof loadAdminShopItems === 'function') {
                 loadAdminShopItems();
             } else {
                 console.error('loadAdminShopItems 函数未定义，请检查脚本加载顺序');
             }
+        } else if (target === 'chest') {
+            const el = getEl('adminChestSection');
+            if (el) el.style.display = 'block';
+            loadAdminChests();   // 这个函数需要在前面已定义
         }
     });
 });
@@ -3285,5 +3287,162 @@ document.addEventListener('click', async (e) => {
   }
 });
 
+
+
+// ==================== 开箱配置管理 ====================
+
+let editingChestId = null;
+
+// 加载所有箱子配置
+async function loadAdminChests() {
+    const container = getEl('adminChestList');
+    if (!container) return;
+    try {
+        const res = await fetch(`${API_BASE}/chest/configs`);
+        const chests = await res.json();
+        if (!chests.length) {
+            container.innerHTML = '<p>暂无箱子配置</p>';
+            return;
+        }
+        let html = '<table><tr><th>ID</th><th>名称</th><th>价格</th><th>物品数</th><th>操作</th></tr>';
+        chests.forEach(chest => {
+            const normalCount = chest.items.filter(i => i.rarity === 'normal').length;
+            const rareCount = chest.items.filter(i => i.rarity === 'rare').length;
+            html += `<tr>
+                <td>${chest.id}</td>
+                <td>${chest.name}</td>
+                <td>${chest.price}</td>
+                <td>普通 ${normalCount} / 稀有 ${rareCount}</td>
+                <td><button class="edit-chest-btn" data-id="${chest.id}">编辑</button></td>
+            </tr>`;
+        });
+        html += '</table>';
+        container.innerHTML = html;
+    } catch (err) {
+        container.innerHTML = '<p style="color:var(--red)">加载失败</p>';
+    }
+}
+
+// 打开编辑弹窗
+async function openChestEditor(chestId) {
+    try {
+        const res = await fetch(`${API_BASE}/chest/configs`);
+        const chests = await res.json();
+        const chest = chests.find(c => c.id == chestId);
+        if (!chest) return;
+
+        editingChestId = chestId;
+        getEl('chestEditorTitle').textContent = '编辑箱子 #' + chest.id;
+        getEl('chestEditorName').value = chest.name;
+        getEl('chestEditorPrice').value = chest.price;
+        getEl('chestEditorImage').value = chest.image || '';
+        getEl('chestEditorDesc').value = chest.description || '';
+        getEl('chestEditorError').textContent = '';
+
+        renderChestItemsEditor(chest.items);
+        getEl('chestEditorModal').style.display = 'flex';
+    } catch (err) {
+        showToast('加载箱子信息失败');
+    }
+}
+
+// 渲染奖池物品编辑器
+function renderChestItemsEditor(items) {
+    const container = getEl('chestItemsEditor');
+    if (!container) return;
+    container.innerHTML = '';
+    items.forEach((item, index) => {
+        addChestItemRow(item);
+    });
+}
+
+// 添加一行物品编辑
+function addChestItemRow(item = {}) {
+    const container = getEl('chestItemsEditor');
+    if (!container) return;
+
+    const row = document.createElement('div');
+    row.className = 'chest-item-edit-row';
+    row.style.cssText = 'display:flex; gap:8px; margin-bottom:8px; align-items:center;';
+
+    row.innerHTML = `
+        <select class="chest-item-rarity" style="width:90px;">
+            <option value="normal" ${item.rarity === 'normal' ? 'selected' : ''}>普通</option>
+            <option value="rare" ${item.rarity === 'rare' ? 'selected' : ''}>稀有</option>
+        </select>
+        <input type="text" class="chest-item-name" placeholder="物品名称" value="${item.item_name || ''}" style="flex:1;">
+        <input type="number" class="chest-item-weight" placeholder="权重" value="${item.weight || ''}" min="1" step="1" style="width:80px;">
+        <button type="button" class="remove-chest-item-btn" style="border:1px solid var(--red); color:var(--red); background:transparent; padding:4px 8px; border-radius:4px; cursor:pointer;">删除</button>
+    `;
+    container.appendChild(row);
+}
+
+// 绑定添加物品按钮
+getEl('addChestItemBtn')?.addEventListener('click', () => {
+    addChestItemRow();
+});
+
+// 事件委托：删除物品行
+document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('remove-chest-item-btn')) {
+        e.target.closest('.chest-item-edit-row').remove();
+    }
+    if (e.target.classList.contains('edit-chest-btn')) {
+        openChestEditor(e.target.dataset.id);
+    }
+});
+
+// 保存配置
+getEl('saveChestConfigBtn')?.addEventListener('click', async () => {
+    if (!editingChestId) return;
+    const token = safeGetItem('token');
+    if (!token) { showToast('请先登录'); return; }
+
+    const name = getEl('chestEditorName').value.trim();
+    const price = parseInt(getEl('chestEditorPrice').value);
+    const image = getEl('chestEditorImage').value.trim();
+    const description = getEl('chestEditorDesc').value.trim();
+
+    // 收集所有物品
+    const itemRows = document.querySelectorAll('.chest-item-edit-row');
+    const items = [];
+    itemRows.forEach(row => {
+        const rarity = row.querySelector('.chest-item-rarity').value;
+        const item_name = row.querySelector('.chest-item-name').value.trim();
+        const weight = parseInt(row.querySelector('.chest-item-weight').value);
+        if (item_name && weight && ['normal','rare'].includes(rarity)) {
+            items.push({ rarity, item_name, weight });
+        }
+    });
+
+    if (!name || isNaN(price) || items.length === 0) {
+        getEl('chestEditorError').textContent = '请填写名称、价格和至少一个有效物品';
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/admin/chest/configs/${editingChestId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ name, price, image, description, items })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast('✅ 配置已保存');
+            getEl('chestEditorModal').style.display = 'none';
+            loadAdminChests();
+        } else {
+            getEl('chestEditorError').textContent = data.error || '保存失败';
+        }
+    } catch (err) {
+        getEl('chestEditorError').textContent = '网络错误';
+    }
+});
+
+// 关闭编辑弹窗
+getEl('closeChestEditorBtn')?.addEventListener('click', () => getEl('chestEditorModal').style.display = 'none');
+getEl('chestEditorModal')?.addEventListener('click', (e) => {
+    if (e.target === getEl('chestEditorModal')) getEl('chestEditorModal').style.display = 'none';
+});
 // ==================== 启动 ====================
 init();

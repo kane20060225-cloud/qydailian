@@ -1317,3 +1317,44 @@ body.theme-light #contentEditorTextarea {
   border-bottom: 1px solid var(--border);
   font-size: 0.85rem;
 }
+
+/* 开箱配置管理 */
+#adminChestList table {
+    width: 100%;
+    border-collapse: collapse;
+}
+#adminChestList th {
+    background: rgba(240,160,80,0.1);
+    color: var(--accent);
+    padding: 8px;
+    text-align: left;
+}
+#adminChestList td {
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+}
+.edit-chest-btn {
+    padding: 4px 10px;
+    border: 1px solid var(--accent);
+    background: rgba(240,160,80,0.1);
+    color: var(--accent);
+    border-radius: 4px;
+    cursor: pointer;
+}
+.edit-chest-btn:hover {
+    background: rgba(240,160,80,0.2);
+}
+.chest-item-edit-row select,
+.chest-item-edit-row input {
+    background: #111927;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 6px 8px;
+}
+.chest-item-edit-row select:focus,
+.chest-item-edit-row input:focus {
+    border-color: var(--accent);
+    outline: none;
+}
