@@ -28,11 +28,9 @@ const pool = mysql.createPool({
 });
 
 // ---------- 支付宝 SDK ----------
-const fs = require('fs');
-const path = require('path');
 const { AlipaySdk } = require('alipay-sdk');
 
-// 读取密钥文件
+// 读取密钥文件（使用顶部已经声明的 fs 和 path）
 const alipayPrivateKey = fs.readFileSync('/var/www/your-site/backend/alipay_private_key.pem', 'utf8');
 const alipayPublicKey = fs.readFileSync('/var/www/your-site/backend/alipay_public_key.pem', 'utf8');
 
