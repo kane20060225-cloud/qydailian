@@ -28,8 +28,7 @@ const pool = mysql.createPool({
 });
 
 // ---------- 支付宝 SDK ----------
-const AlipaySdkModule = require('alipay-sdk');
-const AlipaySdk = AlipaySdkModule.default || AlipaySdkModule;
+const AlipaySdk = require('alipay-sdk');
 
 const alipaySdk = new AlipaySdk({
   appId: process.env.ALIPAY_APP_ID,
