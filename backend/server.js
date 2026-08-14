@@ -34,7 +34,7 @@ const alipaySdk = new AlipaySdk({
   appId: process.env.ALIPAY_APP_ID,
   privateKey: process.env.ALIPAY_PRIVATE_KEY,
   alipayPublicKey: process.env.ALIPAY_PUBLIC_KEY,
-  gateway: process.env.ALIPAY_GATEWAY || 'https://openapi.alipaydev.com/gateway.do',
+  gateway: process.env.ALIPAY_GATEWAY || 'https://openapi-sandbox.dl.alipaydev.com/gateway.do',
   timeout: 10000,
   signType: 'RSA2'
 });
