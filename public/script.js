@@ -1400,14 +1400,18 @@ getEl('buyChestBtn')?.addEventListener('click', async () => {
     });
     const data = await res.json();
     if (res.ok) {
-      showToast(`🎉 获得：${data.item}（${data.rarity === 'rare' ? '稀有' : '普通'}）`);
+      // data.rewards 是数组，例如 [{item_name:'银币', quantity:500000, rarity:'normal'}, ...]
+      const rewardText = data.rewards.map(r => `${r.item_name} x${r.quantity}`).join('、');
+      showToast(`🎁 获得：${rewardText}`);
       updateTicketDisplay();
       getEl('chestDetailModal').style.display = 'none';
     } else {
       const buyMsg = getEl('chestBuyMsg');
       if (buyMsg) { buyMsg.textContent = data.error || '开箱失败'; buyMsg.style.display = 'block'; }
     }
-  } catch (err) { showToast('网络错误'); }
+  } catch (err) {
+    showToast('网络错误');
+  }
 });
 
 // 我的仓库

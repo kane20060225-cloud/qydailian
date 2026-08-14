@@ -1854,57 +1854,89 @@ app.post('/api/chest/open', authMiddleware, async (req, res) => {
     if (!userRows.length) throw new Error('用户不存在');
     const tickets = userRows[0].chest_tickets;
 
-    // 获取箱子价格
+    // 获取箱子信息
     const [chestRows] = await conn.execute('SELECT * FROM chest_configs WHERE id = ?', [chestId]);
     if (!chestRows.length) throw new Error('箱子不存在');
     const chest = chestRows[0];
 
     if (tickets < chest.price) throw new Error('军需券不足');
 
-    // 抽取物品（先决定稀有度：95%普通，5%稀有）
-    const isRare = Math.random() < 0.05;
-    const rarity = isRare ? 'rare' : 'normal';
-    const [items] = await conn.execute(
-      'SELECT * FROM chest_items WHERE chest_id = ? AND rarity = ?',
-      [chestId, rarity]
-    );
-    if (!items.length) throw new Error('箱子奖池为空');
-
-    // 按权重抽取
-    const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
-    let rand = Math.random() * totalWeight;
-    let selectedItem = items[0];
-    for (const item of items) {
-      rand -= item.weight;
-      if (rand <= 0) {
-        selectedItem = item;
-        break;
-      }
-    }
-
     // 扣券
     await conn.execute('UPDATE users SET chest_tickets = chest_tickets - ? WHERE id = ?', [chest.price, req.userId]);
 
-    // 写入开箱记录
-    await conn.execute(
-      'INSERT INTO user_chest_records (user_id, chest_id, item_name, rarity) VALUES (?,?,?,?)',
-      [req.userId, chestId, selectedItem.item_name, rarity]
-    );
+    // 决定稀有度：5% 稀有，95% 普通
+    const isRare = Math.random() < 0.05;
+    const rarity = isRare ? 'rare' : 'normal';
 
-    // 写入仓库（相同物品数量+1）
-    await conn.execute(
-      `INSERT INTO user_inventory (user_id, item_name, chest_id, rarity, quantity)
-       VALUES (?,?,?,?,1)
-       ON DUPLICATE KEY UPDATE quantity = quantity + 1`,
-      [req.userId, selectedItem.item_name, chestId, rarity]
-    );
+    const rewards = []; // 最终奖励列表 [{ item_name, quantity, rarity }]
+
+    if (isRare) {
+      // 从稀有池按权重抽一个
+      const [rareItems] = await conn.execute(
+        'SELECT * FROM chest_items WHERE chest_id = ? AND rarity = ?',
+        [chestId, 'rare']
+      );
+      if (!rareItems.length) throw new Error('箱子稀有奖池为空');
+
+      const totalWeight = rareItems.reduce((sum, item) => sum + item.weight, 0);
+      let rand = Math.random() * totalWeight;
+      let selectedItem = rareItems[0];
+      for (const item of rareItems) {
+        rand -= item.weight;
+        if (rand <= 0) {
+          selectedItem = item;
+          break;
+        }
+      }
+      rewards.push({ item_name: selectedItem.item_name, quantity: 1, rarity: 'rare' });
+    } else {
+      // 普通奖励：生成组合
+      // 1) 全局经验嘉奖令：10-25 个
+      const expBonusCount = 10 + Math.floor(Math.random() * 16); // 10-25
+      rewards.push({ item_name: '常规全局经验嘉奖令', quantity: expBonusCount, rarity: 'normal' });
+
+      // 2) 银币：250000-500000
+      const silverAmount = 250000 + Math.floor(Math.random() * 250001); // 250000-500000
+      rewards.push({ item_name: '银币', quantity: silverAmount, rarity: 'normal' });
+
+      // 3) 强化剂：随机 1 或 2 种，每种数量 1-5
+      const boosters = ['银币强化剂', '战斗经验强化剂', '全局经验强化剂'];
+      const boosterCount = Math.random() < 0.5 ? 1 : 2; // 1或2种
+      const selectedBoosters = [];
+      while (selectedBoosters.length < boosterCount) {
+        const randomBooster = boosters[Math.floor(Math.random() * boosters.length)];
+        if (!selectedBoosters.includes(randomBooster)) {
+          selectedBoosters.push(randomBooster);
+        }
+      }
+      selectedBoosters.forEach(booster => {
+        const qty = 1 + Math.floor(Math.random() * 5); // 1-5
+        rewards.push({ item_name: booster, quantity: qty, rarity: 'normal' });
+      });
+    }
+
+    // 写入开箱记录和仓库
+    for (const reward of rewards) {
+      await conn.execute(
+        'INSERT INTO user_chest_records (user_id, chest_id, item_name, rarity) VALUES (?,?,?,?)',
+        [req.userId, chestId, reward.item_name, reward.rarity]
+      );
+      await conn.execute(
+        `INSERT INTO user_inventory (user_id, item_name, chest_id, rarity, quantity)
+         VALUES (?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)`,
+        [req.userId, reward.item_name, chestId, reward.rarity, reward.quantity]
+      );
+    }
+
+    const [ticketsAfter] = await conn.execute('SELECT chest_tickets FROM users WHERE id = ?', [req.userId]);
 
     await conn.commit();
     res.json({
       success: true,
-      item: selectedItem.item_name,
+      rewards,
       rarity,
-      tickets: tickets - chest.price
+      tickets: ticketsAfter[0].chest_tickets
     });
   } catch (err) {
     await conn.rollback();
