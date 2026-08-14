@@ -1795,15 +1795,21 @@ app.put('/api/third-party-orders/:orderNo/mark-paid', adminMiddleware, async (re
 // ==================== 开箱模拟器 API ====================
 
 // 获取所有箱子及奖池（公开）
+// 获取所有箱子及奖池（公开）
 app.get('/api/chest/configs', async (req, res) => {
   try {
     const [chests] = await pool.execute('SELECT * FROM chest_configs ORDER BY id');
-    const [items] = await pool.execute('SELECT * FROM chest_items ORDER BY chest_id, rarity, id');
+    const [rareItems] = await pool.execute('SELECT * FROM chest_items WHERE rarity = ?', ['rare']);
+    const [commonRewards] = await pool.execute('SELECT * FROM chest_common_rewards');
+
     const result = chests.map(chest => {
-      const chestItems = items.filter(i => i.chest_id === chest.id);
+      const rare = rareItems.filter(i => i.chest_id === chest.id);
+      const common = commonRewards.filter(r => r.chest_id === chest.id);
       return {
         ...chest,
-        items: chestItems
+        items: rare,          // 兼容旧前端，只返回稀有物品作为 items（详情弹窗会用到）
+        rare_items: rare,
+        common_rewards: common
       };
     });
     res.json(result);

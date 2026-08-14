@@ -1351,41 +1351,48 @@ async function openChestDetail(chestId) {
     const chest = chests.find(c => c.id == chestId);
     if (!chest) return;
 
+    // 设置基本信息
     getEl('chestDetailTitle').textContent = chest.name;
     getEl('chestDetailImg').src = chest.image;
     getEl('chestDetailDesc').textContent = chest.description;
     getEl('chestPriceDisplay').textContent = chest.price;
 
-    // 计算概率并显示
-    const normalItems = chest.items.filter(i => i.rarity === 'normal');
-    const rareItems = chest.items.filter(i => i.rarity === 'rare');
-    const normalTotalWeight = normalItems.reduce((sum, i) => sum + i.weight, 0);
-    const rareTotalWeight = rareItems.reduce((sum, i) => sum + i.weight, 0);
+    // ---- 构建概率显示区 ----
+    let probHtml = '<div class="prob-list"><div><strong>奖励类别</strong><strong>概率</strong></div>';
 
-    let probHtml = '<div class="prob-list"><div><strong>类别</strong><strong>概率</strong></div>';
-    normalItems.forEach(item => {
-      const p = (item.weight / normalTotalWeight * 95).toFixed(2);
-      probHtml += `<div><span class="prob-label">${item.item_name}</span><span class="prob-value">${p}%</span></div>`;
-    });
+    // 1. 显示稀有物品（总概率5%）
+    const rareItems = chest.rare_items || [];
+    const rareTotalWeight = rareItems.reduce((sum, item) => sum + item.weight, 0);
     rareItems.forEach(item => {
-      const p = (item.weight / rareTotalWeight * 5).toFixed(2);
+      const p = rareTotalWeight > 0 ? (item.weight / rareTotalWeight * 5).toFixed(2) : '0';
       probHtml += `<div><span class="prob-label">${item.item_name}</span><span class="prob-value">${p}%</span></div>`;
     });
+
+    // 2. 显示普通奖励（每项独立概率）
+    const commonRewards = chest.common_rewards || [];
+    commonRewards.forEach(reward => {
+      const p = parseFloat(reward.drop_chance).toFixed(2);
+      const range = `${reward.min_quantity} - ${reward.max_quantity}`;
+      probHtml += `<div><span class="prob-label">${reward.item_name}（数量 ${range}）</span><span class="prob-value">${p}%</span></div>`;
+    });
+
     probHtml += '</div>';
     getEl('chestDetailProb').innerHTML = probHtml;
 
+    // 重置错误提示
     const buyMsg = getEl('chestBuyMsg');
     if (buyMsg) buyMsg.style.display = 'none';
+
+    // 显示弹窗
     getEl('chestDetailModal').style.display = 'flex';
 
-    // 存储当前箱子ID用于开箱
+    // 记录当前箱子ID，供开箱按钮使用
     window._currentChestId = chestId;
   } catch (err) {
     console.error('打开箱子详情失败:', err);
     showToast('加载失败');
   }
 }
-
 // 开箱按钮点击（购买箱子）
 getEl('buyChestBtn')?.addEventListener('click', async () => {
   const chestId = window._currentChestId;
@@ -3310,7 +3317,8 @@ async function loadAdminChests() {
         }
         let html = '<table><tr><th>ID</th><th>名称</th><th>价格</th><th>稀有物品数</th><th>普通奖励数</th><th>操作</th></tr>';
         chests.forEach(chest => {
-            const rareCount = chest.rare_items ? chest.rare_items.length : (chest.items ? chest.items.filter(i => i.rarity === 'rare').length : 0);
+            // 使用 rare_items 和 common_rewards 字段
+            const rareCount = chest.rare_items ? chest.rare_items.length : 0;
             const commonCount = chest.common_rewards ? chest.common_rewards.length : 0;
             html += `<tr>
                 <td>${chest.id}</td>
