@@ -28,7 +28,7 @@ const pool = mysql.createPool({
 });
 
 // ---------- 支付宝 SDK ----------
-const { AlipaySdk } = require('alipay-sdk');
+const AlipaySdk = require('alipay-sdk').default;
 
 const alipaySdk = new AlipaySdk({
   appId: process.env.ALIPAY_APP_ID,
@@ -1918,14 +1918,14 @@ app.post('/api/chest/recharge', authMiddleware, async (req, res) => {
       [outTradeNo, userId, totalAmount]
     );
 
-    const result = await alipaySdk.exec('alipay.trade.page.pay', {
-      outTradeNo: outTradeNo,
-      totalAmount: totalAmount,
-      subject: '军需券充值（6元=10000军需券）',
-      productCode: 'FAST_INSTANT_TRADE_PAY',
-      notifyUrl: process.env.ALIPAY_NOTIFY_URL,
-      returnUrl: process.env.ALIPAY_RETURN_URL,
-    });
+    const result = await alipaySdk.pageExecute('alipay.trade.page.pay', {
+  outTradeNo: outTradeNo,
+  totalAmount: totalAmount,
+  subject: '军需券充值（6元=10000军需券）',
+  productCode: 'FAST_INSTANT_TRADE_PAY',
+  notifyUrl: process.env.ALIPAY_NOTIFY_URL,
+  returnUrl: process.env.ALIPAY_RETURN_URL,
+});
 
     // 返回支付宝支付页面 HTML
     res.send(result);
