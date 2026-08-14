@@ -27,6 +27,18 @@ const pool = mysql.createPool({
   decimalNumbers: true
 });
 
+// ---------- 支付宝 SDK ----------
+const AlipaySdk = require('alipay-sdk').default;
+
+const alipaySdk = new AlipaySdk({
+  appId: process.env.ALIPAY_APP_ID,
+  privateKey: process.env.ALIPAY_PRIVATE_KEY,
+  alipayPublicKey: process.env.ALIPAY_PUBLIC_KEY,
+  gateway: process.env.ALIPAY_GATEWAY || 'https://openapi.alipaydev.com/gateway.do',
+  timeout: 10000,
+  signType: 'RSA2'
+});
+
 // ---------- IP 注册限流 ----------
 const ipRegisterCount = new Map();
 
@@ -292,6 +304,21 @@ async function initDB() {
         FOREIGN KEY (chest_id) REFERENCES chest_configs(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    // 支付订单表
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS payment_orders (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        out_trade_no VARCHAR(64) NOT NULL UNIQUE,
+        user_id INT NOT NULL,
+        amount DECIMAL(10,2) NOT NULL,
+        status ENUM('pending','paid','closed') DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+
 
     // 用户表增加军需券和签到日期字段
     try { await pool.execute(`ALTER TABLE users ADD COLUMN chest_tickets INT DEFAULT 0`); } catch(e) {}
@@ -1877,16 +1904,34 @@ app.post('/api/chest/checkin', authMiddleware, async (req, res) => {
   }
 });
 
-// 充值（目前模拟，后续接入真实支付）
+// 充值
+// 创建支付宝充值订单（沙箱电脑网站支付）
 app.post('/api/chest/recharge', authMiddleware, async (req, res) => {
+  const userId = req.userId;
+  const outTradeNo = 'RC' + Date.now() + Math.random().toString(36).substring(2, 8).toUpperCase();
+  const totalAmount = '6.00';
+
   try {
-    // 6元 = 10000军需券，后续接入真实支付时在此处调用支付接口
-    const amount = 1;
-    await pool.execute('UPDATE users SET chest_tickets = chest_tickets + ? WHERE id = ?', [amount, req.userId]);
-    const [rows] = await pool.execute('SELECT chest_tickets FROM users WHERE id = ?', [req.userId]);
-    res.json({ success: true, tickets: rows[0].chest_tickets, message: '充值成功，获得10000军需券' });
+    // 插入待支付订单
+    await pool.execute(
+      'INSERT INTO payment_orders (out_trade_no, user_id, amount) VALUES (?,?,?)',
+      [outTradeNo, userId, totalAmount]
+    );
+
+    const result = await alipaySdk.exec('alipay.trade.page.pay', {
+      outTradeNo: outTradeNo,
+      totalAmount: totalAmount,
+      subject: '军需券充值（6元=10000军需券）',
+      productCode: 'FAST_INSTANT_TRADE_PAY',
+      notifyUrl: process.env.ALIPAY_NOTIFY_URL,
+      returnUrl: process.env.ALIPAY_RETURN_URL,
+    });
+
+    // 返回支付宝支付页面 HTML
+    res.send(result);
   } catch (err) {
-    res.status(500).json({ error: '服务器错误' });
+    console.error('创建支付宝订单失败:', err);
+    res.status(500).json({ error: '创建支付订单失败' });
   }
 });
 
@@ -2082,6 +2127,47 @@ app.get('/api/admin/chest/configs/:id', adminMiddleware, async (req, res) => {
   }
 });
 
+
+
+
+
+
+// 支付宝异步通知
+app.post('/api/chest/alipay/notify', async (req, res) => {
+  try {
+    const valid = alipaySdk.checkNotifySign(req.body);
+    if (!valid) {
+      console.error('支付宝异步通知签名验证失败');
+      return res.send('fail');
+    }
+
+    const { outTradeNo, tradeStatus } = req.body;
+    if (tradeStatus === 'TRADE_SUCCESS' || tradeStatus === 'TRADE_FINISHED') {
+      const [orders] = await pool.execute(
+        'SELECT user_id, status FROM payment_orders WHERE out_trade_no = ? AND status = ?',
+        [outTradeNo, 'pending']
+      );
+      if (orders.length === 0) {
+        return res.send('fail');
+      }
+
+      const userId = orders[0].user_id;
+      await pool.execute(
+        'UPDATE users SET chest_tickets = chest_tickets + 10000 WHERE id = ?',
+        [userId]
+      );
+      await pool.execute(
+        'UPDATE payment_orders SET status = ? WHERE out_trade_no = ?',
+        ['paid', outTradeNo]
+      );
+    }
+
+    res.send('success');
+  } catch (err) {
+    console.error('处理支付宝异步通知失败:', err);
+    res.send('fail');
+  }
+});
 // ---------- 启动 ----------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

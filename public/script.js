@@ -1302,21 +1302,33 @@ async function doCheckin() {
   }
 }
 
-// 充值（当前为模拟，后续接入真实支付）
+// 充值
 async function doRecharge() {
-  if (!confirm('确定充值6元获得10000军需券吗？（当前为演示，后续接入支付）')) return;
   const token = safeGetItem('token');
   if (!token) { showToast('请先登录'); return; }
+
   try {
-    const res = await fetch(`${API_BASE}/chest/recharge`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
-    const data = await res.json();
-    if (res.ok) {
-      showToast(data.message);
-      updateTicketDisplay();
-    } else {
-      showToast(data.error || '充值失败');
+    const res = await fetch(`${API_BASE}/chest/recharge`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      showToast(data.error || '创建支付订单失败');
+      return;
     }
-  } catch (err) { showToast('网络错误'); }
+
+    const html = await res.text();
+    const newWindow = window.open('', '_blank');
+    if (newWindow) {
+      newWindow.document.write(html);
+      newWindow.document.close();
+    } else {
+      showToast('请允许弹窗，或使用浏览器直接打开');
+    }
+  } catch (err) {
+    showToast('网络错误');
+  }
 }
 
 // 渲染箱子列表（从后端加载）
