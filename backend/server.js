@@ -28,12 +28,21 @@ const pool = mysql.createPool({
 });
 
 // ---------- 支付宝 SDK ----------
+const fs = require('fs');
+const path = require('path');
 const { AlipaySdk } = require('alipay-sdk');
+
+// 读取密钥文件
+const alipayPrivateKey = fs.readFileSync('/var/www/your-site/backend/alipay_private_key.pem', 'utf8');
+const alipayPublicKey = fs.readFileSync('/var/www/your-site/backend/alipay_public_key.pem', 'utf8');
+
+console.log('✅ 私钥长度:', alipayPrivateKey.length);
+console.log('✅ 公钥长度:', alipayPublicKey.length);
 
 const alipaySdk = new AlipaySdk({
   appId: process.env.ALIPAY_APP_ID,
-  privateKey: fs.readFileSync(path.join(__dirname, 'alipay_private_key.pem'), 'utf8'),
-  alipayPublicKey: fs.readFileSync(path.join(__dirname, 'alipay_public_key.pem'), 'utf8'),
+  privateKey: alipayPrivateKey,
+  alipayPublicKey: alipayPublicKey,
   gateway: process.env.ALIPAY_GATEWAY || 'https://openapi-sandbox.dl.alipaydev.com/gateway.do',
   timeout: 10000,
   signType: 'RSA2'
