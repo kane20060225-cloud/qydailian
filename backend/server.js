@@ -1787,8 +1787,8 @@ app.post('/api/chest/checkin', authMiddleware, async (req, res) => {
     await conn.beginTransaction();
 
     // 使用数据库当前日期，避免时区问题
-    const [todayRows] = await conn.execute('SELECT DATE(NOW()) AS today');
-    const today = todayRows[0].today;  // 格式 YYYY-MM-DD
+    const [todayRows] = await conn.execute(`SELECT DATE_FORMAT(NOW(), '%Y-%m-%d') AS today`);
+    const today = todayRows[0].today;  // 现在是字符串，如 '2026-08-14'
 
     // 查询并锁定用户行，防止并发；直接返回格式化日期字符串，避免时区问题
     const [userRows] = await conn.execute(

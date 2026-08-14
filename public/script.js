@@ -1444,6 +1444,15 @@ getEl('inventoryModal')?.addEventListener('click', (e) => {
   if (e.target === getEl('inventoryModal')) getEl('inventoryModal').style.display = 'none';
 });
 
+
+// 关闭箱子详情弹窗
+getEl('closeChestDetailBtn')?.addEventListener('click', () => {
+    const m = getEl('chestDetailModal');
+    if (m) m.style.display = 'none';
+});
+getEl('chestDetailModal')?.addEventListener('click', (e) => {
+    if (e.target === getEl('chestDetailModal')) e.target.style.display = 'none';
+});
 // 初始化开箱模拟器
 function initChestSimulator() {
   updateTicketDisplay();
