@@ -1924,14 +1924,30 @@ app.post('/api/chest/recharge', authMiddleware, async (req, res) => {
       [outTradeNo, userId, totalAmount]
     );
 
-  const result = await alipaySdk.pageExecute('alipay.trade.page.pay', {
-  outTradeNo: 'TEST' + Date.now(),          // 纯字母+数字
-  totalAmount: '0.01',                     // 最小金额测试
-  subject: 'test',                         // 纯英文
+const params = {
+  outTradeNo: outTradeNo,
+  totalAmount: totalAmount,
+  subject: 'Game currency recharge 6 yuan',
   productCode: 'FAST_INSTANT_TRADE_PAY',
   notifyUrl: process.env.ALIPAY_NOTIFY_URL,
   returnUrl: process.env.ALIPAY_RETURN_URL,
-});
+};
+
+console.log('=== 支付宝请求参数 ===');
+console.log(JSON.stringify(params, null, 2));
+console.log('APP_ID:', process.env.ALIPAY_APP_ID);
+console.log('网关:', process.env.ALIPAY_GATEWAY);
+
+try {
+  const result = await alipaySdk.pageExecute('alipay.trade.page.pay', params);
+  console.log('=== 支付宝返回结果 ===');
+  console.log(result);
+  res.send(result);
+} catch (err) {
+  console.error('=== 支付宝调用异常 ===');
+  console.error(err);
+  res.status(500).json({ error: '创建支付订单失败' });
+}
 
     // 返回支付宝支付页面 HTML
     res.send(result);
