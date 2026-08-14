@@ -127,6 +127,25 @@ const tankList = [
 while (tankList.length < 100) tankList.push("随机坦克" + (tankList.length + 1));
 
 
+// ==================== 全局 fetch 包装（自动处理401） ====================
+const originalFetch = window.fetch;
+window.fetch = async function(...args) {
+  const response = await originalFetch(...args);
+  if (response.status === 401) {
+    // 清除本地登录状态
+    safeSetItem('token', '');
+    safeSetItem('username', '');
+    safeSetItem('role', '');
+    safeSetItem('userId', '');
+    checkLoginStatus();
+    showToast('登录已过期，请重新登录');
+    // 打开登录弹窗（如果存在）
+    if (loginModal) loginModal.style.display = 'flex';
+  }
+  return response;
+};
+
+
 
 // ==================== DOM 元素引用 (带 null 检查) ====================
 const mainMenu = getEl('mainMenu');
@@ -1215,65 +1234,194 @@ async function loadEarnings() {
     } catch (err) { display.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
 
-// ==================== 开箱模拟器 (安全版) ====================
-let currentChestId = null;
-function getTickets() { return parseInt(safeGetItem('tickets', '0')); }
-function setTickets(num) { safeSetItem('tickets', num); updateTicketDisplay(); }
-function updateTicketDisplay() { const el = getEl('ticketBalance'); if (el) el.textContent = getTickets(); }
-function getTodayStr() { return new Date().toISOString().slice(0,10); }
-function getLastCheckin() { return safeGetItem('lastCheckinDate', ''); }
-function doCheckin() {
-    const today = getTodayStr();
-    if (getLastCheckin() === today) { showToast('⏰ 今日已签到，明天再来吧'); return; }
-    setTickets(getTickets() + 1000);
-    safeSetItem('lastCheckinDate', today);
-    showToast('✅ 签到成功！获得1000军需券');
+// ==================== 开箱模拟器（后端持久化版） ====================
+
+// 获取军需券余额
+async function getTickets() {
+  const token = safeGetItem('token');
+  if (!token) return 0;
+  try {
+    const res = await fetch(`${API_BASE}/chest/tickets`, { headers: { 'Authorization': `Bearer ${token}` } });
+    const data = await res.json();
+    return data.tickets || 0;
+  } catch (err) {
+    console.error('获取军需券失败:', err);
+    return 0;
+  }
 }
-function doRecharge() { setTickets(getTickets() + 1000); showToast('💰 充值成功！获得1000军需券'); }
-function renderChests() {
-    const grid = getEl('chestGrid'); if (!grid) return;
-    grid.innerHTML = '';
-    chestsConfig.forEach(chest => {
-        const div = document.createElement('div'); div.className = 'chest-item';
-        div.innerHTML = `<img src="${chest.image}" alt="${chest.name}" onerror="this.src='images/chests/placeholder.png';"><div class="chest-name">${chest.name}</div><div class="chest-price">🪙 ${chest.price} <span class="chest-currency">军需券</span></div>`;
-        div.addEventListener('click', () => openChestDetail(chest)); grid.appendChild(div);
-    });
+
+// 更新军需券显示
+async function updateTicketDisplay() {
+  const el = getEl('ticketBalance');
+  if (!el) return;
+  const tickets = await getTickets();
+  el.textContent = tickets;
 }
-function openChestDetail(chest) {
-    currentChestId = chest.id;
-    getEl('chestDetailTitle') && (getEl('chestDetailTitle').textContent = chest.name);
-    getEl('chestDetailImg') && (getEl('chestDetailImg').src = chest.image);
-    getEl('chestDetailDesc') && (getEl('chestDetailDesc').textContent = chest.desc);
-    getEl('chestPriceDisplay') && (getEl('chestPriceDisplay').textContent = chest.price);
-    const probContainer = getEl('chestDetailProb');
-    if (probContainer) {
-        let html = '<div class="prob-list"><div><strong>类别</strong><strong>概率</strong></div>';
-        normalPool.forEach(item => { const p = (item.weight / normalTotalWeight * 95).toFixed(2); html += `<div><span class="prob-label">${item.name}</span><span class="prob-value">${p}%</span></div>`; });
-        rarePool.forEach(item => { const p = (item.weight / rareTotalWeight * 5).toFixed(2); html += `<div><span class="prob-label">${item.name}</span><span class="prob-value">${p}%</span></div>`; });
-        html += '</div>'; probContainer.innerHTML = html;
+
+// 签到
+async function doCheckin() {
+  const token = safeGetItem('token');
+  if (!token) { showToast('请先登录'); return; }
+  try {
+    const res = await fetch(`${API_BASE}/chest/checkin`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message);
+      updateTicketDisplay();
+    } else {
+      showToast(data.error || '签到失败');
     }
-    const buyMsg = getEl('chestBuyMsg'); if (buyMsg) buyMsg.style.display = 'none';
-    const modal = getEl('chestDetailModal'); if (modal) modal.style.display = 'flex';
+  } catch (err) { showToast('网络错误'); }
 }
-getEl('closeChestDetailBtn')?.addEventListener('click', () => { const m = getEl('chestDetailModal'); if (m) m.style.display = 'none'; });
-getEl('chestDetailModal')?.addEventListener('click', (e) => { if (e.target === getEl('chestDetailModal')) e.target.style.display = 'none'; });
-getEl('buyChestBtn')?.addEventListener('click', () => {
-    if (!currentChestId) return;
-    const chest = chestsConfig.find(c => c.id === currentChestId); if (!chest) return;
+
+// 充值（当前为模拟，后续接入真实支付）
+async function doRecharge() {
+  if (!confirm('确定充值6元获得10000军需券吗？（当前为演示，后续接入支付）')) return;
+  const token = safeGetItem('token');
+  if (!token) { showToast('请先登录'); return; }
+  try {
+    const res = await fetch(`${API_BASE}/chest/recharge`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message);
+      updateTicketDisplay();
+    } else {
+      showToast(data.error || '充值失败');
+    }
+  } catch (err) { showToast('网络错误'); }
+}
+
+// 渲染箱子列表（从后端加载）
+async function renderChests() {
+  const grid = getEl('chestGrid');
+  if (!grid) return;
+  try {
+    const res = await fetch(`${API_BASE}/chest/configs`);
+    const chests = await res.json();
+    grid.innerHTML = '';
+    chests.forEach(chest => {
+      const div = document.createElement('div');
+      div.className = 'chest-item';
+      div.innerHTML = `
+        <img src="${chest.image}" alt="${chest.name}" onerror="this.src='images/chests/placeholder.png';">
+        <div class="chest-name">${chest.name}</div>
+        <div class="chest-price">🪙 ${chest.price} <span class="chest-currency">军需券</span></div>
+      `;
+      div.addEventListener('click', () => openChestDetail(chest.id));
+      grid.appendChild(div);
+    });
+  } catch (err) {
+    grid.innerHTML = '<p style="color:var(--red)">加载失败</p>';
+  }
+}
+
+// 打开箱子详情弹窗（动态显示该箱子独立奖池概率）
+async function openChestDetail(chestId) {
+  try {
+    const res = await fetch(`${API_BASE}/chest/configs`);
+    const chests = await res.json();
+    const chest = chests.find(c => c.id == chestId);
+    if (!chest) return;
+
+    getEl('chestDetailTitle').textContent = chest.name;
+    getEl('chestDetailImg').src = chest.image;
+    getEl('chestDetailDesc').textContent = chest.description;
+    getEl('chestPriceDisplay').textContent = chest.price;
+
+    // 计算概率并显示
+    const normalItems = chest.items.filter(i => i.rarity === 'normal');
+    const rareItems = chest.items.filter(i => i.rarity === 'rare');
+    const normalTotalWeight = normalItems.reduce((sum, i) => sum + i.weight, 0);
+    const rareTotalWeight = rareItems.reduce((sum, i) => sum + i.weight, 0);
+
+    let probHtml = '<div class="prob-list"><div><strong>类别</strong><strong>概率</strong></div>';
+    normalItems.forEach(item => {
+      const p = (item.weight / normalTotalWeight * 95).toFixed(2);
+      probHtml += `<div><span class="prob-label">${item.item_name}</span><span class="prob-value">${p}%</span></div>`;
+    });
+    rareItems.forEach(item => {
+      const p = (item.weight / rareTotalWeight * 5).toFixed(2);
+      probHtml += `<div><span class="prob-label">${item.item_name}</span><span class="prob-value">${p}%</span></div>`;
+    });
+    probHtml += '</div>';
+    getEl('chestDetailProb').innerHTML = probHtml;
+
     const buyMsg = getEl('chestBuyMsg');
-    if (getTickets() < chest.price) { if (buyMsg) { buyMsg.textContent = '❌ 军需券不足'; buyMsg.style.display = 'block'; } return; }
-    setTickets(getTickets() - chest.price);
-    const rand = Math.random() * 100;
-    const reward = rand < 5 ? drawFromPool(rarePool, rareTotalWeight) : drawFromPool(normalPool, normalTotalWeight);
-    showToast(`🎉 打开 ${chest.name} 获得：${reward.name}`);
-    const modal = getEl('chestDetailModal'); if (modal) modal.style.display = 'none';
+    if (buyMsg) buyMsg.style.display = 'none';
+    getEl('chestDetailModal').style.display = 'flex';
+
+    // 存储当前箱子ID用于开箱
+    window._currentChestId = chestId;
+  } catch (err) {
+    console.error('打开箱子详情失败:', err);
+    showToast('加载失败');
+  }
+}
+
+// 开箱按钮点击（购买箱子）
+getEl('buyChestBtn')?.addEventListener('click', async () => {
+  const chestId = window._currentChestId;
+  if (!chestId) return;
+  const token = safeGetItem('token');
+  if (!token) { showToast('请先登录'); return; }
+  try {
+    const res = await fetch(`${API_BASE}/chest/open`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ chestId })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(`🎉 获得：${data.item}（${data.rarity === 'rare' ? '稀有' : '普通'}）`);
+      updateTicketDisplay();
+      getEl('chestDetailModal').style.display = 'none';
+    } else {
+      const buyMsg = getEl('chestBuyMsg');
+      if (buyMsg) { buyMsg.textContent = data.error || '开箱失败'; buyMsg.style.display = 'block'; }
+    }
+  } catch (err) { showToast('网络错误'); }
 });
-function drawFromPool(pool, totalWeight) { let r = Math.random() * totalWeight; for (let item of pool) { r -= item.weight; if (r <= 0) return item; } return pool[0]; }
+
+// 我的仓库
+async function loadInventory() {
+  const token = safeGetItem('token');
+  if (!token) { showToast('请先登录'); return; }
+  try {
+    const res = await fetch(`${API_BASE}/chest/inventory`, { headers: { 'Authorization': `Bearer ${token}` } });
+    const items = await res.json();
+    const list = getEl('inventoryList');
+    if (!items.length) {
+      list.innerHTML = '<p>仓库是空的，快去开箱吧！</p>';
+    } else {
+      let html = '<table><tr><th>物品</th><th>类型</th><th>数量</th><th>获得时间</th></tr>';
+      items.forEach(item => {
+        html += `<tr>
+          <td>${item.item_name}</td>
+          <td>${item.rarity === 'rare' ? '稀有' : '普通'}</td>
+          <td>${item.quantity}</td>
+          <td>${new Date(item.obtained_at).toLocaleString()}</td>
+        </tr>`;
+      });
+      html += '</table>';
+      list.innerHTML = html;
+    }
+    getEl('inventoryModal').style.display = 'flex';
+  } catch (err) { showToast('加载仓库失败'); }
+}
+
+// 绑定按钮事件
 getEl('checkinBtn')?.addEventListener('click', doCheckin);
 getEl('rechargeBtn')?.addEventListener('click', doRecharge);
+getEl('inventoryBtn')?.addEventListener('click', loadInventory);
+getEl('closeInventoryBtn')?.addEventListener('click', () => getEl('inventoryModal').style.display = 'none');
+getEl('inventoryModal')?.addEventListener('click', (e) => {
+  if (e.target === getEl('inventoryModal')) getEl('inventoryModal').style.display = 'none';
+});
+
+// 初始化开箱模拟器
 function initChestSimulator() {
-    updateTicketDisplay();
-    renderChests();
+  updateTicketDisplay();
+  renderChests();
 }
 
 // ==================== 独立工具面板控制 ====================

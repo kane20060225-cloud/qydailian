@@ -1299,3 +1299,21 @@ body.theme-light #contentEditorTextarea {
     min-width: 150px;
   }
 }
+
+
+/* 仓库弹窗表格 */
+#inventoryList table {
+  width: 100%;
+  border-collapse: collapse;
+}
+#inventoryList th {
+  background: rgba(240,160,80,0.1);
+  color: var(--accent);
+  padding: 8px;
+  text-align: left;
+}
+#inventoryList td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}

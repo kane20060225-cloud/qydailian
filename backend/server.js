@@ -229,6 +229,61 @@ async function initDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+        // ========== 开箱模拟器系统 ==========
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS chest_configs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        image VARCHAR(255),
+        price INT NOT NULL DEFAULT 0,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS chest_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        chest_id INT NOT NULL,
+        rarity ENUM('normal','rare') DEFAULT 'normal',
+        item_name VARCHAR(100) NOT NULL,
+        weight INT NOT NULL,
+        FOREIGN KEY (chest_id) REFERENCES chest_configs(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS user_inventory (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        item_name VARCHAR(100) NOT NULL,
+        chest_id INT NOT NULL,
+        rarity ENUM('normal','rare') DEFAULT 'normal',
+        quantity INT DEFAULT 1,
+        obtained_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_inventory (user_id, item_name, chest_id, rarity),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (chest_id) REFERENCES chest_configs(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS user_chest_records (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        chest_id INT NOT NULL,
+        item_name VARCHAR(100) NOT NULL,
+        rarity ENUM('normal','rare') DEFAULT 'normal',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (chest_id) REFERENCES chest_configs(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 用户表增加军需券和签到日期字段
+    try { await pool.execute(`ALTER TABLE users ADD COLUMN chest_tickets INT DEFAULT 0`); } catch(e) {}
+    try { await pool.execute(`ALTER TABLE users ADD COLUMN last_chest_checkin_date DATE DEFAULT NULL`); } catch(e) {}
+
     // 用户购买记录表
     await pool.execute(`
       CREATE TABLE IF NOT EXISTS qy_purchases (
@@ -340,6 +395,53 @@ async function initDB() {
     try { await pool.execute(`ALTER TABLE users ADD COLUMN rental_earnings DECIMAL(10,2) DEFAULT 0.00`); } catch(e) {}
     try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN complete_requested TINYINT(1) DEFAULT 0`); } catch(e) {}
     try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN payment_status ENUM('unpaid','paid') DEFAULT 'unpaid'`); } catch(e) {}
+
+
+
+        // 如果箱子表为空，插入默认数据
+    const [chestCount] = await pool.execute('SELECT COUNT(*) AS cnt FROM chest_configs');
+    if (chestCount[0].cnt === 0) {
+      const chests = [
+        { name: '美国集装箱箱', price: 198, image: 'images/chests/chest_1.png', desc: '经典战斗资源补给，开出强力道具。' },
+        { name: '苏联集装箱', price: 198, image: 'images/chests/chest_2.png', desc: '火焰主题，内含稀有坦克碎片。' },
+        { name: '顶尖捕食者集装箱', price: 498, image: 'images/chests/chest_3.png', desc: '夜战专属，高概率出全局经验。' },
+        { name: '超赞集装箱', price: 288, image: 'images/chests/chest_4.png', desc: '雷电系列，有机会获得高级坦克。' },
+        { name: '我全都要集装箱', price: 98, image: 'images/chests/chest_5.png', desc: '冰雪奇缘，内含稀有银币加成。' },
+        { name: '超大集装箱', price: 198, image: 'images/chests/chest_6.png', desc: '经典怀旧，出金币概率较高。' },
+        { name: '重坦集装箱', price: 88, image: 'images/chests/chest_7.png', desc: '未来科技，有极小概率出绝版坦克。' },
+        { name: '泰坦集装箱箱', price: 388, image: 'images/chests/chest_8.png', desc: '专为狂战士打造，必出好东西。' },
+        { name: '赛季集装箱', price: 588, image: 'images/chests/chest_9.png', desc: '传奇级别，概率获得稀有指挥官坦克。' }
+      ];
+
+      for (let i = 0; i < chests.length; i++) {
+        const [result] = await pool.execute(
+          'INSERT INTO chest_configs (name, image, price, description) VALUES (?,?,?,?)',
+          [chests[i].name, chests[i].image, chests[i].price, chests[i].desc]
+        );
+        const chestId = result.insertId;
+
+        // 每个箱子独立奖池（普通和稀有各5个，权重不同）
+        const normalItems = [
+          `银币 x50000`, `银币强化剂 x10`, `战斗经验强化剂 x10`, `全局经验强化剂 x10`, `金币 x500`
+        ];
+        const rareItems = [
+          '概念型1B', '116F3', 'BZT70', '五式重战车', 'F1.0WT'
+        ];
+        for (const item of normalItems) {
+          await pool.execute(
+            'INSERT INTO chest_items (chest_id, rarity, item_name, weight) VALUES (?,?,?,?)',
+            [chestId, 'normal', item, 20 + i * 5] // 权重略有差异
+          );
+        }
+        for (const item of rareItems) {
+          await pool.execute(
+            'INSERT INTO chest_items (chest_id, rarity, item_name, weight) VALUES (?,?,?,?)',
+            [chestId, 'rare', item, 10 + i * 3]
+          );
+        }
+      }
+      console.log('✅ 箱子数据已初始化');
+    }
 
     console.log('✅ 数据库表已就绪');
   } catch (err) {
@@ -1644,6 +1746,158 @@ app.put('/api/third-party-orders/:orderNo/mark-paid', adminMiddleware, async (re
   await pool.execute('UPDATE third_party_orders SET payment_status = ? WHERE order_no = ?', ['paid', req.params.orderNo]);
   res.json({ success: true, message: '已标记为已支付' });
 });
+
+
+// ==================== 开箱模拟器 API ====================
+
+// 获取所有箱子及奖池（公开）
+app.get('/api/chest/configs', async (req, res) => {
+  try {
+    const [chests] = await pool.execute('SELECT * FROM chest_configs ORDER BY id');
+    const [items] = await pool.execute('SELECT * FROM chest_items ORDER BY chest_id, rarity, id');
+    const result = chests.map(chest => {
+      const chestItems = items.filter(i => i.chest_id === chest.id);
+      return {
+        ...chest,
+        items: chestItems
+      };
+    });
+    res.json(result);
+  } catch (err) {
+    console.error('获取箱子配置失败:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 获取用户军需券余额
+app.get('/api/chest/tickets', authMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT chest_tickets FROM users WHERE id = ?', [req.userId]);
+    if (!rows.length) return res.status(404).json({ error: '用户不存在' });
+    res.json({ tickets: rows[0].chest_tickets });
+  } catch (err) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 签到领券
+app.post('/api/chest/checkin', authMiddleware, async (req, res) => {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const [rows] = await pool.execute('SELECT last_chest_checkin_date, chest_tickets FROM users WHERE id = ?', [req.userId]);
+    if (rows[0].last_chest_checkin_date === today) {
+      return res.status(400).json({ error: '今日已签到' });
+    }
+    const newTickets = rows[0].chest_tickets + 1000;
+    await pool.execute('UPDATE users SET chest_tickets = ?, last_chest_checkin_date = ? WHERE id = ?', [newTickets, today, req.userId]);
+    res.json({ success: true, tickets: newTickets, message: '签到成功，获得1000军需券' });
+  } catch (err) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 充值（目前模拟，后续接入真实支付）
+app.post('/api/chest/recharge', authMiddleware, async (req, res) => {
+  try {
+    // 6元 = 10000军需券，后续接入真实支付时在此处调用支付接口
+    const amount = 10000;
+    await pool.execute('UPDATE users SET chest_tickets = chest_tickets + ? WHERE id = ?', [amount, req.userId]);
+    const [rows] = await pool.execute('SELECT chest_tickets FROM users WHERE id = ?', [req.userId]);
+    res.json({ success: true, tickets: rows[0].chest_tickets, message: '充值成功，获得10000军需券' });
+  } catch (err) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 开箱
+app.post('/api/chest/open', authMiddleware, async (req, res) => {
+  const { chestId } = req.body;
+  if (!chestId) return res.status(400).json({ error: '缺少箱子ID' });
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // 检查用户券
+    const [userRows] = await conn.execute('SELECT chest_tickets FROM users WHERE id = ? FOR UPDATE', [req.userId]);
+    if (!userRows.length) throw new Error('用户不存在');
+    const tickets = userRows[0].chest_tickets;
+
+    // 获取箱子价格
+    const [chestRows] = await conn.execute('SELECT * FROM chest_configs WHERE id = ?', [chestId]);
+    if (!chestRows.length) throw new Error('箱子不存在');
+    const chest = chestRows[0];
+
+    if (tickets < chest.price) throw new Error('军需券不足');
+
+    // 抽取物品（先决定稀有度：95%普通，5%稀有）
+    const isRare = Math.random() < 0.05;
+    const rarity = isRare ? 'rare' : 'normal';
+    const [items] = await conn.execute(
+      'SELECT * FROM chest_items WHERE chest_id = ? AND rarity = ?',
+      [chestId, rarity]
+    );
+    if (!items.length) throw new Error('箱子奖池为空');
+
+    // 按权重抽取
+    const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
+    let rand = Math.random() * totalWeight;
+    let selectedItem = items[0];
+    for (const item of items) {
+      rand -= item.weight;
+      if (rand <= 0) {
+        selectedItem = item;
+        break;
+      }
+    }
+
+    // 扣券
+    await conn.execute('UPDATE users SET chest_tickets = chest_tickets - ? WHERE id = ?', [chest.price, req.userId]);
+
+    // 写入开箱记录
+    await conn.execute(
+      'INSERT INTO user_chest_records (user_id, chest_id, item_name, rarity) VALUES (?,?,?,?)',
+      [req.userId, chestId, selectedItem.item_name, rarity]
+    );
+
+    // 写入仓库（相同物品数量+1）
+    await conn.execute(
+      `INSERT INTO user_inventory (user_id, item_name, chest_id, rarity, quantity)
+       VALUES (?,?,?,?,1)
+       ON DUPLICATE KEY UPDATE quantity = quantity + 1`,
+      [req.userId, selectedItem.item_name, chestId, rarity]
+    );
+
+    await conn.commit();
+    res.json({
+      success: true,
+      item: selectedItem.item_name,
+      rarity,
+      tickets: tickets - chest.price
+    });
+  } catch (err) {
+    await conn.rollback();
+    res.status(400).json({ error: err.message });
+  } finally {
+    conn.release();
+  }
+});
+
+// 获取个人仓库
+app.get('/api/chest/inventory', authMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT * FROM user_inventory WHERE user_id = ? ORDER BY obtained_at DESC',
+      [req.userId]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+
+
 
 // ---------- 启动 ----------
 const PORT = process.env.PORT || 3000;
