@@ -1782,17 +1782,48 @@ app.get('/api/chest/tickets', authMiddleware, async (req, res) => {
 
 // 签到领券
 app.post('/api/chest/checkin', authMiddleware, async (req, res) => {
+  const conn = await pool.getConnection();
   try {
-    const today = new Date().toISOString().slice(0, 10);
-    const [rows] = await pool.execute('SELECT last_chest_checkin_date, chest_tickets FROM users WHERE id = ?', [req.userId]);
-    if (rows[0].last_chest_checkin_date === today) {
+    await conn.beginTransaction();
+
+    // 使用数据库当前日期，避免时区问题
+    const [todayRows] = await conn.execute('SELECT DATE(NOW()) AS today');
+    const today = todayRows[0].today;  // 格式 YYYY-MM-DD
+
+    // 查询并锁定用户行，防止并发
+    const [userRows] = await conn.execute(
+      'SELECT last_chest_checkin_date, chest_tickets FROM users WHERE id = ? FOR UPDATE',
+      [req.userId]
+    );
+    if (!userRows.length) {
+      await conn.rollback();
+      return res.status(404).json({ error: '用户不存在' });
+    }
+
+    const lastCheckin = userRows[0].last_chest_checkin_date;
+    const tickets = userRows[0].chest_tickets;
+
+    // 将数据库返回的日期转为 YYYY-MM-DD 字符串进行比较
+    const lastDate = lastCheckin ? new Date(lastCheckin).toISOString().slice(0,10) : null;
+    if (lastDate === today) {
+      await conn.rollback();
       return res.status(400).json({ error: '今日已签到' });
     }
-    const newTickets = rows[0].chest_tickets + 1000;
-    await pool.execute('UPDATE users SET chest_tickets = ?, last_chest_checkin_date = ? WHERE id = ?', [newTickets, today, req.userId]);
+
+    const newTickets = tickets + 1000;
+    await conn.execute(
+      'UPDATE users SET chest_tickets = ?, last_chest_checkin_date = ? WHERE id = ?',
+      [newTickets, today, req.userId]
+    );
+
+    await conn.commit();
     res.json({ success: true, tickets: newTickets, message: '签到成功，获得1000军需券' });
   } catch (err) {
+    await conn.rollback();
+    console.error('签到失败:', err);
     res.status(500).json({ error: '服务器错误' });
+  } finally {
+    conn.release();
   }
 });
 

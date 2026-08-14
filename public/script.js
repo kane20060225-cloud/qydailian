@@ -1260,18 +1260,44 @@ async function updateTicketDisplay() {
 
 // 签到
 async function doCheckin() {
+  const btn = getEl('checkinBtn');
+  if (!btn) return;
+  // 如果按钮已经禁用，说明今日已签到或正在请求中，直接返回
+  if (btn.disabled) return;
+
   const token = safeGetItem('token');
-  if (!token) { showToast('请先登录'); return; }
+  if (!token) {
+    showToast('请先登录');
+    return;
+  }
+
+  // 立即禁用按钮，防止重复点击
+  btn.disabled = true;
+  btn.textContent = '⏳ 签到中...';
+
   try {
-    const res = await fetch(`${API_BASE}/chest/checkin`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+    const res = await fetch(`${API_BASE}/chest/checkin`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
     const data = await res.json();
     if (res.ok) {
       showToast(data.message);
       updateTicketDisplay();
+      // 签到成功后保持禁用，并显示“今日已签到”
+      btn.textContent = '✅ 今日已签到';
+      btn.disabled = true;
     } else {
+      // 签到失败（如已签到过），恢复按钮
       showToast(data.error || '签到失败');
+      btn.textContent = '📅 每日签到 (+1000券)';
+      btn.disabled = false;
     }
-  } catch (err) { showToast('网络错误'); }
+  } catch (err) {
+    showToast('网络错误');
+    btn.textContent = '📅 每日签到 (+1000券)';
+    btn.disabled = false;
+  }
 }
 
 // 充值（当前为模拟，后续接入真实支付）
