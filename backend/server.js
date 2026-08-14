@@ -1921,7 +1921,7 @@ app.post('/api/chest/recharge', authMiddleware, async (req, res) => {
     const result = await alipaySdk.pageExecute('alipay.trade.page.pay', {
   outTradeNo: outTradeNo,
   totalAmount: totalAmount,
-  subject: '军需券充值（6元=10000军需券）',
+  subject: 'Game currency recharge 6 yuan',
   productCode: 'FAST_INSTANT_TRADE_PAY',
   notifyUrl: process.env.ALIPAY_NOTIFY_URL,
   returnUrl: process.env.ALIPAY_RETURN_URL,
