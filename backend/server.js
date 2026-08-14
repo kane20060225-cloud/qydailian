@@ -33,12 +33,11 @@ const { AlipaySdk } = require('alipay-sdk');
 const alipaySdk = new AlipaySdk({
   appId: process.env.ALIPAY_APP_ID,
   privateKey: fs.readFileSync(path.join(__dirname, 'alipay_private_key.pem'), 'utf8'),
-  alipayPublicKey: process.env.ALIPAY_PUBLIC_KEY,
+  alipayPublicKey: fs.readFileSync(path.join(__dirname, 'alipay_public_key.pem'), 'utf8'),
   gateway: process.env.ALIPAY_GATEWAY || 'https://openapi-sandbox.dl.alipaydev.com/gateway.do',
   timeout: 10000,
   signType: 'RSA2'
 });
-
 // ---------- IP 注册限流 ----------
 const ipRegisterCount = new Map();
 
