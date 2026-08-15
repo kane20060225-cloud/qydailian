@@ -2155,34 +2155,51 @@ app.get('/api/admin/chest/configs/:id', adminMiddleware, async (req, res) => {
 
 // 支付宝异步通知
 app.post('/api/chest/alipay/notify', async (req, res) => {
+  console.log('========== 收到支付宝异步通知 ==========');
+  console.log('通知内容:', req.body);
+
   try {
     const valid = alipaySdk.checkNotifySign(req.body);
+    console.log('支付宝签名验证结果:', valid);
+
     if (!valid) {
       console.error('支付宝异步通知签名验证失败');
       return res.send('fail');
     }
 
-    // 支付宝回调字段是下划线格式
     const { out_trade_no, trade_status } = req.body;
+
+    console.log('订单号:', out_trade_no);
+    console.log('交易状态:', trade_status);
 
     if (trade_status === 'TRADE_SUCCESS' || trade_status === 'TRADE_FINISHED') {
       const [orders] = await pool.execute(
         'SELECT user_id, status FROM payment_orders WHERE out_trade_no = ? AND status = ?',
         [out_trade_no, 'pending']
       );
+
+      console.log('查询到的订单:', orders);
+
       if (orders.length === 0) {
+        console.error('没有找到 pending 状态的订单');
         return res.send('fail');
       }
 
       const userId = orders[0].user_id;
+
       await pool.execute(
         'UPDATE users SET chest_tickets = chest_tickets + 10000 WHERE id = ?',
         [userId]
       );
+
+      console.log('已给用户增加 10000 chest_tickets，userId:', userId);
+
       await pool.execute(
         'UPDATE payment_orders SET status = ? WHERE out_trade_no = ?',
         ['paid', out_trade_no]
       );
+
+      console.log('订单已标记为 paid:', out_trade_no);
     }
 
     res.send('success');
