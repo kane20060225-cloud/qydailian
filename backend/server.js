@@ -1932,7 +1932,7 @@ app.post('/api/chest/recharge', authMiddleware, async (req, res) => {
       bizContent: {
         out_trade_no: outTradeNo,
         total_amount: totalAmount,
-        subject: 'Game currency recharge 6 yuan',
+        subject: 'QingYi工具站6元兑换10000券',
         product_code: 'FAST_INSTANT_TRADE_PAY'
       }
     };
