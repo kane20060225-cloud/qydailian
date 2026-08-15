@@ -2162,11 +2162,13 @@ app.post('/api/chest/alipay/notify', async (req, res) => {
       return res.send('fail');
     }
 
-    const { outTradeNo, tradeStatus } = req.body;
-    if (tradeStatus === 'TRADE_SUCCESS' || tradeStatus === 'TRADE_FINISHED') {
+    // 支付宝回调字段是下划线格式
+    const { out_trade_no, trade_status } = req.body;
+
+    if (trade_status === 'TRADE_SUCCESS' || trade_status === 'TRADE_FINISHED') {
       const [orders] = await pool.execute(
         'SELECT user_id, status FROM payment_orders WHERE out_trade_no = ? AND status = ?',
-        [outTradeNo, 'pending']
+        [out_trade_no, 'pending']
       );
       if (orders.length === 0) {
         return res.send('fail');
@@ -2179,7 +2181,7 @@ app.post('/api/chest/alipay/notify', async (req, res) => {
       );
       await pool.execute(
         'UPDATE payment_orders SET status = ? WHERE out_trade_no = ?',
-        ['paid', outTradeNo]
+        ['paid', out_trade_no]
       );
     }
 
