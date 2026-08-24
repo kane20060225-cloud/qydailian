@@ -61,12 +61,12 @@ function getUseCredits() {
 const API_BASE = '/api';
 
 const projectDetails = {
-    silver: { name:'银币', a:{desc:'有紫狗牌有高级银币/百万',price:7.8}, b:{desc:'无紫狗牌有高级银币/百万',price:11.8}, c:{desc:'无紫狗牌无高级银币/百万',price:13.8} },
+    silver: { name:'银币', a:{desc:'有紫狗牌有高级银币/百万',price:7.8}, b:{desc:'无紫狗牌有高级银币/百万',price:10.8}, c:{desc:'无紫狗牌无高级银币/百万',price:13.8} },
     exp: { name:'单车经验', a:{desc:'有紫狗牌有高级经验/万',price:3.8}, b:{desc:'无紫狗牌有高级经验/万',price:5.8}, c:{desc:'无紫狗牌无高级经验/万',price:6.8} },
-    winrate: { name:'胜率', a:{desc:'70%胜率/10场',price:19.8}, b:{desc:'75%胜率/10场',price:24.8}, c:{desc:'80%胜率/10场',price:34.8} },
+    winrate: { name:'胜率', a:{desc:'70%胜率/10场',price:17.8}, b:{desc:'75%胜率/10场',price:22.8}, c:{desc:'80%胜率/10场',price:32.8} },
     average: { name:'场均', a:{desc:'3000场均/10场',price:19.8}, b:{desc:'3300场均/10场',price:28.8}, c:{desc:'3500场均/10场',price:37.8} },
     mmedal: { name:'M章', a:{desc:'1个M章',price:29.8}, b:{desc:'3个M章',price:57.8}, c:{desc:'5个M章',price:138.8} },
-    rings: { name:'三环', a:{desc:'0%到65%',price:59.8}, b:{desc:'65%到85%',price:49.8}, c:{desc:'三环',price:88.8} },
+    rings: { name:'三环', a:{desc:'0%到65%',price:59.8}, b:{desc:'65%到85%',price:49.8}, c:{desc:'85%到95%',price:88.8} },
     rating: { name:'评级', a:{desc:'3千到4千/百分',price:11.8}, b:{desc:'4千到5千/百分',price:14.8}, c:{desc:'5千到6千/百分',price:29.8} }
 };
 
@@ -112,17 +112,17 @@ const rarePool = [
 const rareTotalWeight = rarePool.reduce((s, i) => s + i.weight, 0);
 
 const tankList = [
-    "T-54", "鼠式", "IS-7", "AMX 50B", "M48 Patton", "E-100", "T110E5", "FV215b", "T-62A", "Leopard 1",
-    "Bat.-Chat. 25t", "STB-1", "Object 140", "60TP", "Kranvagn", "Progetto M40/65", "TVP T50/51", "AMX 30B",
-    "WZ-132-1", "T-100 LT", "Sheridan", "Rhm. Pzw.", "Grille 15", "FV4005", "Strv K", "Foch 155", "斯柯达T27",
-    "T95E6", "Super Conqueror ", "TRV", "Obj. 263", "FV215b 183", "穆拉特工程", "Type 5 Heavy", "T110E3",
-    "Jagdpanzer E 100", "T110E4", "BadgerFV217", "Object 268", "WZ-113G FT", "T57 Heavy", "埃里希概念车",
-    "VK 72.01(K)", "ChieftainMK6", "752工程", "Carro 45T", "Rinoceronte", "Vz.55", "Minotauro", "Ho-Ri III",
-    "GSOR", "Lion", "BZ-75", "M-VI-Y", "菲利斯", "AC阿特拉斯", "野牛C45", "CS-63", "Object 430U", "K-91",
-    "T-22 medium", "E 50 M", "Panzer 58", "121B", "122 TM", "56TP", "斯柯达T56", "埃米尔1951", "AMX 30原", "T77",
-    "JPanther II", "Object268/4", "德古拉", "Smasher", "Rammer", "T-34-85 Rudy", "WZ-113", "WZ-121", "Type 71",
+    "SPHT", "鼠式", "IS-7", "AMX 50B", "M48巴顿", "E-100", "T110E5", "FV215b", "T-62A", "豹1",
+    "Bat.-Chat. 25t", "STB-1", "140工程", "60TP", "起重机", "M40/65", "TVP T50/51", "AMX 30B",
+    "WZ-132-1", "T-100 LT", "谢里登", "Rhm. Pzw.", "蟋蟀15", "FV4005", "Strv K", "Foch 155", "斯柯达T27",
+    "T95E6", "超级征服者", "TRV", "263工程", "FV215b 183", "穆拉特工程", "Type 5 Heavy", "T110E3",
+    "E100歼击车", "T110E4", "獾先生FV217", "268工程", "WZ-113G FT", "T57重型", "埃里希概念车",
+    "VK 72.01(K)", "酋长MK6", "752工程", "Carro 45T", "Rinoceronte", "Vz.55", "Minotauro", "Ho-Ri III",
+    "GSOR坦克", "CC狮", "BZ-75", "M-VI-Y", "菲利斯", "AC阿特拉斯", "野牛C45", "CS-63", "Object 430U", "K-91",
+    "T-22中型", "E 50 M", "Panzer 58", "121B", "122 TM", "56TP", "斯柯达T56", "埃米尔1951", "AMX 30原", "T77",
+    "JPanther II", "268/4工程", "德古拉", "粉碎者", "歼灭者", "T-34-85鲁迪", "WZ-113", "WZ-121", "71式",
     "NC70B", "BZT-70", "260工程", "114SP2", "ISU-130", "T-34-3", "T-44-100", "XM66F", "M6A2E1", "T34", "AMX CDC",
-    "FCM 50 t", "Strv 81", "WZ-111 5A", "116F3", "KPZ70", "SU-130PM", "TS-5", "WZ-120-1G FT", "IS-6", "Object 252U"
+    "FCM 50 t", "Strv 81", "WZ-111 5A", "116F3", "KPZ70", "SU-130PM", "TS-5", "WZ-120-1G FT", "IS-6", "252U工程"
 ];
 while (tankList.length < 100) tankList.push("随机坦克" + (tankList.length + 1));
 
