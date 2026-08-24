@@ -61,12 +61,12 @@ function getUseCredits() {
 const API_BASE = '/api';
 
 const projectDetails = {
-    silver: { name:'银币', a:{desc:'有紫狗牌有高级银币/百万',price:8.8}, b:{desc:'无紫狗牌有高级银币/百万',price:12.8}, c:{desc:'无紫狗牌无高级银币/百万',price:14.8} },
+    silver: { name:'银币', a:{desc:'有紫狗牌有高级银币/百万',price:7.8}, b:{desc:'无紫狗牌有高级银币/百万',price:11.8}, c:{desc:'无紫狗牌无高级银币/百万',price:13.8} },
     exp: { name:'单车经验', a:{desc:'有紫狗牌有高级经验/万',price:3.8}, b:{desc:'无紫狗牌有高级经验/万',price:5.8}, c:{desc:'无紫狗牌无高级经验/万',price:6.8} },
     winrate: { name:'胜率', a:{desc:'70%胜率/10场',price:19.8}, b:{desc:'75%胜率/10场',price:24.8}, c:{desc:'80%胜率/10场',price:34.8} },
     average: { name:'场均', a:{desc:'3000场均/10场',price:19.8}, b:{desc:'3300场均/10场',price:28.8}, c:{desc:'3500场均/10场',price:37.8} },
     mmedal: { name:'M章', a:{desc:'1个M章',price:29.8}, b:{desc:'3个M章',price:57.8}, c:{desc:'5个M章',price:138.8} },
-    rings: { name:'三环', a:{desc:'一环',price:68.8}, b:{desc:'二环',price:158.8}, c:{desc:'三环',price:248.8} },
+    rings: { name:'三环', a:{desc:'0%到65%',price:59.8}, b:{desc:'65%到85%',price:49.8}, c:{desc:'三环',price:88.8} },
     rating: { name:'评级', a:{desc:'3千到4千/百分',price:11.8}, b:{desc:'4千到5千/百分',price:14.8}, c:{desc:'5千到6千/百分',price:29.8} }
 };
 
