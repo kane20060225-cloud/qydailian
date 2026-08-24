@@ -815,80 +815,198 @@ button:disabled {
     }
 }
 
-/* ==================== 极昼白主题 ==================== */
+/* ==================== 全新极昼白主题 ==================== */
 body.theme-light {
-    --bg: #f5f7fa;
-    --card-bg: #ffffff;
-    --border: #d1d5db;
-    --accent: #e07b30;
-    --accent-glow: rgba(224,123,48,0.2);
-    --text: #1f2937;
-    --text-secondary: #4b5563;
-    --text-muted: #9ca3af;
+    --bg: #f4f6fa;                    /* 页面背景改为柔和浅灰蓝 */
+    --card-bg: #ffffff;               /* 卡片纯白 */
+    --border: #d9e0ea;                /* 边框浅灰蓝 */
+    --accent: #d97706;                /* 强调色改为琥珀橙，更温暖 */
+    --accent-glow: rgba(217, 119, 6, 0.18);
+    --text: #1e293b;                  /* 主文字深灰蓝 */
+    --text-secondary: #475569;        /* 次级文字 */
+    --text-muted: #94a3b8;            /* 弱化文字 */
     --green: #059669;
     --red: #dc2626;
+    --radius: 14px;
+    --radius-sm: 10px;
+    --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --font-mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
 }
 
+/* ---- 顶部导航 ---- */
 body.theme-light .top-bar {
-    background: rgba(255,255,255,0.95);
+    background: rgba(255, 255, 255, 0.92);
     border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
 }
 
+/* ---- 主菜单背景 ---- */
 body.theme-light .main-menu {
-    background: radial-gradient(ellipse at 50% 0%, rgba(224,123,48,0.06) 0%, transparent 60%);
+    background: radial-gradient(ellipse at 50% 0%, rgba(217, 119, 6, 0.05) 0%, transparent 70%);
 }
 
+/* ---- 卡片 ---- */
 body.theme-light .card {
     background: var(--card-bg);
     border: 1px solid var(--border);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+body.theme-light .card:hover {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
 }
 
+/* ---- 菜单卡片 ---- */
+body.theme-light .menu-card {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+body.theme-light .menu-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 12px 24px rgba(217, 119, 6, 0.15);
+}
+
+/* ---- 内部选择卡片 (项目/详情/打手/客户端等) ---- */
 body.theme-light .card-inner,
 body.theme-light .detail-inner,
 body.theme-light .player-inner,
-body.theme-light .quantity-input,
-body.theme-light .qty-btn,
-body.theme-light .calc-field input,
-body.theme-light .remark-input,
-body.theme-light .client-option,
-body.theme-light .chest-item,
-body.theme-light .news-item,
-body.theme-light .contact-item,
-body.theme-light .price-box,
-body.theme-light .calc-result,
-body.theme-light .prob-list,
-body.theme-light .league-news-card,
-body.theme-light .admin-filter select,
-body.theme-light .admin-filter button,
-body.theme-light .status-select,
-body.theme-light #userSelect,
-body.theme-light #roleSelect,
-body.theme-light .booster-identity-select,
-body.theme-light .order-table td,
-body.theme-light .admin-order-list td {
+body.theme-light .client-option {
     background: #f9fafb;
     border-color: var(--border);
     color: var(--text);
 }
-
-body.theme-light .card:hover {
-    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+body.theme-light .client-option:has(input:checked) {
+    background: #fff7ed;
+    border-color: var(--accent);
+    box-shadow: 0 0 10px var(--accent-glow);
 }
 
+/* ---- 输入框 / 文本域 / 下拉框 ---- */
+body.theme-light input,
+body.theme-light select,
+body.theme-light textarea {
+    background: #ffffff;
+    border-color: var(--border);
+    color: var(--text);
+}
+body.theme-light input:focus,
+body.theme-light select:focus,
+body.theme-light textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.15);
+}
+
+/* ---- 弹窗 ---- */
 body.theme-light .modal-card {
     background: #ffffff;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
 }
 
+/* ---- 按钮 ---- */
+body.theme-light button {
+    background: #f8fafc;
+    border-color: var(--border);
+    color: var(--text);
+}
+body.theme-light button:hover {
+    border-color: var(--accent);
+    background: #fff7ed;
+    box-shadow: 0 0 10px var(--accent-glow);
+}
+
+/* ---- 主要提交按钮 ---- */
 body.theme-light .submit-btn {
-    background: linear-gradient(135deg, #e07b30, #f0a050);
+    background: linear-gradient(135deg, #d97706, #f59e0b);
+    color: #fff;
+    border: none;
 }
 
+/* ---- 价格框 ---- */
+body.theme-light .price-box,
+body.theme-light .calc-result,
+body.theme-light .prob-list {
+    background: #f8fafc;
+    border-color: var(--border);
+}
+
+/* ---- 表格 ---- */
+body.theme-light .order-table th,
+body.theme-light .admin-order-list th,
+body.theme-light .booster-tab-content th,
+body.theme-light #adminShopList th,
+body.theme-light #tpOrderList th,
+body.theme-light #leagueStandingsContainer th {
+    background: #f1f5f9;
+    color: var(--accent);
+}
+body.theme-light .order-table td,
+body.theme-light .admin-order-list td,
+body.theme-light .booster-tab-content td,
+body.theme-light #adminShopList td,
+body.theme-light #tpOrderList td {
+    border-bottom: 1px solid var(--border);
+    background: #ffffff;
+}
+
+/* ---- 下拉菜单 ---- */
 body.theme-light .user-dropdown {
     background: #ffffff;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border);
+}
+body.theme-light .user-dropdown button:hover {
+    background: #fff7ed;
 }
 
-/* 其他特定元素可根据需要微调，以上已覆盖主要区域 */
+/* ---- 设置导航 ---- */
+body.theme-light .settings-nav {
+    background: #ffffff;
+    border-color: var(--border);
+}
+body.theme-light .settings-nav-btn.active {
+    background: #fff7ed;
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+/* ---- 联赛卡片/新闻卡片 ---- */
+body.theme-light .league-news-card,
+body.theme-light .news-item,
+body.theme-light .rental-account-card,
+body.theme-light .content-item-card {
+    background: #ffffff;
+    border-color: var(--border);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+/* ---- 状态标签颜色微调 ---- */
+body.theme-light .status-pending { background: #fee2e2; color: #b91c1c; }
+body.theme-light .status-playing { background: #ffedd5; color: #c2410c; }
+body.theme-light .status-done { background: #d1fae5; color: #047857; }
+body.theme-light .payment-paid { background: #d1fae5; color: #047857; }
+body.theme-light .payment-pending { background: #ffedd5; color: #c2410c; }
+body.theme-light .payment-unpaid { background: #fee2e2; color: #b91c1c; }
+
+/* ---- 其他细节 ---- */
+body.theme-light .toast-message {
+    background: #1e293b;
+    color: #fff;
+}
+body.theme-light .copy-btn,
+body.theme-light .submit-order-btn,
+body.theme-light .checkin-btn,
+body.theme-light .recharge-btn {
+    background: #fff7ed;
+    border-color: var(--accent);
+    color: var(--accent);
+}
+body.theme-light .copy-btn:hover,
+body.theme-light .submit-order-btn:hover,
+body.theme-light .checkin-btn:hover,
+body.theme-light .recharge-btn:hover {
+    background: #ffedd5;
+}
 
 /* ==================== 全局表单元素 ==================== */
 select {
