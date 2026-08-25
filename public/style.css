@@ -1487,3 +1487,32 @@ body.theme-light #contentEditorTextarea {
     border-color: var(--accent);
     outline: none;
 }
+
+
+
+/* ==================== 背景图片 ==================== */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('bg.jpg');   /* 改成你的图片路径 */
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: -1;                       /* 确保内容在图片上方 */
+    opacity: 0.3;                      /* 背景图透明度，数值越小越淡 */
+    pointer-events: none;              /* 防止背景层阻挡点击 */
+}
+
+/* 深色模式下背景稍亮一些 */
+body:not(.theme-light)::before {
+    opacity: 0.25;
+}
+
+/* 浅色模式下背景更浅，保持清爽 */
+body.theme-light::before {
+    opacity: 0.12;
+}

@@ -726,8 +726,16 @@ if (submitOrderBtn) {
             };
             const res = await fetch(`${API_BASE}/orders`, { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify(body) });
             const data = await res.json();
-            if (res.ok) showToast(`✅ 订单提交成功！订单号：${data.order_no}`);
-            else showToast('❌ ' + (data.error || '提交失败'));
+            if (res.ok) {
+               showToast(`✅ 订单提交成功！订单号：${data.order_no}`);
+               // 设置当前待支付订单号
+               currentOrderNo = data.order_no;
+               // 显示支付引导弹窗
+               getEl('guideOrderNo').textContent = currentOrderNo;
+               getEl('paymentGuideModal').style.display = 'flex';
+            } else {
+               showToast('❌ ' + (data.error || '提交失败'));
+            }
         } catch (err) { showToast('❌ 网络错误'); }
         finally {
             this.disabled = false;
@@ -3515,5 +3523,31 @@ getEl('closeChestEditorBtn')?.addEventListener('click', () => {
 getEl('chestEditorModal')?.addEventListener('click', (e) => {
     if (e.target === getEl('chestEditorModal')) getEl('chestEditorModal').style.display = 'none';
 });
+
+// 支付引导弹窗关闭
+getEl('closePaymentGuideBtn')?.addEventListener('click', () => {
+    getEl('paymentGuideModal').style.display = 'none';
+});
+getEl('paymentGuideModal')?.addEventListener('click', (e) => {
+    if (e.target === getEl('paymentGuideModal')) {
+        getEl('paymentGuideModal').style.display = 'none';
+    }
+});
+
+// 点击“上传凭证”按钮：关闭引导弹窗，打开上传凭证弹窗
+getEl('goUploadPaymentBtn')?.addEventListener('click', () => {
+    getEl('paymentGuideModal').style.display = 'none';
+    // 打开支付凭证上传弹窗（必须已经存在）
+    if (paymentModal) {
+        paymentModal.style.display = 'flex';
+        // 清空预览和错误信息
+        if (paymentError) paymentError.textContent = '';
+        if (previewImage) previewImage.style.display = 'none';
+        if (paymentFile) paymentFile.value = '';
+        if (pasteArea) pasteArea.innerText = '';
+    }
+});
+
+
 // ==================== 启动 ====================
 init();
