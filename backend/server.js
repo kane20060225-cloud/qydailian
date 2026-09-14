@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const mysql = require('mysql2/promise');
 const path = require('path');
 const fs = require('fs');
+const { createFieldCipher } = require('./lib/field-encryption');
 
 function requireEnvironmentVariables(names) {
   const missing = names.filter((name) => !process.env[name]);
@@ -14,7 +15,34 @@ function requireEnvironmentVariables(names) {
   }
 }
 
-requireEnvironmentVariables(['JWT_SECRET', 'DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME']);
+requireEnvironmentVariables([
+  'JWT_SECRET',
+  'DATA_ENCRYPTION_KEY',
+  'DB_HOST',
+  'DB_USER',
+  'DB_PASSWORD',
+  'DB_NAME'
+]);
+
+const sensitiveFieldCipher = createFieldCipher(process.env.DATA_ENCRYPTION_KEY);
+const ORDER_GAME_ACCOUNT_CONTEXT = 'orders.game_account';
+const ORDER_GAME_PASSWORD_CONTEXT = 'orders.game_password';
+
+function revealOrderCredentials(order, { includePassword = true } = {}) {
+  const revealed = { ...order };
+  if (Object.hasOwn(revealed, 'game_account')) {
+    revealed.game_account = sensitiveFieldCipher.decrypt(
+      revealed.game_account,
+      ORDER_GAME_ACCOUNT_CONTEXT
+    );
+  }
+  if (Object.hasOwn(revealed, 'game_password')) {
+    revealed.game_password = includePassword
+      ? sensitiveFieldCipher.decrypt(revealed.game_password, ORDER_GAME_PASSWORD_CONTEXT)
+      : '******';
+  }
+  return revealed;
+}
 
 const app = express();
 
@@ -117,8 +145,8 @@ async function initDB() {
         auth_provider VARCHAR(20) DEFAULT 'local',
         role VARCHAR(10) DEFAULT 'user',
         game_uid VARCHAR(50),
-        game_account VARCHAR(50),
-        game_password VARCHAR(50),
+        game_account TEXT,
+        game_password TEXT,
         earnings DECIMAL(10,2) DEFAULT 0.00,
         booster_identity ENUM('gold','silver','standard','budget') DEFAULT 'standard',
         booster_points INT DEFAULT 0,
@@ -194,8 +222,8 @@ async function initDB() {
         booster_id INT,
         hall_status ENUM('open','taken') DEFAULT NULL,
         game_uid VARCHAR(50),
-        game_account VARCHAR(50),
-        game_password VARCHAR(50),
+        game_account TEXT,
+        game_password TEXT,
         client_type VARCHAR(10) DEFAULT 'Android',
         required_identity ENUM('gold','silver','standard','budget') DEFAULT 'standard',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -728,11 +756,20 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
       finalTotal = total_price - actualDiscount;
     }
 
+    const protectedGameAccount = sensitiveFieldCipher.encrypt(
+      game_account,
+      ORDER_GAME_ACCOUNT_CONTEXT
+    );
+    const protectedGamePassword = sensitiveFieldCipher.encrypt(
+      game_password,
+      ORDER_GAME_PASSWORD_CONTEXT
+    );
+
     const [result] = await conn.execute(
       `INSERT INTO orders (order_no, user_id, project, detail, quantity, player_name, price, urgent, total_price, remark, game_uid, game_account, game_password, client_type, required_identity, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
       [order_no, req.userId, project, detail, quantity, player_name, price, urgent?1:0, finalTotal,
-       remark||null, game_uid||null, game_account||null, game_password||null,
+       remark||null, game_uid||null, protectedGameAccount, protectedGamePassword,
        client_type||'Android', player_type||'standard']
     );
 
@@ -934,7 +971,7 @@ app.get('/api/admin/orders', adminMiddleware, async (req, res) => {
       LEFT JOIN users b ON o.booster_id = b.id
       ORDER BY o.created_at DESC
     `);
-    res.json(rows);
+    res.json(rows.map((order) => revealOrderCredentials(order)));
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
@@ -991,8 +1028,8 @@ app.get('/api/orders/:orderNo/detail', authMiddleware, async (req, res) => {
     const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
     const role = userRows[0]?.role;
     if (role !== 'admin' && req.userId !== order.user_id && req.userId !== order.booster_id) return res.status(403).json({ error: '无权查看' });
-    if (role !== 'admin' && req.userId !== order.user_id) order.game_password = '******';
-    res.json(order);
+    const includePassword = role === 'admin' || req.userId === order.user_id;
+    res.json(revealOrderCredentials(order, { includePassword }));
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
@@ -1013,7 +1050,7 @@ app.put('/api/admin/users/:userId/role', adminMiddleware, async (req, res) => {
 app.get('/api/booster/hall', boosterMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, client_type, required_identity, created_at,
+      `SELECT order_no, project, detail, quantity, player_name, total_price, status, client_type, required_identity, created_at,
        (total_price * 0.75) AS earnings FROM orders WHERE hall_status = 'open' AND booster_id IS NULL AND status = 'pending' ORDER BY created_at DESC`
     );
     res.json(rows);
@@ -1044,7 +1081,7 @@ app.post('/api/booster/take/:orderNo', boosterMiddleware, async (req, res) => {
 app.get('/api/booster/my-orders', boosterMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT order_no, project, detail, quantity, player_name, total_price, status, game_uid, game_account, client_type, required_identity, created_at,
+      `SELECT order_no, project, detail, quantity, player_name, total_price, status, client_type, required_identity, created_at,
        (total_price * 0.75) AS earnings FROM orders WHERE booster_id = ? ORDER BY created_at DESC`,
       [req.userId]
     );

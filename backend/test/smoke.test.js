@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 process.env.JWT_SECRET = 'test-only-jwt-secret-not-for-production';
+process.env.DATA_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString('base64');
 process.env.DB_HOST = '127.0.0.1';
 process.env.DB_USER = 'test-user';
 process.env.DB_PASSWORD = 'test-password';
