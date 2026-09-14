@@ -26,3 +26,13 @@ test('apply mode requires a separate confirmation value', () => {
   assert.notEqual(result.status, 0);
   assert.match(`${result.stdout}${result.stderr}`, /执行迁移前必须设置/);
 });
+
+test('rollback mode requires its own confirmation value', () => {
+  const result = spawnSync(process.execPath, [migrationScript, '--rollback'], {
+    encoding: 'utf8',
+    env: {}
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stdout}${result.stderr}`, /执行回滚前必须设置/);
+});

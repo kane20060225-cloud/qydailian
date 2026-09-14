@@ -4,6 +4,7 @@ const mysql = require('mysql2/promise');
 const { createFieldCipher, isEncryptedValue } = require('../lib/field-encryption');
 
 const APPLY_CONFIRMATION = 'B2_ENCRYPT_EXISTING_CREDENTIALS';
+const ROLLBACK_CONFIRMATION = 'B2_DECRYPT_EXISTING_CREDENTIALS';
 const TARGETS = [
   {
     table: 'orders',
@@ -55,38 +56,42 @@ async function assertExpandedColumns(connection) {
   }
 }
 
-async function inspectTarget(connection, target) {
+async function inspectTarget(connection, target, predicate = needsEncryption) {
   const [rows] = await connection.execute(
     `SELECT id, game_account, game_password FROM ${target.table} ORDER BY id`
   );
 
   return {
     rows,
-    accountCount: rows.filter((row) => needsEncryption(row.game_account)).length,
-    passwordCount: rows.filter((row) => needsEncryption(row.game_password)).length
+    accountCount: rows.filter((row) => predicate(row.game_account)).length,
+    passwordCount: rows.filter((row) => predicate(row.game_password)).length
   };
 }
 
-async function applyTarget(connection, fieldCipher, target, rows) {
+async function transformTarget(connection, fieldCipher, target, rows, mode) {
   let updatedCount = 0;
+  const predicate = mode === '--rollback' ? isEncryptedValue : needsEncryption;
+  const transform = mode === '--rollback'
+    ? (value, context) => fieldCipher.decrypt(value, context)
+    : (value, context) => fieldCipher.encrypt(value, context);
 
   for (const row of rows) {
-    const shouldEncryptAccount = needsEncryption(row.game_account);
-    const shouldEncryptPassword = needsEncryption(row.game_password);
-    if (!shouldEncryptAccount && !shouldEncryptPassword) continue;
+    const shouldTransformAccount = predicate(row.game_account);
+    const shouldTransformPassword = predicate(row.game_password);
+    if (!shouldTransformAccount && !shouldTransformPassword) continue;
 
-    const protectedAccount = shouldEncryptAccount
-      ? fieldCipher.encrypt(row.game_account, target.accountContext)
+    const transformedAccount = shouldTransformAccount
+      ? transform(row.game_account, target.accountContext)
       : row.game_account;
-    const protectedPassword = shouldEncryptPassword
-      ? fieldCipher.encrypt(row.game_password, target.passwordContext)
+    const transformedPassword = shouldTransformPassword
+      ? transform(row.game_password, target.passwordContext)
       : row.game_password;
 
     const [result] = await connection.execute(
       `UPDATE ${target.table}
        SET game_account = ?, game_password = ?
        WHERE id = ? AND game_account <=> ? AND game_password <=> ?`,
-      [protectedAccount, protectedPassword, row.id, row.game_account, row.game_password]
+      [transformedAccount, transformedPassword, row.id, row.game_account, row.game_password]
     );
 
     if (result.affectedRows !== 1) {
@@ -100,24 +105,25 @@ async function applyTarget(connection, fieldCipher, target, rows) {
 
 async function main() {
   const mode = process.argv[2];
-  if (!['--report', '--apply'].includes(mode)) {
-    throw new Error('必须明确指定 --report 或 --apply；默认不会连接数据库');
+  if (!['--report', '--apply', '--rollback'].includes(mode)) {
+    throw new Error('必须明确指定 --report、--apply 或 --rollback；默认不会连接数据库');
   }
   if (mode === '--apply' && process.env.CONFIRM_DATA_MIGRATION !== APPLY_CONFIRMATION) {
     throw new Error(`执行迁移前必须设置 CONFIRM_DATA_MIGRATION=${APPLY_CONFIRMATION}`);
   }
+  if (mode === '--rollback' && process.env.CONFIRM_DATA_MIGRATION !== ROLLBACK_CONFIRMATION) {
+    throw new Error(`执行回滚前必须设置 CONFIRM_DATA_MIGRATION=${ROLLBACK_CONFIRMATION}`);
+  }
 
   require('dotenv').config({ path: require('path').join(__dirname, '..', '.env'), quiet: true });
 
-  requireEnvironmentVariables([
-    'DATA_ENCRYPTION_KEY',
-    'DB_HOST',
-    'DB_USER',
-    'DB_PASSWORD',
-    'DB_NAME'
-  ]);
+  const requiredVariables = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
+  if (mode !== '--report') requiredVariables.push('DATA_ENCRYPTION_KEY');
+  requireEnvironmentVariables(requiredVariables);
 
-  const fieldCipher = createFieldCipher(process.env.DATA_ENCRYPTION_KEY);
+  const fieldCipher = mode === '--report'
+    ? null
+    : createFieldCipher(process.env.DATA_ENCRYPTION_KEY);
   const pool = mysql.createPool({
     host: process.env.DB_HOST,
     port: process.env.DB_PORT || 3306,
@@ -130,10 +136,11 @@ async function main() {
 
   try {
     connection = await pool.getConnection();
-    await assertExpandedColumns(connection);
+    if (mode !== '--report') await assertExpandedColumns(connection);
+    const predicate = mode === '--rollback' ? isEncryptedValue : needsEncryption;
     const reports = [];
     for (const target of TARGETS) {
-      reports.push({ target, ...(await inspectTarget(connection, target)) });
+      reports.push({ target, ...(await inspectTarget(connection, target, predicate)) });
     }
 
     for (const report of reports) {
@@ -151,10 +158,17 @@ async function main() {
     await connection.beginTransaction();
     let updatedCount = 0;
     for (const report of reports) {
-      updatedCount += await applyTarget(connection, fieldCipher, report.target, report.rows);
+      updatedCount += await transformTarget(
+        connection,
+        fieldCipher,
+        report.target,
+        report.rows,
+        mode
+      );
     }
     await connection.commit();
-    console.log(`MIGRATION_APPLIED=OK；更新 ${updatedCount} 行`);
+    const resultLabel = mode === '--rollback' ? 'MIGRATION_ROLLED_BACK' : 'MIGRATION_APPLIED';
+    console.log(`${resultLabel}=OK；更新 ${updatedCount} 行`);
   } catch (error) {
     if (connection) await connection.rollback();
     throw error;
