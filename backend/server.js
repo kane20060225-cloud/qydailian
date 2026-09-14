@@ -1,4 +1,4 @@
-require('dotenv').config({ path: __dirname + '/.env' });
+require('dotenv').config({ path: __dirname + '/.env', quiet: true });
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -7,22 +7,36 @@ const mysql = require('mysql2/promise');
 const path = require('path');
 const fs = require('fs');
 
+function requireEnvironmentVariables(names) {
+  const missing = names.filter((name) => !process.env[name]);
+  if (missing.length > 0) {
+    throw new Error(`缺少必要环境变量: ${missing.join(', ')}`);
+  }
+}
+
+requireEnvironmentVariables(['JWT_SECRET', 'DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME']);
+
 const app = express();
 
-app.use(express.static(path.join(__dirname, 'public')));
+const repositoryPublicDir = path.join(__dirname, '..', 'public');
+const legacyPublicDir = path.join(__dirname, 'public');
+const publicDir = process.env.PUBLIC_DIR
+  ? path.resolve(process.env.PUBLIC_DIR)
+  : (fs.existsSync(repositoryPublicDir) ? repositoryPublicDir : legacyPublicDir);
+
+app.use(express.static(publicDir));
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
-app.use(express.urlencoded({ extended: false }));
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_change_me';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
+  host: process.env.DB_HOST,
   port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '1677858022Gjc',
-  database: process.env.DB_NAME || 'wotbqydailian',
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -30,22 +44,36 @@ const pool = mysql.createPool({
 });
 
 // ---------- 支付宝 SDK ----------
-const { AlipaySdk } = require('alipay-sdk');
+const ALIPAY_ENABLED = process.env.ALIPAY_ENABLED === 'true';
+let alipaySdk = null;
 
-// 读取密钥文件（使用顶部已经声明的 fs 和 path）
-const alipayPrivateKey = fs.readFileSync('/var/www/your-site/backend/alipay_private_key.pem', 'utf8');
-const alipayPublicKey = fs.readFileSync('/var/www/your-site/backend/alipay_public_key.pem', 'utf8');
+if (ALIPAY_ENABLED) {
+  requireEnvironmentVariables([
+    'ALIPAY_APP_ID',
+    'ALIPAY_PRIVATE_KEY_PATH',
+    'ALIPAY_PUBLIC_KEY_PATH',
+    'ALIPAY_NOTIFY_URL',
+    'ALIPAY_RETURN_URL'
+  ]);
 
-console.log('✅ 私钥长度:', alipayPrivateKey.length);
-console.log('✅ 公钥长度:', alipayPublicKey.length);
+  const { AlipaySdk } = require('alipay-sdk');
+  const alipayPrivateKey = fs.readFileSync(path.resolve(process.env.ALIPAY_PRIVATE_KEY_PATH), 'utf8');
+  const alipayPublicKey = fs.readFileSync(path.resolve(process.env.ALIPAY_PUBLIC_KEY_PATH), 'utf8');
 
-const alipaySdk = new AlipaySdk({
-  appId: process.env.ALIPAY_APP_ID,
-  privateKey: alipayPrivateKey,
-  alipayPublicKey: alipayPublicKey,
-  gateway: process.env.ALIPAY_GATEWAY || 'https://openapi-sandbox.dl.alipaydev.com/gateway.do',
-  timeout: 10000,
-  signType: 'RSA2'
+  alipaySdk = new AlipaySdk({
+    appId: process.env.ALIPAY_APP_ID,
+    privateKey: alipayPrivateKey,
+    alipayPublicKey,
+    gateway: process.env.ALIPAY_GATEWAY || 'https://openapi-sandbox.dl.alipaydev.com/gateway.do',
+    timeout: 10000,
+    signType: 'RSA2'
+  });
+} else {
+  console.warn('⚠️ 支付宝功能未启用；设置 ALIPAY_ENABLED=true 并提供完整配置后启用');
+}
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
 });
 // ---------- IP 注册限流 ----------
 const ipRegisterCount = new Map();
@@ -1915,6 +1943,10 @@ app.post('/api/chest/checkin', authMiddleware, async (req, res) => {
 // 充值
 // 创建支付宝充值订单（沙箱电脑网站支付）
 app.post('/api/chest/recharge', authMiddleware, async (req, res) => {
+  if (!alipaySdk) {
+    return res.status(503).json({ error: '支付服务暂未启用' });
+  }
+
   const userId = req.userId;
   const outTradeNo = 'RC' + Date.now() + Math.random().toString(36).substring(2, 8).toUpperCase();
   const totalAmount = '6.00';
@@ -2154,6 +2186,10 @@ app.get('/api/admin/chest/configs/:id', adminMiddleware, async (req, res) => {
 
 // 支付宝异步通知
 app.post('/api/chest/alipay/notify', async (req, res) => {
+  if (!alipaySdk) {
+    return res.status(503).send('fail');
+  }
+
   console.log('========== 收到支付宝异步通知 ==========');
   console.log('通知内容:', req.body);
 
@@ -2209,6 +2245,15 @@ app.post('/api/chest/alipay/notify', async (req, res) => {
 });
 // ---------- 启动 ----------
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 后端服务运行在 http://localhost:${PORT}`);
-});
+
+function startServer(port = PORT) {
+  return app.listen(port, () => {
+    console.log(`🚀 后端服务运行在 http://localhost:${port}`);
+  });
+}
+
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = { app, startServer };
