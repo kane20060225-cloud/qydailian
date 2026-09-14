@@ -7,6 +7,17 @@ const mysql = require('mysql2/promise');
 const path = require('path');
 const fs = require('fs');
 const { createFieldCipher } = require('./lib/field-encryption');
+const {
+  RECHARGE_AMOUNT,
+  RECHARGE_TICKETS,
+  createOutTradeNo,
+  isValidOutTradeNo,
+  maskTradeReference,
+  processAlipayNotification,
+  queryAlipayTrade,
+  reconcileAlipayTrade,
+  validateAlipayConfiguration
+} = require('./lib/payment-security');
 
 function requireEnvironmentVariables(names) {
   const missing = names.filter((name) => !process.env[name]);
@@ -74,15 +85,20 @@ const pool = mysql.createPool({
 // ---------- 支付宝 SDK ----------
 const ALIPAY_ENABLED = process.env.ALIPAY_ENABLED === 'true';
 let alipaySdk = null;
+let paymentConfig = null;
 
 if (ALIPAY_ENABLED) {
   requireEnvironmentVariables([
+    'ALIPAY_ENVIRONMENT',
     'ALIPAY_APP_ID',
+    'ALIPAY_SELLER_ID',
     'ALIPAY_PRIVATE_KEY_PATH',
     'ALIPAY_PUBLIC_KEY_PATH',
+    'ALIPAY_GATEWAY',
     'ALIPAY_NOTIFY_URL',
     'ALIPAY_RETURN_URL'
   ]);
+  paymentConfig = validateAlipayConfiguration(process.env);
 
   const { AlipaySdk } = require('alipay-sdk');
   const alipayPrivateKey = fs.readFileSync(path.resolve(process.env.ALIPAY_PRIVATE_KEY_PATH), 'utf8');
@@ -92,7 +108,7 @@ if (ALIPAY_ENABLED) {
     appId: process.env.ALIPAY_APP_ID,
     privateKey: alipayPrivateKey,
     alipayPublicKey,
-    gateway: process.env.ALIPAY_GATEWAY || 'https://openapi-sandbox.dl.alipaydev.com/gateway.do',
+    gateway: paymentConfig.gateway,
     timeout: 10000,
     signType: 'RSA2'
   });
@@ -374,10 +390,15 @@ async function initDB() {
       CREATE TABLE IF NOT EXISTS payment_orders (
         id INT AUTO_INCREMENT PRIMARY KEY,
         out_trade_no VARCHAR(64) NOT NULL UNIQUE,
+        alipay_trade_no VARCHAR(64) NULL UNIQUE,
         user_id INT NOT NULL,
         amount DECIMAL(10,2) NOT NULL,
         status ENUM('pending','paid','closed') DEFAULT 'pending',
+        paid_at DATETIME NULL,
+        closed_at DATETIME NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_payment_orders_status_created_at (status, created_at),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
@@ -1977,50 +1998,125 @@ app.post('/api/chest/checkin', authMiddleware, async (req, res) => {
   }
 });
 
-// 充值
-// 创建支付宝充值订单（沙箱电脑网站支付）
+// 创建支付宝充值订单
 app.post('/api/chest/recharge', authMiddleware, async (req, res) => {
   if (!alipaySdk) {
     return res.status(503).json({ error: '支付服务暂未启用' });
   }
 
   const userId = req.userId;
-  const outTradeNo = 'RC' + Date.now() + Math.random().toString(36).substring(2, 8).toUpperCase();
-  const totalAmount = '6.00';
+  const outTradeNo = createOutTradeNo();
 
   try {
-    // 插入待支付订单
     await pool.execute(
       'INSERT INTO payment_orders (out_trade_no, user_id, amount) VALUES (?,?,?)',
-      [outTradeNo, userId, totalAmount]
+      [outTradeNo, userId, RECHARGE_AMOUNT]
     );
 
-    // 支付宝参数：notify_url 和 return_url 放在外层，bizContent 只含业务字段
     const params = {
       notify_url: process.env.ALIPAY_NOTIFY_URL,
       return_url: process.env.ALIPAY_RETURN_URL,
       bizContent: {
         out_trade_no: outTradeNo,
-        total_amount: totalAmount,
+        total_amount: RECHARGE_AMOUNT,
         subject: 'QingYi工具站6元兑换10000券',
         product_code: 'FAST_INSTANT_TRADE_PAY'
       }
     };
 
-    console.log('=== 支付宝请求参数 ===');
-    console.log(JSON.stringify(params, null, 2));
-
     const result = await alipaySdk.pageExecute('alipay.trade.page.pay', params);
-
-    console.log('=== 支付宝返回结果 ===');
-    console.log(result);
-
+    res.set('Cache-Control', 'no-store');
     res.send(result);
   } catch (err) {
-    console.error('创建支付宝订单失败:', err);
+    try {
+      await pool.execute(
+        `UPDATE payment_orders
+         SET status = 'closed', closed_at = NOW()
+         WHERE out_trade_no = ? AND status = 'pending'`,
+        [outTradeNo]
+      );
+    } catch {
+      console.error(`支付订单关闭失败 order=${maskTradeReference(outTradeNo)}`);
+    }
+    console.error(`创建支付宝订单失败 order=${maskTradeReference(outTradeNo)}`);
     if (!res.headersSent) {
       res.status(500).json({ error: '创建支付订单失败' });
     }
+  }
+});
+
+app.get('/api/chest/payments/:outTradeNo', authMiddleware, async (req, res) => {
+  const { outTradeNo } = req.params;
+  if (!isValidOutTradeNo(outTradeNo)) {
+    return res.status(400).json({ error: '支付订单号格式无效' });
+  }
+
+  try {
+    const [rows] = await pool.execute(
+      `SELECT out_trade_no, amount, status, created_at, paid_at, closed_at
+       FROM payment_orders
+       WHERE out_trade_no = ? AND user_id = ?`,
+      [outTradeNo, req.userId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: '支付订单不存在' });
+    res.set('Cache-Control', 'no-store');
+    res.json(rows[0]);
+  } catch {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+app.get('/api/admin/chest/payments/:outTradeNo/provider-status', adminMiddleware, async (req, res) => {
+  if (!alipaySdk) return res.status(503).json({ error: '支付服务暂未启用' });
+  const { outTradeNo } = req.params;
+
+  try {
+    const result = await queryAlipayTrade(alipaySdk, outTradeNo);
+    res.set('Cache-Control', 'no-store');
+    if (!result.found) {
+      return res.json({
+        found: false,
+        providerCode: result.providerCode,
+        providerSubCode: result.providerSubCode
+      });
+    }
+    res.json({
+      found: true,
+      tradeStatus: result.tradeStatus,
+      totalAmount: result.totalAmount,
+      orderReference: maskTradeReference(result.outTradeNo)
+    });
+  } catch (err) {
+    console.error(`支付宝订单查询失败 code=${err.code || 'INTERNAL_ERROR'}`);
+    res.status(502).json({ error: '支付宝订单查询失败' });
+  }
+});
+
+app.post('/api/admin/chest/payments/:outTradeNo/reconcile', adminMiddleware, async (req, res) => {
+  if (!alipaySdk || !paymentConfig) {
+    return res.status(503).json({ error: '支付服务暂未启用' });
+  }
+  if (req.body?.confirmation !== 'RECONCILE_SIGNED_ALIPAY_PAYMENT') {
+    return res.status(400).json({ error: '缺少支付对账确认值' });
+  }
+
+  const { outTradeNo } = req.params;
+  try {
+    const result = await reconcileAlipayTrade({
+      pool,
+      alipaySdk,
+      outTradeNo,
+      expectedAppId: paymentConfig.appId,
+      expectedSellerId: paymentConfig.sellerId,
+      ticketCredit: RECHARGE_TICKETS
+    });
+    console.info(
+      `支付宝人工对账 outcome=${result.outcome} order=${maskTradeReference(outTradeNo)}`
+    );
+    res.json({ success: result.acknowledge, outcome: result.outcome });
+  } catch (err) {
+    console.error(`支付宝人工对账失败 code=${err.code || 'INTERNAL_ERROR'}`);
+    res.status(502).json({ error: '支付宝订单对账失败' });
   }
 });
 
@@ -2223,60 +2319,30 @@ app.get('/api/admin/chest/configs/:id', adminMiddleware, async (req, res) => {
 
 // 支付宝异步通知
 app.post('/api/chest/alipay/notify', async (req, res) => {
-  if (!alipaySdk) {
+  if (!alipaySdk || !paymentConfig) {
     return res.status(503).send('fail');
   }
 
-  console.log('========== 收到支付宝异步通知 ==========');
-  console.log('通知内容:', req.body);
-
   try {
-    const valid = alipaySdk.checkNotifySign(req.body);
-    console.log('支付宝签名验证结果:', valid);
-
+    const valid = await Promise.resolve(alipaySdk.checkNotifySign(req.body));
     if (!valid) {
-      console.error('支付宝异步通知签名验证失败');
+      console.error('支付宝通知签名验证失败');
       return res.send('fail');
     }
 
-    const { out_trade_no, trade_status } = req.body;
-
-    console.log('订单号:', out_trade_no);
-    console.log('交易状态:', trade_status);
-
-    if (trade_status === 'TRADE_SUCCESS' || trade_status === 'TRADE_FINISHED') {
-      const [orders] = await pool.execute(
-        'SELECT user_id, status FROM payment_orders WHERE out_trade_no = ? AND status = ?',
-        [out_trade_no, 'pending']
-      );
-
-      console.log('查询到的订单:', orders);
-
-      if (orders.length === 0) {
-        console.error('没有找到 pending 状态的订单');
-        return res.send('fail');
-      }
-
-      const userId = orders[0].user_id;
-
-      await pool.execute(
-        'UPDATE users SET chest_tickets = chest_tickets + 10000 WHERE id = ?',
-        [userId]
-      );
-
-      console.log('已给用户增加 10000 chest_tickets，userId:', userId);
-
-      await pool.execute(
-        'UPDATE payment_orders SET status = ? WHERE out_trade_no = ?',
-        ['paid', out_trade_no]
-      );
-
-      console.log('订单已标记为 paid:', out_trade_no);
-    }
-
-    res.send('success');
+    const result = await processAlipayNotification({
+      pool,
+      notification: req.body,
+      expectedAppId: paymentConfig.appId,
+      expectedSellerId: paymentConfig.sellerId,
+      ticketCredit: RECHARGE_TICKETS
+    });
+    console.info(
+      `支付宝通知处理 outcome=${result.outcome} order=${maskTradeReference(req.body.out_trade_no)}`
+    );
+    res.send(result.acknowledge ? 'success' : 'fail');
   } catch (err) {
-    console.error('处理支付宝异步通知失败:', err);
+    console.error(`支付宝通知处理失败 code=${err.code || 'INTERNAL_ERROR'}`);
     res.send('fail');
   }
 });
