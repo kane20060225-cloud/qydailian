@@ -946,6 +946,19 @@ if (e.target.classList.contains('delete-custom-btn')) {
         } catch (err) { showToast('网络错误'); }
     }
 
+    if (e.target.classList.contains('tp-finalize-btn')) {
+        const orderNo = e.target.dataset.order;
+        if (!confirm('请先核实该订单已收款、已申请完单且履约完成。确认最终完成后将保留审计记录，是否继续？')) return;
+        const token = safeGetItem('token');
+        try {
+            const res = await fetch(`${API_BASE}/third-party-orders/${orderNo}/finalize`, {
+                method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) { showToast('已最终完成'); loadThirdPartyOrders(); }
+            else { const data = await res.json(); showToast('❌ ' + (data.error || '确认失败')); }
+        } catch (err) { showToast('网络错误'); }
+    }
+
 
 
 });
@@ -3192,7 +3205,7 @@ async function loadThirdPartyOrders() {
             html += `<tr>
                 <td>${o.order_no}</td><td>${o.platform || '其他'}</td><td>${o.content}</td><td>${o.account_info}</td>
                 <td>¥${o.price}</td><td>${o.creator_name || '—'}</td>
-                <td>${statusMap[o.status] || o.status}</td>
+                <td>${o.final_status === 'completed' ? '✅ 最终完成' : (statusMap[o.status] || o.status)}</td>
                 <td>${completeCell}</td>
                 <td>${payCell}</td>
                 <td>`;
@@ -3200,7 +3213,12 @@ async function loadThirdPartyOrders() {
                 html += `<button class="tp-approve-btn" data-order="${o.order_no}">通过</button>
                          <button class="tp-reject-btn" data-order="${o.order_no}">拒绝</button>`;
             }
-            if (role === 'admin' || o.creator_id == userId) {
+            if (role === 'admin' && o.status === 'approved' && o.payment_status === 'paid' &&
+                o.complete_requested && o.final_status !== 'completed') {
+                html += `<button class="tp-finalize-btn" data-order="${o.order_no}">最终完成</button>`;
+            }
+            if ((role === 'admin' || o.creator_id == userId) &&
+                o.payment_status !== 'paid' && !o.complete_requested) {
                 html += `<button class="tp-delete-btn" data-order="${o.order_no}">删除</button>`;
             }
             html += `</td></tr>`;

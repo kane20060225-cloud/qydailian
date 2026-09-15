@@ -33,6 +33,8 @@ function createFakePool(initialOrder, options = {}) {
     order: initialOrder ? { ...initialOrder } : null,
     tickets: 0,
     creditUpdates: 0,
+    ledger: [],
+    audit: [],
     commits: 0,
     rollbacks: 0,
     releases: 0
@@ -44,7 +46,9 @@ function createFakePool(initialOrder, options = {}) {
       snapshot = {
         order: state.order ? { ...state.order } : null,
         tickets: state.tickets,
-        creditUpdates: state.creditUpdates
+        creditUpdates: state.creditUpdates,
+        ledger: structuredClone(state.ledger),
+        audit: structuredClone(state.audit)
       };
     },
     async execute(sql, params) {
@@ -72,6 +76,23 @@ function createFakePool(initialOrder, options = {}) {
         }
         state.tickets += ticketCredit;
         state.creditUpdates += 1;
+        return [{ affectedRows: 1 }];
+      }
+
+      if (normalized === 'SELECT chest_tickets AS balance FROM users WHERE id = ? FOR UPDATE') {
+        if (options.userExists === false) return [[]];
+        return [[{ balance: state.tickets }]];
+      }
+
+      if (normalized.startsWith('INSERT INTO account_ledger')) {
+        if (options.failLedger) throw new Error('ledger unavailable');
+        state.ledger.push(params);
+        return [{ affectedRows: 1 }];
+      }
+
+      if (normalized.startsWith('INSERT INTO operation_audit')) {
+        if (options.failAudit) throw new Error('audit unavailable');
+        state.audit.push(params);
         return [{ affectedRows: 1 }];
       }
 
@@ -108,6 +129,8 @@ function createFakePool(initialOrder, options = {}) {
         state.order = snapshot.order;
         state.tickets = snapshot.tickets;
         state.creditUpdates = snapshot.creditUpdates;
+        state.ledger = snapshot.ledger;
+        state.audit = snapshot.audit;
         snapshot = undefined;
       }
     },
@@ -195,6 +218,9 @@ test('credits a valid pending payment atomically', async () => {
   assert.equal(pool.state.order.alipay_trade_no, TRADE_NO);
   assert.equal(pool.state.tickets, RECHARGE_TICKETS);
   assert.equal(pool.state.creditUpdates, 1);
+  assert.equal(pool.state.ledger.length, 1);
+  assert.equal(pool.state.ledger[0][3], RECHARGE_TICKETS);
+  assert.equal(pool.state.audit.length, 1);
   assert.equal(pool.state.commits, 1);
 });
 
@@ -206,6 +232,7 @@ test('acknowledges a duplicate success notification without double credit', asyn
   assert.deepEqual(duplicate, { acknowledge: true, outcome: 'duplicate_paid' });
   assert.equal(pool.state.tickets, RECHARGE_TICKETS);
   assert.equal(pool.state.creditUpdates, 1);
+  assert.equal(pool.state.ledger.length, 1);
 });
 
 test('rejects an incorrect amount without changing tickets or order state', async () => {
@@ -265,6 +292,17 @@ test('rolls back the paid transition if the user credit update fails', async () 
   assert.equal(pool.state.order.status, 'pending');
   assert.equal(pool.state.order.alipay_trade_no, null);
   assert.equal(pool.state.tickets, 0);
+  assert.equal(pool.state.commits, 0);
+  assert.equal(pool.state.rollbacks, 1);
+});
+
+test('a failed B5 ledger insert rolls back both payment state and ticket credit', async () => {
+  const pool = createFakePool(pendingOrder(), { failLedger: true });
+  await assert.rejects(() => processWith(pool), /ledger unavailable/);
+  assert.equal(pool.state.order.status, 'pending');
+  assert.equal(pool.state.tickets, 0);
+  assert.equal(pool.state.ledger.length, 0);
+  assert.equal(pool.state.audit.length, 0);
   assert.equal(pool.state.commits, 0);
   assert.equal(pool.state.rollbacks, 1);
 });

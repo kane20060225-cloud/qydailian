@@ -10,6 +10,7 @@ const { createFieldCipher } = require('./lib/field-encryption');
 const { createAuthMiddleware, issueSessionToken } = require('./lib/auth-session');
 const { generateTotpSecret, verifyTotpCode } = require('./lib/totp');
 const { createRecoveryCodes, hashRecoveryCode } = require('./lib/recovery-codes');
+const { postAccountDelta, recordOperation } = require('./lib/accounting');
 const {
   RECHARGE_AMOUNT,
   RECHARGE_TICKETS,
@@ -453,8 +454,8 @@ async function initDB() {
 
 
     // 用户表增加军需券和签到日期字段
-    try { await pool.execute(`ALTER TABLE users ADD COLUMN chest_tickets INT DEFAULT 0`); } catch(e) {}
-    try { await pool.execute(`ALTER TABLE users ADD COLUMN last_chest_checkin_date DATE DEFAULT NULL`); } catch(e) {}
+    try { await pool.execute(`ALTER TABLE users ADD COLUMN chest_tickets INT DEFAULT 0`); } catch(e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+    try { await pool.execute(`ALTER TABLE users ADD COLUMN last_chest_checkin_date DATE DEFAULT NULL`); } catch(e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
 
     // 用户购买记录表
     await pool.execute(`
@@ -558,15 +559,15 @@ async function initDB() {
     `);
 
     // 兼容旧字段 / 确保字段存在
-    try { await pool.execute(`ALTER TABLE users ADD COLUMN qy_credits INT DEFAULT 0`); } catch(e) {}
-    try { await pool.execute(`ALTER TABLE users ADD COLUMN total_earned_credits INT DEFAULT 0`); } catch(e) {}
-    try { await pool.execute(`ALTER TABLE users ADD COLUMN vip_level TINYINT DEFAULT 0`); } catch(e) {}
-    try { await pool.execute(`ALTER TABLE orders ADD COLUMN required_identity ENUM('gold','silver','standard','budget') DEFAULT 'standard'`); } catch(e) {}
-    try { await pool.execute(`ALTER TABLE orders ADD COLUMN client_type VARCHAR(10) DEFAULT 'Android'`); } catch(e) {}
-    try { await pool.execute(`ALTER TABLE custom_requests ADD COLUMN status VARCHAR(20) DEFAULT 'pending'`); } catch(e) {}
-    try { await pool.execute(`ALTER TABLE users ADD COLUMN rental_earnings DECIMAL(10,2) DEFAULT 0.00`); } catch(e) {}
-    try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN complete_requested TINYINT(1) DEFAULT 0`); } catch(e) {}
-    try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN payment_status ENUM('unpaid','paid') DEFAULT 'unpaid'`); } catch(e) {}
+    try { await pool.execute(`ALTER TABLE users ADD COLUMN qy_credits INT DEFAULT 0`); } catch(e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+    try { await pool.execute(`ALTER TABLE users ADD COLUMN total_earned_credits INT DEFAULT 0`); } catch(e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+    try { await pool.execute(`ALTER TABLE users ADD COLUMN vip_level TINYINT DEFAULT 0`); } catch(e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+    try { await pool.execute(`ALTER TABLE orders ADD COLUMN required_identity ENUM('gold','silver','standard','budget') DEFAULT 'standard'`); } catch(e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+    try { await pool.execute(`ALTER TABLE orders ADD COLUMN client_type VARCHAR(10) DEFAULT 'Android'`); } catch(e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+    try { await pool.execute(`ALTER TABLE custom_requests ADD COLUMN status VARCHAR(20) DEFAULT 'pending'`); } catch(e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+    try { await pool.execute(`ALTER TABLE users ADD COLUMN rental_earnings DECIMAL(10,2) DEFAULT 0.00`); } catch(e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+    try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN complete_requested TINYINT(1) DEFAULT 0`); } catch(e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+    try { await pool.execute(`ALTER TABLE third_party_orders ADD COLUMN payment_status ENUM('unpaid','paid') DEFAULT 'unpaid'`); } catch(e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
 
     // 如果箱子表为空，插入默认箱子数据
     const [chestCount] = await pool.execute('SELECT COUNT(*) AS cnt FROM chest_configs');
@@ -650,6 +651,7 @@ async function initDB() {
     console.log('✅ 数据库表已就绪');
   } catch (err) {
     console.error('❌ 建表失败:', err.message);
+    throw err;
   }
 }
 
@@ -695,13 +697,23 @@ app.post('/api/auth/register', ipRegisterLimit, async (req, res) => {
 
     if (referrer_id) {
       await connection.execute(
-        'UPDATE users SET qy_credits = qy_credits + 300, total_earned_credits = total_earned_credits + 300 WHERE id = ?',
+        'UPDATE users SET total_earned_credits = total_earned_credits + 300 WHERE id = ?',
         [referrer_id]
       );
       await connection.execute(
-        'UPDATE users SET qy_credits = qy_credits + 300, total_earned_credits = total_earned_credits + 300 WHERE id = ?',
+        'UPDATE users SET total_earned_credits = total_earned_credits + 300 WHERE id = ?',
         [result.insertId]
       );
+      await postAccountDelta(connection, {
+        userId: referrer_id, accountType: 'qy_credits', delta: 300,
+        entryKey: `registration:${result.insertId}:referrer_bonus`,
+        sourceType: 'registration', sourceRef: String(result.insertId)
+      });
+      await postAccountDelta(connection, {
+        userId: result.insertId, accountType: 'qy_credits', delta: 300,
+        entryKey: `registration:${result.insertId}:new_user_bonus`,
+        sourceType: 'registration', sourceRef: String(result.insertId)
+      });
     }
 
     await connection.commit();
@@ -1053,14 +1065,18 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
     let finalTotal = total_price;
     let creditsUsed = 0;
     if (use_credits && use_credits > 0) {
-      const [creditsRow] = await conn.execute('SELECT qy_credits FROM users WHERE id = ?', [req.userId]);
+      const [creditsRow] = await conn.execute('SELECT qy_credits FROM users WHERE id = ? FOR UPDATE', [req.userId]);
       const available = creditsRow[0]?.qy_credits || 0;
       creditsUsed = Math.min(use_credits, available);
       const maxDiscountByCredits = creditsUsed / 100;
       const actualDiscount = Math.min(maxDiscountByCredits, total_price);
       creditsUsed = Math.floor(actualDiscount * 100);
       if (creditsUsed > 0) {
-        await conn.execute('UPDATE users SET qy_credits = qy_credits - ? WHERE id = ?', [creditsUsed, req.userId]);
+        await postAccountDelta(conn, {
+          userId: req.userId, accountType: 'qy_credits', delta: -creditsUsed,
+          entryKey: `order:${order_no}:credits_debit`, sourceType: 'order',
+          sourceRef: order_no, actorUserId: req.userId
+        });
       }
       finalTotal = total_price - actualDiscount;
     }
@@ -1081,6 +1097,10 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
        remark||null, game_uid||null, protectedGameAccount, protectedGamePassword,
        client_type||'Android', player_type||'standard']
     );
+    await recordOperation(conn, {
+      eventKey: `order:${order_no}:created`, actorUserId: req.userId,
+      action: 'order_created', targetType: 'order', targetRef: order_no
+    });
 
     await conn.commit();
     res.status(201).json({ success: true, order_no, order_id: result.insertId });
@@ -1275,16 +1295,66 @@ app.post('/api/orders/:orderNo/payment', authMiddleware, async (req, res) => {
   const { orderNo } = req.params;
   const { screenshot } = req.body;
   if (!screenshot) return res.status(400).json({ error: '请提供支付截图' });
+  try {
+    const [matchingOrders] = await pool.execute(
+      'SELECT id, payment_status FROM orders WHERE order_no = ? AND user_id = ?',
+      [orderNo, req.userId]
+    );
+    if (!matchingOrders.length) return res.status(404).json({ error: '订单不存在' });
+    if (matchingOrders[0].payment_status === 'paid') {
+      return res.status(409).json({ error: '订单已经确认付款' });
+    }
+  } catch {
+    return res.status(503).json({ error: '暂时无法验证订单' });
+  }
   const uploadDir = path.join(__dirname, 'uploads');
   if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-  const filename = `payment_${orderNo}_${Date.now()}.png`;
+  const filename = `payment_${orderNo}_${Date.now()}_${require('node:crypto').randomUUID()}.png`;
+  const newFilePath = path.join(uploadDir, filename);
+  let newFileWritten = false;
+  let committed = false;
+  let conn;
   try {
     const base64Data = screenshot.replace(/^data:image\/\w+;base64,/, "");
-    fs.writeFileSync(path.join(uploadDir, filename), base64Data, 'base64');
-    await pool.execute('UPDATE orders SET payment_screenshot = ?, payment_status = ? WHERE order_no = ? AND user_id = ?',
-      [filename, 'pending', orderNo, req.userId]);
+    fs.writeFileSync(newFilePath, base64Data, { encoding: 'base64', flag: 'wx' });
+    newFileWritten = true;
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+    const [orders] = await conn.execute(
+      'SELECT id, total_price, payment_status FROM orders WHERE order_no = ? AND user_id = ? FOR UPDATE',
+      [orderNo, req.userId]
+    );
+    if (!orders.length || orders[0].payment_status === 'paid') {
+      await conn.rollback();
+      fs.unlinkSync(newFilePath);
+      newFileWritten = false;
+      return res.status(409).json({ error: '订单付款状态已变化' });
+    }
+    await conn.execute(
+      'UPDATE orders SET payment_screenshot = ?, payment_status = ? WHERE id = ?',
+      [filename, 'pending', orders[0].id]
+    );
+    const [evidence] = await conn.execute(
+      `INSERT INTO manual_payment_evidence
+       (business_type, business_ref, uploader_user_id, filename, expected_amount)
+       VALUES (?, ?, ?, ?, ?)`,
+      ['order', orderNo, req.userId, filename, orders[0].total_price]
+    );
+    await recordOperation(conn, {
+      eventKey: `order:${orderNo}:evidence:${evidence.insertId}`,
+      actorUserId: req.userId, action: 'manual_payment_submitted',
+      targetType: 'order', targetRef: orderNo
+    });
+    await conn.commit();
+    committed = true;
     res.json({ success: true, message: '支付凭证已上传' });
-  } catch(err) { res.status(500).json({ error: '服务器错误' }); }
+  } catch(err) {
+    if (conn) await conn.rollback();
+    if (newFileWritten && !committed) {
+      try { fs.unlinkSync(newFilePath); } catch { /* exact new uncommitted upload only */ }
+    }
+    res.status(500).json({ error: '服务器错误' });
+  } finally { if (conn) conn.release(); }
 });
 
 // ---------- 管理端订单 ----------
@@ -1328,14 +1398,49 @@ app.delete('/api/admin/orders/:orderNo', adminMiddleware, async (req, res) => {
 
 app.put('/api/admin/orders/:orderNo/confirm-payment', adminMiddleware, async (req, res) => {
   const { orderNo } = req.params;
+  const conn = await pool.getConnection();
   try {
-    const [orders] = await pool.execute('SELECT user_id FROM orders WHERE order_no = ?', [orderNo]);
-    await pool.execute('UPDATE orders SET payment_status = ?, status = ? WHERE order_no = ?', ['paid', 'playing', orderNo]);
-    if (orders.length) {
-      await sendMessage(orders[0].user_id, '支付已确认', `您的订单 ${orderNo} 已确认收款，代练即将开始。`);
+    await conn.beginTransaction();
+    const [orders] = await conn.execute(
+      'SELECT id, user_id, payment_status FROM orders WHERE order_no = ? FOR UPDATE', [orderNo]
+    );
+    if (!orders.length) {
+      await conn.rollback();
+      return res.status(404).json({ error: '订单不存在' });
     }
+    if (orders[0].payment_status === 'paid') {
+      await conn.rollback();
+      return res.status(409).json({ error: '订单已确认付款' });
+    }
+    await conn.execute(
+      'UPDATE orders SET payment_status = ?, status = ? WHERE id = ?',
+      ['paid', 'playing', orders[0].id]
+    );
+    const [evidence] = await conn.execute(
+      `SELECT id FROM manual_payment_evidence
+       WHERE business_type = ? AND business_ref = ? AND status = ?
+       ORDER BY id DESC LIMIT 1 FOR UPDATE`,
+      ['order', orderNo, 'submitted']
+    );
+    if (evidence.length) {
+      await conn.execute(
+        `UPDATE manual_payment_evidence
+         SET status = ?, reviewer_user_id = ?, reviewed_at = NOW() WHERE id = ?`,
+        ['accepted', req.userId, evidence[0].id]
+      );
+    }
+    await recordOperation(conn, {
+      eventKey: `order:${orderNo}:payment_confirmed`, actorUserId: req.userId,
+      action: evidence.length ? 'manual_payment_confirmed' : 'manual_payment_confirmed_without_evidence',
+      targetType: 'order', targetRef: orderNo
+    });
+    await conn.commit();
+    await sendMessage(orders[0].user_id, '支付已确认', `您的订单 ${orderNo} 已确认收款，代练即将开始。`);
     res.json({ success: true, message: '已确认支付' });
-  } catch(err) { res.status(500).json({ error: '服务器错误' }); }
+  } catch(err) {
+    await conn.rollback();
+    res.status(500).json({ error: '服务器错误' });
+  } finally { conn.release(); }
 });
 
 app.put('/api/admin/orders/:orderNo/hall', adminMiddleware, async (req, res) => {
@@ -1423,21 +1528,44 @@ app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) =
   try {
     conn = await pool.getConnection();
     await conn.beginTransaction();
-    const [rows] = await conn.execute('SELECT * FROM orders WHERE order_no = ? AND booster_id = ? AND status = ?', [orderNo, boosterId, 'playing']);
+    const [rows] = await conn.execute('SELECT * FROM orders WHERE order_no = ? AND booster_id = ? AND status = ? FOR UPDATE', [orderNo, boosterId, 'playing']);
     if (rows.length === 0) { await conn.rollback(); return res.status(400).json({ error: '订单无法完成' }); }
     const order = rows[0];
     if (order.payment_status !== 'paid') { await conn.rollback(); return res.status(400).json({ error: '该订单尚未确认支付，无法完成' }); }
 
-    const earnings = order.total_price * 0.75;
+    const earnings = Math.round(order.total_price * 0.75 * 100) / 100;
     const pointsEarned = Math.floor(earnings * 100);
-    await conn.execute('UPDATE orders SET status = ? WHERE order_no = ?', ['done', orderNo]);
-    await conn.execute('UPDATE users SET earnings = earnings + ?, booster_points = booster_points + ? WHERE id = ?',
-      [earnings, pointsEarned, boosterId]);
+    const [completed] = await conn.execute(
+      'UPDATE orders SET status = ? WHERE order_no = ? AND status = ?',
+      ['done', orderNo, 'playing']
+    );
+    if (completed.affectedRows !== 1) throw new Error('订单状态已变化');
+    if (earnings > 0) {
+      await postAccountDelta(conn, {
+        userId: boosterId, accountType: 'earnings', delta: earnings,
+        entryKey: `order:${orderNo}:booster_earnings`, sourceType: 'order',
+        sourceRef: orderNo, actorUserId: boosterId
+      });
+    }
+    if (pointsEarned > 0) {
+      await postAccountDelta(conn, {
+        userId: boosterId, accountType: 'booster_points', delta: pointsEarned,
+        entryKey: `order:${orderNo}:booster_points`, sourceType: 'order',
+        sourceRef: orderNo, actorUserId: boosterId
+      });
+    }
     await checkBoosterUpgrade(conn, boosterId);
 
     const creditsEarned = Math.floor(order.total_price * 0.03 * 100);
-    await conn.execute('UPDATE users SET qy_credits = qy_credits + ?, total_earned_credits = total_earned_credits + ? WHERE id = ?',
-      [creditsEarned, creditsEarned, order.user_id]);
+    if (creditsEarned > 0) {
+      await postAccountDelta(conn, {
+        userId: order.user_id, accountType: 'qy_credits', delta: creditsEarned,
+        entryKey: `order:${orderNo}:customer_credits`, sourceType: 'order',
+        sourceRef: orderNo, actorUserId: boosterId
+      });
+    }
+    await conn.execute('UPDATE users SET total_earned_credits = total_earned_credits + ? WHERE id = ?',
+      [creditsEarned, order.user_id]);
 
     const [userRow] = await conn.execute('SELECT total_earned_credits FROM users WHERE id = ?', [order.user_id]);
     const totalCredits = userRow[0].total_earned_credits;
@@ -1448,6 +1576,10 @@ app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) =
     else if (totalCredits >= 1500) newVip = 2;
     else if (totalCredits >= 600) newVip = 1;
     await conn.execute('UPDATE users SET vip_level = ? WHERE id = ?', [newVip, order.user_id]);
+    await recordOperation(conn, {
+      eventKey: `order:${orderNo}:completed`, actorUserId: boosterId,
+      action: 'order_completed', targetType: 'order', targetRef: orderNo
+    });
 
     await sendMessage(order.user_id, '订单已完成', `您的订单 ${orderNo} 已代练完成，感谢您的信任！`);
 
@@ -1698,16 +1830,25 @@ app.post('/api/shop/buy/:itemId', authMiddleware, async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    const [items] = await conn.execute('SELECT * FROM qy_shop_items WHERE id=? AND is_active=1', [itemId]);
+    const [items] = await conn.execute('SELECT * FROM qy_shop_items WHERE id=? AND is_active=1 FOR UPDATE', [itemId]);
     if (items.length === 0) throw new Error('商品不存在或已下架');
     const item = items[0];
     if (item.stock === 0) throw new Error('商品库存不足');
-    const [user] = await conn.execute('SELECT qy_credits FROM users WHERE id=?', [req.userId]);
+    const [user] = await conn.execute('SELECT qy_credits FROM users WHERE id=? FOR UPDATE', [req.userId]);
     if (user[0].qy_credits < item.price_credits) throw new Error('积分不足');
-    await conn.execute('UPDATE users SET qy_credits = qy_credits - ? WHERE id=?', [item.price_credits, req.userId]);
-    if (item.stock > 0) await conn.execute('UPDATE qy_shop_items SET stock = stock - 1 WHERE id=?', [itemId]);
-    await conn.execute('INSERT INTO qy_purchases (user_id, item_id, item_name, price_credits) VALUES (?,?,?,?)',
+    const [purchase] = await conn.execute('INSERT INTO qy_purchases (user_id, item_id, item_name, price_credits) VALUES (?,?,?,?)',
       [req.userId, item.id, item.name, item.price_credits]);
+    await postAccountDelta(conn, {
+      userId: req.userId, accountType: 'qy_credits', delta: -item.price_credits,
+      entryKey: `shop:${purchase.insertId}:credits_debit`, sourceType: 'shop_purchase',
+      sourceRef: String(purchase.insertId), actorUserId: req.userId
+    });
+    if (item.stock > 0) await conn.execute('UPDATE qy_shop_items SET stock = stock - 1 WHERE id=?', [itemId]);
+    await recordOperation(conn, {
+      eventKey: `shop:${purchase.insertId}:purchased`, actorUserId: req.userId,
+      action: 'shop_purchased', targetType: 'shop_purchase',
+      targetRef: String(purchase.insertId)
+    });
     await conn.commit();
     res.json({ success: true, message: '购买成功' });
   } catch (err) {
@@ -1846,37 +1987,50 @@ app.post('/api/rental/orders', authMiddleware, async (req, res) => {
     await conn.beginTransaction();
 
     const [accounts] = await conn.execute(
-      'SELECT * FROM rental_accounts WHERE id = ? AND status = ?',
+      'SELECT * FROM rental_accounts WHERE id = ? AND status = ? FOR UPDATE',
       [account_id, 'active']
     );
     if (accounts.length === 0) throw new Error('账号不可租用');
     const account = accounts[0];
     if (account.owner_id === req.userId) throw new Error('不能租用自己的账号');
+    const [occupied] = await conn.execute(
+      'SELECT id FROM rental_orders WHERE account_id = ? AND status IN (?, ?) LIMIT 1',
+      [account_id, 'pending', 'active']
+    );
+    if (occupied.length) throw new Error('账号已有未结束的租用订单');
 
     const unitPrice = rental_type === 'hour' ? account.hourly_price : account.daily_price;
     if (unitPrice <= 0) throw new Error('价格设置有误');
     let totalPrice = unitPrice * quantity;
+    const orderNo = 'RNT' + Date.now() + Math.random().toString(36).substring(2, 8).toUpperCase();
 
     let creditsUsed = 0;
     if (use_credits && use_credits > 0) {
-      const [creditsRow] = await conn.execute('SELECT qy_credits FROM users WHERE id = ?', [req.userId]);
+      const [creditsRow] = await conn.execute('SELECT qy_credits FROM users WHERE id = ? FOR UPDATE', [req.userId]);
       const available = creditsRow[0]?.qy_credits || 0;
       creditsUsed = Math.min(use_credits, available);
       const maxDiscount = creditsUsed / 100;
       const actualDiscount = Math.min(maxDiscount, totalPrice);
       creditsUsed = Math.floor(actualDiscount * 100);
       if (creditsUsed > 0) {
-        await conn.execute('UPDATE users SET qy_credits = qy_credits - ? WHERE id = ?', [creditsUsed, req.userId]);
+        await postAccountDelta(conn, {
+          userId: req.userId, accountType: 'qy_credits', delta: -creditsUsed,
+          entryKey: `rental:${orderNo}:credits_debit`, sourceType: 'rental_order',
+          sourceRef: orderNo, actorUserId: req.userId
+        });
       }
       totalPrice -= actualDiscount;
     }
 
-    const orderNo = 'RNT' + Date.now() + Math.random().toString(36).substring(2, 8).toUpperCase();
     await conn.execute(
       `INSERT INTO rental_orders (order_no, renter_id, owner_id, account_id, rental_type, quantity, total_price, credits_used, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
       [orderNo, req.userId, account.owner_id, account_id, rental_type, quantity, totalPrice, creditsUsed]
     );
+    await recordOperation(conn, {
+      eventKey: `rental:${orderNo}:created`, actorUserId: req.userId,
+      action: 'rental_created', targetType: 'rental_order', targetRef: orderNo
+    });
 
     await conn.commit();
     res.status(201).json({ success: true, order_no: orderNo });
@@ -1964,16 +2118,40 @@ app.put('/api/rental/orders/:orderNo/complete', authMiddleware, async (req, res)
 
 app.put('/api/rental/orders/:orderNo/cancel', authMiddleware, async (req, res) => {
   const { orderNo } = req.params;
+  const conn = await pool.getConnection();
   try {
-    const [orders] = await pool.execute(
-      'SELECT * FROM rental_orders WHERE order_no = ? AND (renter_id = ? OR owner_id = ?) AND status IN (?, ?)',
+    await conn.beginTransaction();
+    const [orders] = await conn.execute(
+      'SELECT * FROM rental_orders WHERE order_no = ? AND (renter_id = ? OR owner_id = ?) AND status IN (?, ?) FOR UPDATE',
       [orderNo, req.userId, req.userId, 'pending', 'active']
     );
-    if (orders.length === 0) return res.status(400).json({ error: '无法取消' });
-
-    await pool.execute('UPDATE rental_orders SET status = ? WHERE order_no = ?', ['cancelled', orderNo]);
+    if (orders.length === 0) {
+      await conn.rollback();
+      return res.status(400).json({ error: '无法取消' });
+    }
+    const order = orders[0];
+    const [result] = await conn.execute(
+      'UPDATE rental_orders SET status = ? WHERE id = ? AND status = ?',
+      ['cancelled', order.id, order.status]
+    );
+    if (result.affectedRows !== 1) throw new Error('无法取消');
+    if (order.credits_used > 0) {
+      await postAccountDelta(conn, {
+        userId: order.renter_id, accountType: 'qy_credits', delta: order.credits_used,
+        entryKey: `rental:${orderNo}:credits_refund`, sourceType: 'rental_order',
+        sourceRef: orderNo, actorUserId: req.userId
+      });
+    }
+    await recordOperation(conn, {
+      eventKey: `rental:${orderNo}:cancelled`, actorUserId: req.userId,
+      action: 'rental_cancelled', targetType: 'rental_order', targetRef: orderNo
+    });
+    await conn.commit();
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ error: '服务器错误' });
+  } finally { conn.release(); }
 });
 
 app.get('/api/rental/earnings', authMiddleware, async (req, res) => {
@@ -2119,10 +2297,17 @@ app.get('/api/third-party-orders', authMiddleware, async (req, res, next) => {
   const role = userRows[0].role;
   let sql, params;
   if (role === 'admin') {
-    sql = 'SELECT t.*, u.username AS creator_name FROM third_party_orders t JOIN users u ON t.creator_id = u.id ORDER BY t.created_at DESC';
+    sql = `SELECT t.*, f.final_status, f.finalized_at, u.username AS creator_name
+      FROM third_party_orders t
+      LEFT JOIN third_party_order_finalization f ON f.order_no = t.order_no
+      JOIN users u ON t.creator_id = u.id ORDER BY t.created_at DESC`;
     params = [];
   } else if (role === 'booster') {
-    sql = 'SELECT t.*, u.username AS creator_name FROM third_party_orders t JOIN users u ON t.creator_id = u.id WHERE t.creator_id = ? ORDER BY t.created_at DESC';
+    sql = `SELECT t.*, f.final_status, f.finalized_at, u.username AS creator_name
+      FROM third_party_orders t
+      LEFT JOIN third_party_order_finalization f ON f.order_no = t.order_no
+      JOIN users u ON t.creator_id = u.id
+      WHERE t.creator_id = ? ORDER BY t.created_at DESC`;
     params = [req.userId];
   } else {
     return res.status(403).json({ error: '无权限访问' });
@@ -2157,6 +2342,9 @@ app.delete('/api/third-party-orders/:orderNo', authMiddleware, async (req, res) 
   if (orderRows.length === 0) return res.status(404).json({ error: '订单不存在' });
 
   const order = orderRows[0];
+  if (order.payment_status === 'paid' || order.complete_requested) {
+    return res.status(400).json({ error: '已付款或申请完单的订单不能删除' });
+  }
   const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
   const role = userRows[0]?.role;
 
@@ -2196,6 +2384,47 @@ app.put('/api/third-party-orders/:orderNo/request-complete', authMiddleware, asy
 app.put('/api/third-party-orders/:orderNo/mark-paid', adminMiddleware, async (req, res) => {
   await pool.execute('UPDATE third_party_orders SET payment_status = ? WHERE order_no = ?', ['paid', req.params.orderNo]);
   res.json({ success: true, message: '已标记为已支付' });
+});
+
+app.put('/api/third-party-orders/:orderNo/finalize', adminMiddleware, async (req, res) => {
+  const orderNo = req.params.orderNo;
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [orders] = await conn.execute(
+      'SELECT status, payment_status, complete_requested FROM third_party_orders WHERE order_no = ? FOR UPDATE',
+      [orderNo]
+    );
+    if (!orders.length) {
+      await conn.rollback();
+      return res.status(404).json({ error: '订单不存在' });
+    }
+    const order = orders[0];
+    if (order.status !== 'approved' || order.payment_status !== 'paid' || !order.complete_requested) {
+      await conn.rollback();
+      return res.status(400).json({ error: '订单尚未满足最终完成条件' });
+    }
+    const [existing] = await conn.execute(
+      'SELECT order_no FROM third_party_order_finalization WHERE order_no = ?', [orderNo]
+    );
+    if (existing.length) {
+      await conn.rollback();
+      return res.status(409).json({ error: '订单已经最终完成' });
+    }
+    await conn.execute(
+      'INSERT INTO third_party_order_finalization (order_no, final_status, finalized_by) VALUES (?, ?, ?)',
+      [orderNo, 'completed', req.userId]
+    );
+    await recordOperation(conn, {
+      eventKey: `third_party:${orderNo}:finalized`, actorUserId: req.userId,
+      action: 'third_party_finalized', targetType: 'third_party_order', targetRef: orderNo
+    });
+    await conn.commit();
+    res.json({ success: true, final_status: 'completed' });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ error: '服务器错误' });
+  } finally { conn.release(); }
 });
 
 
@@ -2260,18 +2489,24 @@ app.post('/api/chest/checkin', authMiddleware, async (req, res) => {
     }
 
     const lastDate = userRows[0].last_date;  // 例如 '2026-08-14' 或 null
-    const tickets = userRows[0].chest_tickets;
-
     if (lastDate === today) {
       await conn.rollback();
       return res.status(400).json({ error: '今日已签到' });
     }
 
-    const newTickets = tickets + 1000;
+    const newTickets = await postAccountDelta(conn, {
+      userId: req.userId, accountType: 'chest_tickets', delta: 1000,
+      entryKey: `checkin:${req.userId}:${today}`, sourceType: 'checkin',
+      sourceRef: today, actorUserId: req.userId
+    });
     await conn.execute(
-      'UPDATE users SET chest_tickets = ?, last_chest_checkin_date = ? WHERE id = ?',
-      [newTickets, today, req.userId]
+      'UPDATE users SET last_chest_checkin_date = ? WHERE id = ?',
+      [today, req.userId]
     );
+    await recordOperation(conn, {
+      eventKey: `checkin:${req.userId}:${today}:completed`, actorUserId: req.userId,
+      action: 'chest_checkin', targetType: 'user', targetRef: String(req.userId)
+    });
 
     await conn.commit();
     res.json({ success: true, tickets: newTickets, message: '签到成功，获得1000军需券' });
@@ -2428,7 +2663,14 @@ app.post('/api/chest/open', authMiddleware, async (req, res) => {
     if (tickets < chest.price) throw new Error('军需券不足');
 
     // 扣券
-    await conn.execute('UPDATE users SET chest_tickets = chest_tickets - ? WHERE id = ?', [chest.price, req.userId]);
+    const openEventId = require('node:crypto').randomUUID();
+    if (chest.price > 0) {
+      await postAccountDelta(conn, {
+        userId: req.userId, accountType: 'chest_tickets', delta: -chest.price,
+        entryKey: `chest_open:${openEventId}:tickets_debit`, sourceType: 'chest_open',
+        sourceRef: openEventId, actorUserId: req.userId
+      });
+    }
 
     // 决定稀有度：5% 稀有，95% 普通
     const isRare = Math.random() < 0.05;
@@ -2493,6 +2735,11 @@ app.post('/api/chest/open', authMiddleware, async (req, res) => {
         [req.userId, reward.item_name, chestId, reward.rarity, reward.quantity]
       );
     }
+
+    await recordOperation(conn, {
+      eventKey: `chest_open:${openEventId}:completed`, actorUserId: req.userId,
+      action: 'chest_opened', targetType: 'chest', targetRef: String(chestId)
+    });
 
     const [ticketsAfter] = await conn.execute('SELECT chest_tickets FROM users WHERE id = ?', [req.userId]);
 

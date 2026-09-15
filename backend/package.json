@@ -9,7 +9,9 @@
     "check": "node --check server.js",
     "test": "node --test",
     "migration:b2:credentials": "node scripts/encrypt-legacy-credentials.js",
-    "payment:b3:report": "node scripts/report-payment-anomalies.js --report"
+    "payment:b3:report": "node scripts/report-payment-anomalies.js --report",
+    "migration:b5": "node scripts/migrate-b5.js",
+    "report:b5": "node scripts/report-b5-anomalies.js --report"
   },
   "engines": {
     "node": ">=18.0.0"

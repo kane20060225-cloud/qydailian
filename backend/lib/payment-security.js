@@ -1,5 +1,7 @@
 'use strict';
 
+const { recordAppliedDelta, recordOperation } = require('./accounting');
+
 const crypto = require('crypto');
 
 const RECHARGE_AMOUNT = '6.00';
@@ -212,6 +214,16 @@ async function processAlipayNotification(options) {
       if (userUpdate.affectedRows !== 1) {
         throw new PaymentNotificationError('PAYMENT_USER_NOT_FOUND', '支付订单用户不存在');
       }
+      await recordAppliedDelta(connection, {
+        userId: order.user_id, accountType: 'chest_tickets', delta: ticketCredit,
+        entryKey: `payment:${parsed.outTradeNo}:tickets_credited`,
+        sourceType: 'payment_order', sourceRef: parsed.outTradeNo
+      });
+      await recordOperation(connection, {
+        eventKey: `payment:${parsed.outTradeNo}:credited`,
+        action: 'payment_credited', targetType: 'payment_order',
+        targetRef: parsed.outTradeNo
+      });
     } else if (transition.action === 'close') {
       const [orderUpdate] = await connection.execute(
         `UPDATE payment_orders
@@ -222,6 +234,11 @@ async function processAlipayNotification(options) {
       if (orderUpdate.affectedRows !== 1) {
         throw new PaymentNotificationError('CONCURRENT_PAYMENT_UPDATE', '支付订单状态并发变更');
       }
+      await recordOperation(connection, {
+        eventKey: `payment:${parsed.outTradeNo}:closed`,
+        action: 'payment_closed', targetType: 'payment_order',
+        targetRef: parsed.outTradeNo
+      });
     } else if (transition.action === 'record_paid_reference') {
       await connection.execute(
         `UPDATE payment_orders
@@ -229,6 +246,11 @@ async function processAlipayNotification(options) {
          WHERE id = ? AND status = 'paid'`,
         [parsed.tradeNo, order.id]
       );
+      await recordOperation(connection, {
+        eventKey: `payment:${parsed.outTradeNo}:reference_backfilled`,
+        action: 'payment_reference_backfilled', targetType: 'payment_order',
+        targetRef: parsed.outTradeNo
+      });
     }
 
     await connection.commit();
