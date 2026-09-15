@@ -59,9 +59,14 @@ function parseMigration(sql) {
 function loadMigrations() {
   return B5_FILES.map((file) => {
     const sql = fs.readFileSync(path.join(MIGRATION_DIR, file), 'utf8');
+    const canonicalSql = sql.replace(/\r\n/g, '\n');
+    const checksum = crypto.createHash('sha256').update(canonicalSql).digest('hex');
+    const crlfChecksum = crypto.createHash('sha256')
+      .update(canonicalSql.replace(/\n/g, '\r\n')).digest('hex');
     return {
       version: file.replace(/\.sql$/, ''),
-      checksum: crypto.createHash('sha256').update(sql).digest('hex'),
+      checksum,
+      compatibleChecksums: crlfChecksum === checksum ? [] : [crlfChecksum],
       statements: parseMigration(sql)
     };
   });
@@ -88,7 +93,8 @@ async function existingVersions(conn, { createVersionTable = false } = {}) {
 function planMigrations(migrations, existing) {
   return migrations.map((migration) => {
     const appliedChecksum = existing.get(migration.version);
-    if (appliedChecksum && appliedChecksum !== migration.checksum) {
+    if (appliedChecksum && appliedChecksum !== migration.checksum &&
+        !(migration.compatibleChecksums || []).includes(appliedChecksum)) {
       throw new Error(`Migration checksum mismatch: ${migration.version}`);
     }
     return { version: migration.version, status: appliedChecksum ? 'applied' : 'pending' };

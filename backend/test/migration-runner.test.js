@@ -2,6 +2,9 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const {
   parseMigration, loadMigrations, planMigrations, runMigrations
@@ -14,6 +17,19 @@ test('B5 migration SQL is additive and contains only versioned tables', () => {
   assert.ok(migrations.every((migration) => migration.checksum.length === 64));
   assert.throws(() => parseMigration('DROP TABLE users;'), /additive/);
   assert.throws(() => parseMigration('DELETE FROM users;'), /additive/);
+});
+
+test('Git LF and released CRLF SQL use one canonical checksum with a narrow legacy alias', () => {
+  const migration = loadMigrations()[0];
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'migrations',
+    '20260915_b5_accounting.sql'), 'utf8');
+  const canonical = sql.replace(/\r\n/g, '\n');
+  const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
+  assert.equal(migration.checksum, hash(canonical));
+  assert.deepEqual(migration.compatibleChecksums, [hash(canonical.replace(/\n/g, '\r\n'))]);
+  assert.equal(planMigrations([migration], new Map([
+    [migration.version, migration.compatibleChecksums[0]]
+  ]))[0].status, 'applied');
 });
 
 test('plan mode does not create a migrations table or run DDL', async () => {
