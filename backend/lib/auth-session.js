@@ -7,12 +7,13 @@ function issueSessionToken(userId, tokenVersion, secret) {
       !Number.isSafeInteger(tokenVersion) || tokenVersion < 0) {
     throw new Error('用户会话参数无效');
   }
-  return jwt.sign({ userId, tokenVersion }, secret, { expiresIn: '7d' });
+  return jwt.sign({ purpose: 'session', userId, tokenVersion }, secret, { expiresIn: '7d' });
 }
 
 function verifySessionClaims(token, secret) {
   const claims = jwt.verify(token, secret);
-  if (!Number.isSafeInteger(claims.userId) || claims.userId < 1 ||
+  if (claims.purpose !== 'session' ||
+      !Number.isSafeInteger(claims.userId) || claims.userId < 1 ||
       !Number.isSafeInteger(claims.tokenVersion) || claims.tokenVersion < 0) {
     throw new Error('用户会话声明无效');
   }

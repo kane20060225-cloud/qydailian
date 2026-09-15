@@ -25,6 +25,15 @@ test('rejects legacy unversioned JWTs', () => {
   assert.throws(() => verifySessionClaims(legacyToken, SECRET), /声明无效/);
 });
 
+test('rejects a two-factor setup token as an authenticated session', () => {
+  const setupToken = jwt.sign({
+    purpose: 'totp-setup', userId: 42, tokenVersion: 3, secret: 'test-only-secret'
+  }, SECRET);
+  assert.throws(() => verifySessionClaims(setupToken, SECRET), /声明无效/);
+  const oldVersionedToken = jwt.sign({ userId: 42, tokenVersion: 3 }, SECRET);
+  assert.throws(() => verifySessionClaims(oldVersionedToken, SECRET), /声明无效/);
+});
+
 test('invalidates old tokens after a version increment', () => {
   const claims = verifySessionClaims(issueSessionToken(42, 3, SECRET), SECRET);
   assert.equal(isCurrentSession(claims, { token_version: 3 }), true);

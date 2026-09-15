@@ -595,9 +595,10 @@ if (loginForm) loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const username = getEl('loginUsername')?.value.trim();
     const password = getEl('loginPassword')?.value;
+    const twoFactorCode = getEl('loginTwoFactorCode')?.value.trim();
     if (!username || !password) { if (loginError) loginError.textContent = '用户名和密码不能为空'; return; }
     try {
-        const res = await fetch(`${API_BASE}/auth/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, password }) });
+        const res = await fetch(`${API_BASE}/auth/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, password, twoFactorCode }) });
         const data = await res.json();
         if (res.ok && data.success) {
             safeSetItem('token', data.token);
@@ -608,8 +609,16 @@ if (loginForm) loginForm.addEventListener('submit', async (e) => {
             checkLoginStatus();
             if (loginModal) loginModal.style.display = 'none';
             if (loginError) loginError.textContent = '';
+            if (getEl('loginTwoFactorCode')) getEl('loginTwoFactorCode').value = '';
+            if (getEl('loginTwoFactorGroup')) getEl('loginTwoFactorGroup').style.display = 'none';
             showToast('✅ 登录成功！');
-        } else { if (loginError) loginError.textContent = data.error || '登录失败'; }
+        } else {
+            if (data.requiresTwoFactor && getEl('loginTwoFactorGroup')) {
+                getEl('loginTwoFactorGroup').style.display = 'block';
+                getEl('loginTwoFactorCode')?.focus();
+            }
+            if (loginError) loginError.textContent = data.error || '登录失败';
+        }
     } catch (err) { if (loginError) loginError.textContent = '网络错误'; }
 });
 
@@ -2046,6 +2055,7 @@ function showSettingSection(name) {
 // ---------- 账号与安全 ----------
 function renderAccountSecurity() {
     const content = getEl('settingsContent');
+    const factorEnabled = Boolean(window._userSettings?.two_factor_enabled);
     content.innerHTML = `
         <div class="card"><h4>修改用户名</h4>
             <input type="text" id="newUsername" placeholder="新用户名" class="remark-input" style="margin-bottom:8px;">
@@ -2067,10 +2077,76 @@ function renderAccountSecurity() {
             <input type="email" id="emailInput" placeholder="邮箱" class="remark-input" style="margin-bottom:8px;">
             <button id="changeEmailBtn" class="submit-btn">更新邮箱</button>
             <p id="emailMsg" style="margin-top:4px; font-size:0.85rem;"></p>
+        </div>
+        <div class="card"><h4>身份验证器二次认证</h4>
+            <p id="twoFactorStatus">${factorEnabled ? '已启用。登录时需要身份验证器的 6 位验证码。' : '未启用。可使用支持 TOTP 的身份验证器绑定。'}</p>
+            <input type="password" id="twoFactorPassword" placeholder="当前登录密码" class="remark-input" autocomplete="current-password" style="margin-bottom:8px;">
+            ${factorEnabled ? '' : '<button id="twoFactorSetupBtn" class="submit-btn">开始绑定</button>'}
+            <div id="twoFactorSetupDetails" style="display:none">
+                <p>在身份验证器中手动输入以下密钥；请勿转发或截图。</p>
+                <code id="twoFactorSecret"></code>
+            </div>
+            <input type="text" id="twoFactorCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="身份验证器 6 位验证码" class="remark-input" style="margin:8px 0;">
+            <button id="twoFactorConfirmBtn" class="submit-btn" style="display:none">确认启用</button>
+            ${factorEnabled ? '<button id="twoFactorDisableBtn" class="submit-btn">关闭二次认证</button>' : ''}
+            <p id="twoFactorMessage"></p>
         </div>`;
 
     // 绑定修改事件（与之前相同，此处省略具体 fetch 代码，实际使用时请复制之前给出的完整事件绑定）
     bindAccountSecurityEvents();
+    bindTwoFactorEvents();
+}
+
+function bindTwoFactorEvents() {
+    let setupToken = null;
+    const message = getEl('twoFactorMessage');
+    const request = async (route, body) => {
+        const response = await fetch(`${API_BASE}/auth/two-factor/${route}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${safeGetItem('token')}` },
+            body: JSON.stringify(body)
+        });
+        return { response, data: await response.json() };
+    };
+    getEl('twoFactorSetupBtn')?.addEventListener('click', async () => {
+        try {
+            const { response, data } = await request('setup', { password: getEl('twoFactorPassword').value });
+            if (!response.ok) { message.textContent = data.error || '绑定失败'; return; }
+            setupToken = data.setupToken;
+            getEl('twoFactorSecret').textContent = data.secret;
+            getEl('twoFactorSetupDetails').style.display = 'block';
+            getEl('twoFactorConfirmBtn').style.display = 'block';
+            message.textContent = '输入身份验证器当前显示的验证码完成绑定。';
+        } catch { message.textContent = '网络错误，请重试'; }
+    });
+    getEl('twoFactorConfirmBtn')?.addEventListener('click', async () => {
+        try {
+            const { response, data } = await request('confirm', { setupToken, code: getEl('twoFactorCode').value.trim() });
+            message.textContent = data.message || data.error || '绑定失败';
+            if (response.ok) {
+                setupToken = null;
+                if (data.token) safeSetItem('token', data.token);
+                window._userSettings.two_factor_enabled = 1;
+                renderAccountSecurity();
+                getEl('twoFactorMessage').textContent = data.message;
+            }
+        } catch { message.textContent = '网络错误，请重试'; }
+    });
+    getEl('twoFactorDisableBtn')?.addEventListener('click', async () => {
+        try {
+            const { response, data } = await request('disable', {
+                password: getEl('twoFactorPassword').value,
+                code: getEl('twoFactorCode').value.trim()
+            });
+            message.textContent = data.message || data.error || '关闭失败';
+            if (response.ok) {
+                if (data.token) safeSetItem('token', data.token);
+                window._userSettings.two_factor_enabled = 0;
+                renderAccountSecurity();
+                getEl('twoFactorMessage').textContent = data.message;
+            }
+        } catch { message.textContent = '网络错误，请重试'; }
+    });
 }
 
 function bindAccountSecurityEvents() {

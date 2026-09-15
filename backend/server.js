@@ -2,11 +2,13 @@ require('dotenv').config({ path: __dirname + '/.env', quiet: true });
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const mysql = require('mysql2/promise');
 const path = require('path');
 const fs = require('fs');
 const { createFieldCipher } = require('./lib/field-encryption');
 const { createAuthMiddleware, issueSessionToken } = require('./lib/auth-session');
+const { generateTotpSecret, verifyTotpCode } = require('./lib/totp');
 const {
   RECHARGE_AMOUNT,
   RECHARGE_TICKETS,
@@ -38,6 +40,7 @@ requireEnvironmentVariables([
 const sensitiveFieldCipher = createFieldCipher(process.env.DATA_ENCRYPTION_KEY);
 const ORDER_GAME_ACCOUNT_CONTEXT = 'orders.game_account';
 const ORDER_GAME_PASSWORD_CONTEXT = 'orders.game_password';
+const TWO_FACTOR_SECRET_CONTEXT = 'user_settings.two_factor_secret';
 
 function revealOrderCredentials(order, { includePassword = true } = {}) {
   const revealed = { ...order };
@@ -134,6 +137,31 @@ function ipRegisterLimit(req, res, next) {
   next();
 }
 
+// 单进程登录尝试限制；多实例部署还需共享限流存储或网关规则。
+const loginAttempts = new Map();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_FAILURES = 5;
+function loginAttemptKey(req, username) {
+  return `${req.ip || req.connection.remoteAddress}|${username.toLowerCase()}`;
+}
+function checkLoginAttempts(key) {
+  const attempt = loginAttempts.get(key);
+  if (!attempt) return false;
+  if (Date.now() - attempt.startedAt >= LOGIN_WINDOW_MS) {
+    loginAttempts.delete(key);
+    return false;
+  }
+  return attempt.failures >= LOGIN_MAX_FAILURES;
+}
+function recordLoginFailure(key) {
+  if (loginAttempts.size >= 10000 && !loginAttempts.has(key)) {
+    loginAttempts.delete(loginAttempts.keys().next().value);
+  }
+  const attempt = loginAttempts.get(key) || { startedAt: Date.now(), failures: 0 };
+  attempt.failures += 1;
+  loginAttempts.set(key, attempt);
+}
+
 // ---------- 站内信辅助函数 ----------
 async function sendMessage(userId, title, content) {
   try {
@@ -189,7 +217,8 @@ async function initDB() {
         default_urgent TINYINT(1) DEFAULT 0,
         default_remark_template VARCHAR(255) DEFAULT '',
         two_factor_enabled TINYINT(1) DEFAULT 0,
-        two_factor_secret VARCHAR(32) DEFAULT '',
+        two_factor_secret TEXT,
+        two_factor_last_step BIGINT NOT NULL DEFAULT -1,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
@@ -670,8 +699,12 @@ app.post('/api/auth/register', ipRegisterLimit, async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
+  const { username, password, twoFactorCode } = req.body;
+  if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
+    return res.status(400).json({ error: '用户名和密码不能为空' });
+  }
+  const attemptKey = loginAttemptKey(req, username);
+  if (checkLoginAttempts(attemptKey)) return res.status(429).json({ error: '尝试次数过多，请稍后再试' });
   let connection;
   try {
     connection = await pool.getConnection();
@@ -682,10 +715,45 @@ app.post('/api/auth/login', async (req, res) => {
        FROM users WHERE username = ?`,
       [username]
     );
-    if (rows.length === 0) return res.status(401).json({ error: '用户名或密码错误' });
+    if (rows.length === 0) {
+      recordLoginFailure(attemptKey);
+      return res.status(401).json({ error: '用户名或密码错误' });
+    }
     const user = rows[0];
     const validPassword = await bcrypt.compare(password, user.password_hash);
-    if (!validPassword) return res.status(401).json({ error: '用户名或密码错误' });
+    if (!validPassword) {
+      recordLoginFailure(attemptKey);
+      return res.status(401).json({ error: '用户名或密码错误' });
+    }
+    const [factorRows] = await connection.execute(
+      'SELECT two_factor_enabled, two_factor_secret, two_factor_last_step FROM user_settings WHERE user_id = ?',
+      [user.id]
+    );
+    const factor = factorRows[0];
+    if (factor?.two_factor_enabled) {
+      if (!twoFactorCode) return res.status(401).json({ error: '请输入二次认证验证码', requiresTwoFactor: true });
+      let verifiedStep;
+      try {
+        const secret = sensitiveFieldCipher.decrypt(factor.two_factor_secret, TWO_FACTOR_SECRET_CONTEXT);
+        verifiedStep = verifyTotpCode(secret, twoFactorCode, Number(factor.two_factor_last_step));
+      } catch {
+        return res.status(503).json({ error: '二次认证配置无法验证，请联系管理员' });
+      }
+      if (verifiedStep === null) {
+        recordLoginFailure(attemptKey);
+        return res.status(401).json({ error: '二次认证验证码无效', requiresTwoFactor: true });
+      }
+      const [used] = await connection.execute(
+        `UPDATE user_settings SET two_factor_last_step = ?
+         WHERE user_id = ? AND two_factor_enabled = 1 AND two_factor_last_step < ?`,
+        [verifiedStep, user.id, verifiedStep]
+      );
+      if (used.affectedRows !== 1) {
+        recordLoginFailure(attemptKey);
+        return res.status(401).json({ error: '验证码已使用，请等待下一组验证码', requiresTwoFactor: true });
+      }
+    }
+    loginAttempts.delete(attemptKey);
     const token = issueSessionToken(user.id, user.token_version, JWT_SECRET);
 
     try {
@@ -752,6 +820,121 @@ app.post('/api/auth/logout', authMiddleware, async (req, res) => {
     res.json({ success: true, message: '已退出所有设备' });
   } catch {
     res.status(503).json({ error: '暂时无法退出登录' });
+  }
+});
+
+app.post('/api/auth/two-factor/setup', authMiddleware, async (req, res) => {
+  const { password } = req.body;
+  if (typeof password !== 'string' || !password) return res.status(400).json({ error: '请输入当前密码' });
+  try {
+    const [users] = await pool.execute('SELECT password_hash FROM users WHERE id = ?', [req.userId]);
+    if (users.length !== 1 || !await bcrypt.compare(password, users[0].password_hash)) {
+      return res.status(401).json({ error: '当前密码不正确' });
+    }
+    const [settings] = await pool.execute('SELECT two_factor_enabled FROM user_settings WHERE user_id = ?', [req.userId]);
+    if (settings[0]?.two_factor_enabled) return res.status(409).json({ error: '二次认证已经启用' });
+    const secret = generateTotpSecret();
+    const setupToken = jwt.sign(
+      { purpose: 'totp-setup', userId: req.userId, tokenVersion: req.tokenVersion, secret },
+      JWT_SECRET, { expiresIn: '10m' }
+    );
+    res.set('Cache-Control', 'no-store').json({ secret, setupToken });
+  } catch {
+    res.status(503).json({ error: '暂时无法创建二次认证' });
+  }
+});
+
+app.post('/api/auth/two-factor/confirm', authMiddleware, async (req, res) => {
+  const { setupToken, code } = req.body;
+  let setup;
+  try {
+    setup = jwt.verify(setupToken, JWT_SECRET);
+  } catch {
+    return res.status(400).json({ error: '绑定请求已失效，请重新开始' });
+  }
+  if (setup.purpose !== 'totp-setup' || setup.userId !== req.userId ||
+      setup.tokenVersion !== req.tokenVersion || typeof setup.secret !== 'string') {
+    return res.status(400).json({ error: '绑定请求无效' });
+  }
+  const step = verifyTotpCode(setup.secret, code);
+  if (step === null) return res.status(400).json({ error: '验证码无效' });
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    const encryptedSecret = sensitiveFieldCipher.encrypt(setup.secret, TWO_FACTOR_SECRET_CONTEXT);
+    const [result] = await connection.execute(
+      `UPDATE user_settings SET two_factor_enabled = 1, two_factor_secret = ?, two_factor_last_step = ?
+       WHERE user_id = ? AND two_factor_enabled = 0`,
+      [encryptedSecret, step, req.userId]
+    );
+    if (result.affectedRows !== 1) {
+      await connection.rollback();
+      return res.status(409).json({ error: '二次认证状态已变化' });
+    }
+    const [revoked] = await connection.execute(
+      'UPDATE users SET token_version = token_version + 1 WHERE id = ? AND token_version = ?',
+      [req.userId, req.tokenVersion]
+    );
+    if (revoked.affectedRows !== 1) {
+      await connection.rollback();
+      return res.status(409).json({ error: '登录状态已变化，请重新登录' });
+    }
+    await connection.commit();
+    res.json({ success: true, message: '二次认证已启用，其他设备已退出',
+      token: issueSessionToken(req.userId, req.tokenVersion + 1, JWT_SECRET) });
+  } catch {
+    if (connection) await connection.rollback().catch(() => {});
+    res.status(503).json({ error: '暂时无法启用二次认证' });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+app.post('/api/auth/two-factor/disable', authMiddleware, async (req, res) => {
+  const { password, code } = req.body;
+  if (typeof password !== 'string' || !password) return res.status(400).json({ error: '请输入当前密码' });
+  let connection;
+  try {
+    const [users] = await pool.execute('SELECT password_hash FROM users WHERE id = ?', [req.userId]);
+    if (users.length !== 1 || !await bcrypt.compare(password, users[0].password_hash)) {
+      return res.status(401).json({ error: '当前密码不正确' });
+    }
+    const [settings] = await pool.execute(
+      'SELECT two_factor_enabled, two_factor_secret, two_factor_last_step FROM user_settings WHERE user_id = ?',
+      [req.userId]
+    );
+    if (!settings[0]?.two_factor_enabled) return res.status(409).json({ error: '二次认证未启用' });
+    const secret = sensitiveFieldCipher.decrypt(settings[0].two_factor_secret, TWO_FACTOR_SECRET_CONTEXT);
+    const step = verifyTotpCode(secret, code, Number(settings[0].two_factor_last_step));
+    if (step === null) return res.status(401).json({ error: '二次认证验证码无效' });
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    const [result] = await connection.execute(
+      `UPDATE user_settings SET two_factor_enabled = 0, two_factor_secret = NULL, two_factor_last_step = -1
+       WHERE user_id = ? AND two_factor_enabled = 1 AND two_factor_last_step < ?`,
+      [req.userId, step]
+    );
+    if (result.affectedRows !== 1) {
+      await connection.rollback();
+      return res.status(409).json({ error: '验证码已使用或状态已变化' });
+    }
+    const [revoked] = await connection.execute(
+      'UPDATE users SET token_version = token_version + 1 WHERE id = ? AND token_version = ?',
+      [req.userId, req.tokenVersion]
+    );
+    if (revoked.affectedRows !== 1) {
+      await connection.rollback();
+      return res.status(409).json({ error: '登录状态已变化，请重新登录' });
+    }
+    await connection.commit();
+    res.json({ success: true, message: '二次认证已关闭，其他设备已退出',
+      token: issueSessionToken(req.userId, req.tokenVersion + 1, JWT_SECRET) });
+  } catch {
+    if (connection) await connection.rollback().catch(() => {});
+    res.status(503).json({ error: '暂时无法关闭二次认证' });
+  } finally {
+    if (connection) connection.release();
   }
 });
 
