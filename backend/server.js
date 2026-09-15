@@ -2045,7 +2045,9 @@ app.get('/api/admin/rental/accounts', adminMiddleware, async (req, res) => {
     const [counts] = await pool.execute(
       `SELECT COUNT(*) AS total FROM rental_accounts ra ${where}`, filters
     );
-    const [rows] = await pool.execute(
+    // mysql2.execute() binds JS numbers as DOUBLE; MySQL rejects DOUBLE LIMIT/OFFSET.
+    // query() still escapes the status placeholder and emits validated integer literals.
+    const [rows] = await pool.query(
       `SELECT ra.id, ra.owner_id, ra.game_uid, ra.client_type,
               ra.tank_list, ra.hourly_price, ra.daily_price,
               ra.available_time_desc, ra.screenshots, ra.rules,

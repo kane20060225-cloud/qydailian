@@ -13,7 +13,7 @@ process.env.DB_PASSWORD = 'test-password';
 process.env.DB_NAME = 'test-db';
 process.env.ALIPAY_ENABLED = 'false';
 
-const state = { accounts: [], audit: [], failAudit: false };
+const state = { accounts: [], audit: [], failAudit: false, listQueryCalls: 0 };
 const conn = {
   saved: null,
   async beginTransaction() {
@@ -58,6 +58,10 @@ const conn = {
 };
 const pool = {
   async getConnection() { return conn; },
+  async query(sql, params) {
+    state.listQueryCalls++;
+    return this.execute(sql, params);
+  },
   async execute(sql, params) {
     const q = sql.replace(/\s+/g, ' ').trim();
     if (q === 'SELECT token_version FROM users WHERE id = ?') {
@@ -100,6 +104,7 @@ function reset() {
   ];
   state.audit = [];
   state.failAudit = false;
+  state.listQueryCalls = 0;
 }
 async function serve(t) {
   const server = app.listen(0, '127.0.0.1');
@@ -178,6 +183,7 @@ test('admin account list is status-filtered, paged and private', async (t) => {
   const rows = await response.json();
   assert.equal(rows.length, 2);
   assert.equal(rows[0].password, undefined);
+  assert.equal(state.listQueryCalls, 1);
   assert.equal((await put(base, '/api/admin/rental/accounts/1/review', 99, undefined)).status, 400);
   assert.equal((await fetch(`${base}/api/admin/rental/accounts?page=0`, {
     headers: { Authorization: `Bearer ${token(99)}` }
@@ -199,6 +205,13 @@ test('admin rental account pagination returns the second page without duplicates
   const secondRows = await second.json();
   assert.equal(firstRows.length, 25);
   assert.equal(secondRows.length, 2);
+  assert.equal(state.listQueryCalls, 2);
   assert.deepEqual(secondRows.map((row) => row.id), [2, 1]);
   assert.equal(firstRows.some((row) => secondRows.some((next) => next.id === row.id)), false);
+});
+
+test('mysql2 text query renders validated pagination as integer SQL literals', () => {
+  assert.equal(mysql.format('SELECT id FROM rental_accounts WHERE status = ? LIMIT ? OFFSET ?',
+    ['pending', 25, 25]),
+  "SELECT id FROM rental_accounts WHERE status = 'pending' LIMIT 25 OFFSET 25");
 });
