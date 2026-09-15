@@ -808,15 +808,16 @@ async function loadAdminRentalAccounts() {
                     <td>${id} / ${rentalSafeText(a.game_uid || '未填写')}</td>
                     <td>${rentalSafeText(a.owner_name)}</td><td>${rentalSafeText(a.client_type)}</td>
                     <td>¥${rentalSafeText(a.hourly_price)} / ¥${rentalSafeText(a.daily_price)}</td>
-                    <td>${statusText[a.status] || rentalSafeText(a.status)}</td>
+                    <td>${a.deleted_at ? '已删除' : statusText[a.status] || rentalSafeText(a.status)}</td>
                     <td><details><summary>查看资料</summary>
                         <p>坦克：${rentalSafeText(a.tank_list || '未填写')}</p>
                         <p>时段：${rentalSafeText(a.available_time_desc || '不限')}</p>
                         <p>规则：${rentalSafeText(a.rules || '无')}</p>${screenshotLinks || '无截图'}
                     </details></td>
                     <td>
-                        ${a.status === 'pending' || a.status === 'suspended' ? `<button class="admin-rental-account-review-btn" data-id="${id}" data-approved="true">${a.status === 'pending' ? '审核通过' : '重新上架'}</button>` : ''}
-                        ${a.status === 'pending' || a.status === 'active' ? `<button class="admin-rental-account-review-btn" data-id="${id}" data-approved="false">${a.status === 'pending' ? '驳回' : '强制下架'}</button>` : ''}
+                        ${!a.deleted_at && (a.status === 'pending' || a.status === 'suspended') ? `<button class="admin-rental-account-review-btn" data-id="${id}" data-approved="true">${a.status === 'pending' ? '审核通过' : '重新上架'}</button>` : ''}
+                        ${!a.deleted_at && (a.status === 'pending' || a.status === 'active') ? `<button class="admin-rental-account-review-btn" data-id="${id}" data-approved="false">${a.status === 'pending' ? '驳回' : '强制下架'}</button>` : ''}
+                        <button class="admin-rental-account-archive-btn" data-id="${id}" data-action="${a.deleted_at ? 'restore' : 'archive'}">${a.deleted_at ? '恢复为待审核' : '删除'}</button>
                     </td></tr>`;
             });
             container.innerHTML = html + '</table>';
@@ -863,6 +864,26 @@ document.addEventListener('click', async (e) => {
         });
         const data = await res.json();
         showToast(res.ok ? data.message : '❌ ' + (data.error || '审核失败'));
+        if (res.ok) loadAdminRentalAccounts();
+    } catch { showToast('网络错误'); }
+});
+
+document.addEventListener('click', async (e) => {
+    const button = e.target.closest?.('.admin-rental-account-archive-btn');
+    if (!button) return;
+    const id = Number(button.dataset.id);
+    const action = button.dataset.action;
+    const token = safeGetItem('token');
+    if (!token || !Number.isSafeInteger(id) || id <= 0 || !['archive', 'restore'].includes(action)) return;
+    if (!window.confirm(action === 'archive' ?
+        '确定删除展示此账号？历史租单会保留；若仍有进行中租单，系统会拒绝删除。' :
+        '确定恢复此账号为待审核？恢复后仍须重新审核才能上架。')) return;
+    try {
+        const res = await fetch(`${API_BASE}/admin/rental/accounts/${id}/${action}`, {
+            method: 'POST', headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        showToast(res.ok ? data.message : '❌ ' + (data.error || '操作失败'));
         if (res.ok) loadAdminRentalAccounts();
     } catch { showToast('网络错误'); }
 });
@@ -2639,7 +2660,7 @@ document.querySelectorAll('.rental-tab').forEach(tab => {
         if (target === 'hall') { getEl('rentalHallView').style.display = 'block'; loadRentalHall(); }
         else if (target === 'publish') { getEl('rentalPublishView').style.display = 'block'; }
         else if (target === 'rented') { getEl('rentalRentedView').style.display = 'block'; loadRentedOrders(); }
-        else if (target === 'my') { getEl('rentalMyView').style.display = 'block'; loadMyRentalAccounts(); loadMyRentalOrders(); loadRentalEarnings(); }
+        else if (target === 'my') { getEl('rentalMyView').style.display = 'block'; loadMyRentalAccounts(); loadMyRentalDeletedAccounts(); loadMyRentalOrders(); loadRentalEarnings(); }
     });
 });
 
@@ -2888,25 +2909,32 @@ async function loadRentedOrders() {
 }
 
 // 我的出租：账号列表
-async function loadMyRentalAccounts() {
-    const container = getEl('myRentalAccountsList');
+async function loadMyRentalAccounts(deleted = false) {
+    const container = getEl(deleted ? 'myRentalDeletedList' : 'myRentalAccountsList');
     if (!container) return;
     const token = safeGetItem('token');
     if (!token) { container.innerHTML = '<p>请先登录</p>'; return; }
     try {
-        const res = await fetch(`${API_BASE}/rental/my-accounts`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const res = await fetch(`${API_BASE}/rental/my-accounts${deleted ? '?deleted=1' : ''}`, { headers: { 'Authorization': `Bearer ${token}` } });
         const accounts = await res.json();
-        if (!accounts.length) { container.innerHTML = '<p>你还没有发布出租账号</p>'; return; }
-        let html = '<p>待审核账号不会在租号大厅展示；仅管理员可通过“管理面板 → 租号审核”上架。</p><table><tr><th>UID</th><th>客户端</th><th>时租/天租</th><th>状态</th><th>操作</th></tr>';
+        if (!res.ok || !Array.isArray(accounts)) throw new Error(accounts.error || '加载失败');
+        if (!accounts.length) { container.innerHTML = deleted ? '<p>没有已删除账号</p>' : '<p>你还没有发布出租账号</p>'; return; }
+        let html = (deleted ? '<p>恢复后进入待审核，不会自动上架。</p>' :
+            '<p>待审核账号不会在租号大厅展示；仅管理员可通过“管理面板 → 租号审核”上架。</p>') +
+            '<table><tr><th>UID</th><th>客户端</th><th>时租/天租</th><th>状态</th><th>操作</th></tr>';
         accounts.forEach(a => {
+            const id = Number(a.id);
+            if (!Number.isSafeInteger(id) || id <= 0) return;
             html += `<tr>
                 <td>${rentalSafeText(a.game_uid || '—')}</td><td>${rentalSafeText(a.client_type)}</td>
                 <td>¥${rentalSafeText(a.hourly_price)} / ¥${rentalSafeText(a.daily_price)}</td>
-                <td>${a.status === 'pending' ? '待管理员审核' : a.status === 'active' ? '已上架' : '已下架/未通过'}</td>
+                <td>${deleted ? '已删除' : a.status === 'pending' ? '待管理员审核' : a.status === 'active' ? '已上架' : '已下架/未通过'}</td>
                 <td>
-                    ${a.status === 'active' ? `<button class="shelve-btn" data-id="${a.id}" data-status="suspended">下架</button>` : ''}
-                    ${a.status === 'suspended' ? `<button class="shelve-btn" data-id="${a.id}" data-status="pending">申请重新审核</button>` : ''}
-                    ${a.status === 'pending' ? '等待审核' : ''}
+                    ${deleted ? `<button class="rental-account-archive-btn" data-id="${id}" data-action="restore">恢复为待审核</button>` : `
+                        ${a.status === 'active' ? `<button class="shelve-btn" data-id="${id}" data-status="suspended">下架</button>` : ''}
+                        ${a.status === 'suspended' ? `<button class="shelve-btn" data-id="${id}" data-status="pending">申请重新审核</button>` : ''}
+                        ${a.status === 'pending' ? '等待审核' : ''}
+                        <button class="rental-account-archive-btn" data-id="${id}" data-action="archive">删除</button>`}
                 </td>
             </tr>`;
         });
@@ -2914,6 +2942,9 @@ async function loadMyRentalAccounts() {
         container.innerHTML = html;
     } catch (err) { container.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
+
+function loadMyRentalDeletedAccounts() { return loadMyRentalAccounts(true); }
+getEl('refreshDeletedRentalAccountsBtn')?.addEventListener('click', loadMyRentalDeletedAccounts);
 
 // 我的出租：订单列表
 async function loadMyRentalOrders() {
@@ -2960,6 +2991,25 @@ async function loadRentalEarnings() {
 document.addEventListener('click', async (e) => {
     const token = safeGetItem('token');
     if (!token) return;
+
+    const archiveButton = e.target.closest?.('.rental-account-archive-btn');
+    if (archiveButton) {
+        const id = Number(archiveButton.dataset.id);
+        const action = archiveButton.dataset.action;
+        if (!Number.isSafeInteger(id) || id <= 0 || !['archive', 'restore'].includes(action)) return;
+        if (!window.confirm(action === 'archive' ?
+            '确定删除展示这个出租账号？历史租单保留，有进行中租单时系统会拒绝。' :
+            '确定恢复为待审核？管理员重新通过后才能上架。')) return;
+        try {
+            const res = await fetch(`${API_BASE}/rental/accounts/${id}/${action}`, {
+                method: 'POST', headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            showToast(res.ok ? data.message : '❌ ' + (data.error || '操作失败'));
+            if (res.ok) { loadMyRentalAccounts(); loadMyRentalDeletedAccounts(); }
+        } catch { showToast('网络错误'); }
+        return;
+    }
 
     // 上下架账号
     if (e.target.classList.contains('shelve-btn')) {

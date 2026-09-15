@@ -403,6 +403,11 @@
                 <section class="card" style="margin-bottom:20px;">
                     <h4 style="color:var(--accent);">📦 我的出租账号</h4>
                     <div id="myRentalAccountsList"></div>
+                    <details style="margin-top:16px;">
+                        <summary>查看已删除账号（可恢复为待审核）</summary>
+                        <button id="refreshDeletedRentalAccountsBtn" type="button" style="margin-top:10px;">刷新已删除账号</button>
+                        <div id="myRentalDeletedList" style="margin-top:10px;"></div>
+                    </details>
                 </section>
                 <!-- 出租订单与收益 -->
                 <section class="card">
@@ -474,6 +479,7 @@
                         <option value="">全部</option>
                         <option value="active">已上架</option>
                         <option value="suspended">已下架/未通过</option>
+                        <option value="deleted">已删除</option>
                     </select>
                     <button id="refreshAdminRentalAccountsBtn" type="button">刷新申请</button>
                 </div>
