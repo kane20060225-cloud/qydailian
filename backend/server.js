@@ -11,6 +11,7 @@ const { createAuthMiddleware, issueSessionToken } = require('./lib/auth-session'
 const { generateTotpSecret, verifyTotpCode } = require('./lib/totp');
 const { createRecoveryCodes, hashRecoveryCode } = require('./lib/recovery-codes');
 const { postAccountDelta, recordOperation } = require('./lib/accounting');
+const { validateRentalPaymentEvidence } = require('./lib/rental-payment-evidence');
 const {
   RECHARGE_AMOUNT,
   RECHARGE_TICKETS,
@@ -2027,6 +2028,10 @@ app.post('/api/rental/orders', authMiddleware, async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
       [orderNo, req.userId, account.owner_id, account_id, rental_type, quantity, totalPrice, creditsUsed]
     );
+    await conn.execute(
+      'INSERT INTO rental_order_workflow (order_no, payment_status) VALUES (?, ?)',
+      [orderNo, totalPrice === 0 ? 'paid' : 'unpaid']
+    );
     await recordOperation(conn, {
       eventKey: `rental:${orderNo}:created`, actorUserId: req.userId,
       action: 'rental_created', targetType: 'rental_order', targetRef: orderNo
@@ -2045,8 +2050,11 @@ app.post('/api/rental/orders', authMiddleware, async (req, res) => {
 app.get('/api/rental/my-rented', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT ro.*, ra.game_uid, ra.client_type, u.username AS owner_name
+      `SELECT ro.*, w.payment_status, w.owner_complete_requested_at,
+              w.renter_confirmed_at, w.disputed_at, w.resolved_at,
+              ra.game_uid, ra.client_type, u.username AS owner_name
        FROM rental_orders ro
+       LEFT JOIN rental_order_workflow w ON w.order_no = ro.order_no
        JOIN rental_accounts ra ON ro.account_id = ra.id
        JOIN users u ON ro.owner_id = u.id
        WHERE ro.renter_id = ?
@@ -2060,8 +2068,11 @@ app.get('/api/rental/my-rented', authMiddleware, async (req, res) => {
 app.get('/api/rental/my-orders', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT ro.*, ra.game_uid, ra.client_type, u.username AS renter_name
+      `SELECT ro.*, w.payment_status, w.owner_complete_requested_at,
+              w.renter_confirmed_at, w.disputed_at, w.resolved_at,
+              ra.game_uid, ra.client_type, u.username AS renter_name
        FROM rental_orders ro
+       LEFT JOIN rental_order_workflow w ON w.order_no = ro.order_no
        JOIN rental_accounts ra ON ro.account_id = ra.id
        JOIN users u ON ro.renter_id = u.id
        WHERE ro.owner_id = ?
@@ -2072,16 +2083,203 @@ app.get('/api/rental/my-orders', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
+app.get('/api/admin/rental/orders', adminMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT ro.order_no, ro.status, ro.total_price, ro.credits_used,
+              ro.created_at, renter.username AS renter_name,
+              owner.username AS owner_name,
+              w.payment_status, w.owner_complete_requested_at,
+              w.renter_confirmed_at, w.disputed_at, w.resolved_at,
+              e.id AS evidence_id, e.filename AS evidence_filename,
+              e.status AS evidence_status, e.expected_amount,
+              pr.payment_reference,
+              rr.refund_reference, sr.decision AS dispute_decision
+       FROM rental_orders ro
+       JOIN users renter ON renter.id = ro.renter_id
+       JOIN users owner ON owner.id = ro.owner_id
+       LEFT JOIN rental_order_workflow w ON w.order_no = ro.order_no
+       LEFT JOIN manual_payment_evidence e ON e.id = (
+         SELECT MAX(e2.id) FROM manual_payment_evidence e2
+         WHERE e2.business_type = 'rental_order' AND e2.business_ref = ro.order_no
+       )
+       LEFT JOIN rental_refund_reviews rr ON rr.order_no = ro.order_no
+       LEFT JOIN rental_payment_reviews pr ON pr.order_no = ro.order_no
+       LEFT JOIN rental_settlement_resolutions sr ON sr.order_no = ro.order_no
+       ORDER BY ro.created_at DESC LIMIT 100`
+    );
+    res.json(rows);
+  } catch {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+app.post('/api/rental/orders/:orderNo/payment-evidence', authMiddleware, async (req, res) => {
+  const { orderNo } = req.params;
+  const { filename } = req.body;
+  try {
+    validateRentalPaymentEvidence(path.join(__dirname, 'uploads'), filename, req.userId);
+  } catch {
+    return res.status(400).json({ error: '付款截图无效，请重新上传 PNG 或 JPEG 图片' });
+  }
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [orders] = await conn.execute(
+      'SELECT id, total_price, status FROM rental_orders WHERE order_no = ? AND renter_id = ? FOR UPDATE',
+      [orderNo, req.userId]
+    );
+    const [workflows] = await conn.execute(
+      'SELECT payment_status, disputed_at FROM rental_order_workflow WHERE order_no = ? FOR UPDATE',
+      [orderNo]
+    );
+    if (!orders.length || orders[0].status !== 'pending' || !workflows.length ||
+        !['unpaid','rejected'].includes(workflows[0].payment_status) ||
+        workflows[0].disputed_at) {
+      await conn.rollback();
+      return res.status(409).json({ error: '当前订单无法提交付款截图' });
+    }
+    const [evidence] = await conn.execute(
+      `INSERT INTO manual_payment_evidence
+       (business_type, business_ref, uploader_user_id, filename, expected_amount)
+       VALUES (?, ?, ?, ?, ?)`,
+      ['rental_order', orderNo, req.userId, filename, orders[0].total_price]
+    );
+    await conn.execute(
+      'UPDATE rental_order_workflow SET payment_status = ? WHERE order_no = ?',
+      ['submitted', orderNo]
+    );
+    await recordOperation(conn, {
+      eventKey: `rental:${orderNo}:evidence:${evidence.insertId}`,
+      actorUserId: req.userId, action: 'rental_payment_submitted',
+      targetType: 'rental_order', targetRef: orderNo
+    });
+    await conn.commit();
+    res.json({ success: true, message: '付款截图已提交，等待管理员核实收款' });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ error: '服务器错误' });
+  } finally { conn.release(); }
+});
+
+app.put('/api/admin/rental/orders/:orderNo/review-payment', adminMiddleware, async (req, res) => {
+  const { orderNo } = req.params;
+  const { approved, payment_reference: paymentReference } = req.body;
+  if (typeof approved !== 'boolean') return res.status(400).json({ error: '审核结果无效' });
+  if (approved && !validRentalReference(paymentReference)) {
+    return res.status(400).json({ error: '请填写实际收款的核对编号' });
+  }
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [orders] = await conn.execute(
+      'SELECT total_price, status FROM rental_orders WHERE order_no = ? FOR UPDATE', [orderNo]
+    );
+    const [workflows] = await conn.execute(
+      'SELECT payment_status FROM rental_order_workflow WHERE order_no = ? FOR UPDATE', [orderNo]
+    );
+    const [evidence] = await conn.execute(
+      `SELECT id, uploader_user_id, filename, expected_amount
+       FROM manual_payment_evidence
+       WHERE business_type = ? AND business_ref = ? AND status = ?
+       ORDER BY id DESC LIMIT 1 FOR UPDATE`,
+      ['rental_order', orderNo, 'submitted']
+    );
+    const [reviews] = await conn.execute(
+      'SELECT order_no FROM rental_payment_reviews WHERE order_no = ? FOR UPDATE', [orderNo]
+    );
+    if (!orders.length || orders[0].status !== 'pending' || !workflows.length ||
+        workflows[0].payment_status !== 'submitted' || !evidence.length || reviews.length ||
+        Math.round(Number(evidence[0].expected_amount) * 100) !==
+          Math.round(Number(orders[0].total_price) * 100)) {
+      await conn.rollback();
+      return res.status(409).json({ error: '付款凭证或订单状态已变化' });
+    }
+    if (approved) {
+      try {
+        validateRentalPaymentEvidence(path.join(__dirname, 'uploads'),
+          evidence[0].filename, evidence[0].uploader_user_id);
+      } catch {
+        await conn.rollback();
+        return res.status(409).json({ error: '付款截图文件已失效，不能确认收款' });
+      }
+      await conn.execute(
+        `INSERT INTO rental_payment_reviews
+         (order_no, evidence_id, payment_reference, confirmed_by)
+         VALUES (?, ?, ?, ?)`,
+        [orderNo, evidence[0].id, paymentReference, req.userId]
+      );
+    }
+    await conn.execute(
+      `UPDATE manual_payment_evidence
+       SET status = ?, reviewer_user_id = ?, reviewed_at = NOW() WHERE id = ?`,
+      [approved ? 'accepted' : 'rejected', req.userId, evidence[0].id]
+    );
+    await conn.execute(
+      'UPDATE rental_order_workflow SET payment_status = ? WHERE order_no = ?',
+      [approved ? 'paid' : 'rejected', orderNo]
+    );
+    await recordOperation(conn, {
+      eventKey: `rental:${orderNo}:payment_review:${evidence[0].id}`,
+      actorUserId: req.userId,
+      action: approved ? 'rental_payment_confirmed' : 'rental_payment_rejected',
+      targetType: 'rental_order', targetRef: orderNo
+    });
+    await conn.commit();
+    res.json({ success: true, payment_status: approved ? 'paid' : 'rejected' });
+  } catch (err) {
+    await conn.rollback();
+    res.status(err.code === 'ER_DUP_ENTRY' ? 409 : 500).json({
+      error: err.code === 'ER_DUP_ENTRY' ? '收款核对编号已用于其他订单' : '服务器错误'
+    });
+  } finally { conn.release(); }
+});
+
+async function postRentalOwnerEarning(conn, order, actorUserId) {
+  const amount = Math.round(Number(order.total_price) * 100) / 100;
+  if (!Number.isFinite(amount) || amount < 0) throw new Error('租号收益金额无效');
+  if (amount === 0) return;
+  await postAccountDelta(conn, {
+    userId: order.owner_id, accountType: 'rental_earnings', delta: amount,
+    entryKey: `rental:${order.order_no}:owner_earnings`,
+    sourceType: 'rental_order', sourceRef: order.order_no, actorUserId
+  });
+}
+
 app.put('/api/rental/orders/:orderNo/confirm', authMiddleware, async (req, res) => {
   const { orderNo } = req.params;
+  const conn = await pool.getConnection();
   try {
-    const [result] = await pool.execute(
-      'UPDATE rental_orders SET status = ? WHERE order_no = ? AND owner_id = ? AND status = ?',
-      ['active', orderNo, req.userId, 'pending']
+    await conn.beginTransaction();
+    const [orders] = await conn.execute(
+      'SELECT id, status FROM rental_orders WHERE order_no = ? AND owner_id = ? FOR UPDATE',
+      [orderNo, req.userId]
     );
-    if (result.affectedRows === 0) return res.status(400).json({ error: '无法确认，订单不存在或状态不正确' });
+    const [workflows] = await conn.execute(
+      'SELECT payment_status, disputed_at FROM rental_order_workflow WHERE order_no = ? FOR UPDATE',
+      [orderNo]
+    );
+    if (!orders.length || orders[0].status !== 'pending' ||
+        !workflows.length || workflows[0].payment_status !== 'paid' ||
+        workflows[0].disputed_at) {
+      await conn.rollback();
+      return res.status(409).json({ error: '请先由管理员确认收款，或处理当前争议' });
+    }
+    const [result] = await conn.execute(
+      'UPDATE rental_orders SET status = ? WHERE id = ? AND status = ?',
+      ['active', orders[0].id, 'pending']
+    );
+    if (result.affectedRows !== 1) throw new Error('订单状态已变化');
+    await recordOperation(conn, {
+      eventKey: `rental:${orderNo}:activated`, actorUserId: req.userId,
+      action: 'rental_activated', targetType: 'rental_order', targetRef: orderNo
+    });
+    await conn.commit();
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ error: '服务器错误' });
+  } finally { conn.release(); }
 });
 
 app.put('/api/rental/orders/:orderNo/complete', authMiddleware, async (req, res) => {
@@ -2091,29 +2289,82 @@ app.put('/api/rental/orders/:orderNo/complete', authMiddleware, async (req, res)
     await conn.beginTransaction();
 
     const [orders] = await conn.execute(
-      'SELECT * FROM rental_orders WHERE order_no = ? AND owner_id = ? AND status = ?',
-      [orderNo, req.userId, 'active']
+      'SELECT id, status FROM rental_orders WHERE order_no = ? AND owner_id = ? FOR UPDATE',
+      [orderNo, req.userId]
     );
-    if (orders.length === 0) throw new Error('订单无法完成');
+    const [workflows] = await conn.execute(
+      `SELECT payment_status, owner_complete_requested_at, disputed_at
+       FROM rental_order_workflow WHERE order_no = ? FOR UPDATE`,
+      [orderNo]
+    );
+    if (!orders.length || orders[0].status !== 'active' || !workflows.length ||
+        workflows[0].payment_status !== 'paid' ||
+        workflows[0].owner_complete_requested_at || workflows[0].disputed_at) {
+      await conn.rollback();
+      return res.status(409).json({ error: '当前无法申请完成，请核查收款或争议状态' });
+    }
+    const [updated] = await conn.execute(
+      `UPDATE rental_order_workflow SET owner_complete_requested_at = NOW()
+       WHERE order_no = ? AND owner_complete_requested_at IS NULL`,
+      [orderNo]
+    );
+    if (updated.affectedRows !== 1) throw new Error('完成申请状态已变化');
+    await recordOperation(conn, {
+      eventKey: `rental:${orderNo}:owner_requested_completion`, actorUserId: req.userId,
+      action: 'rental_completion_requested', targetType: 'rental_order', targetRef: orderNo
+    });
+    await conn.commit();
+    res.json({ success: true, message: '已申请完成，等待租用方确认' });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ error: '服务器错误' });
+  } finally {
+    conn.release();
+  }
+});
 
+app.put('/api/rental/orders/:orderNo/confirm-completion', authMiddleware, async (req, res) => {
+  const { orderNo } = req.params;
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [orders] = await conn.execute(
+      'SELECT * FROM rental_orders WHERE order_no = ? AND renter_id = ? FOR UPDATE',
+      [orderNo, req.userId]
+    );
+    const [workflows] = await conn.execute(
+      `SELECT payment_status, owner_complete_requested_at, renter_confirmed_at, disputed_at
+       FROM rental_order_workflow WHERE order_no = ? FOR UPDATE`,
+      [orderNo]
+    );
+    if (!orders.length || orders[0].status !== 'active' || !workflows.length ||
+        workflows[0].payment_status !== 'paid' ||
+        !workflows[0].owner_complete_requested_at ||
+        workflows[0].renter_confirmed_at || workflows[0].disputed_at) {
+      await conn.rollback();
+      return res.status(409).json({ error: '订单尚未满足双方确认条件' });
+    }
     const order = orders[0];
-    await conn.execute(
-      'UPDATE users SET rental_earnings = rental_earnings + ? WHERE id = ?',
-      [order.total_price, order.owner_id]
+    const [updated] = await conn.execute(
+      'UPDATE rental_orders SET status = ? WHERE id = ? AND status = ?',
+      ['completed', order.id, 'active']
     );
+    if (updated.affectedRows !== 1) throw new Error('订单状态已变化');
+    await postRentalOwnerEarning(conn, order, req.userId);
     await conn.execute(
-      'UPDATE rental_orders SET status = ? WHERE order_no = ?',
-      ['completed', orderNo]
+      'UPDATE rental_order_workflow SET renter_confirmed_at = NOW() WHERE order_no = ?',
+      [orderNo]
     );
-
+    await recordOperation(conn, {
+      eventKey: `rental:${orderNo}:completed`, actorUserId: req.userId,
+      action: 'rental_completed_by_renter', targetType: 'rental_order', targetRef: orderNo
+    });
     await conn.commit();
     res.json({ success: true });
   } catch (err) {
     await conn.rollback();
-    res.status(400).json({ error: err.message });
-  } finally {
-    conn.release();
-  }
+    res.status(500).json({ error: '服务器错误' });
+  } finally { conn.release(); }
 });
 
 app.put('/api/rental/orders/:orderNo/cancel', authMiddleware, async (req, res) => {
@@ -2125,11 +2376,23 @@ app.put('/api/rental/orders/:orderNo/cancel', authMiddleware, async (req, res) =
       'SELECT * FROM rental_orders WHERE order_no = ? AND (renter_id = ? OR owner_id = ?) AND status IN (?, ?) FOR UPDATE',
       [orderNo, req.userId, req.userId, 'pending', 'active']
     );
+    const [workflows] = await conn.execute(
+      `SELECT payment_status, owner_complete_requested_at, disputed_at
+       FROM rental_order_workflow WHERE order_no = ? FOR UPDATE`, [orderNo]
+    );
     if (orders.length === 0) {
       await conn.rollback();
       return res.status(400).json({ error: '无法取消' });
     }
     const order = orders[0];
+    const workflow = workflows[0];
+    if (!workflow || workflow.disputed_at || workflow.owner_complete_requested_at ||
+        workflow.payment_status === 'submitted' ||
+        workflow.payment_status === 'paid' ||
+        (order.status === 'active' && workflow.payment_status !== 'paid')) {
+      await conn.rollback();
+      return res.status(409).json({ error: '订单已有付款或争议，需管理员核实退款后处理' });
+    }
     const [result] = await conn.execute(
       'UPDATE rental_orders SET status = ? WHERE id = ? AND status = ?',
       ['cancelled', order.id, order.status]
@@ -2149,6 +2412,170 @@ app.put('/api/rental/orders/:orderNo/cancel', authMiddleware, async (req, res) =
     await conn.commit();
     res.json({ success: true });
   } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ error: '服务器错误' });
+  } finally { conn.release(); }
+});
+
+app.put('/api/rental/orders/:orderNo/dispute', authMiddleware, async (req, res) => {
+  const { orderNo } = req.params;
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [orders] = await conn.execute(
+      `SELECT status FROM rental_orders WHERE order_no = ?
+       AND (renter_id = ? OR owner_id = ?) FOR UPDATE`,
+      [orderNo, req.userId, req.userId]
+    );
+    const [workflows] = await conn.execute(
+      `SELECT payment_status, disputed_at, resolved_at
+       FROM rental_order_workflow WHERE order_no = ? FOR UPDATE`, [orderNo]
+    );
+    if (!orders.length || !['pending', 'active'].includes(orders[0].status) ||
+        !workflows.length || workflows[0].payment_status !== 'paid' ||
+        workflows[0].disputed_at || workflows[0].resolved_at) {
+      await conn.rollback();
+      return res.status(409).json({ error: '当前订单不能发起争议' });
+    }
+    await conn.execute(
+      'UPDATE rental_order_workflow SET disputed_at = NOW() WHERE order_no = ?', [orderNo]
+    );
+    await recordOperation(conn, {
+      eventKey: `rental:${orderNo}:disputed`, actorUserId: req.userId,
+      action: 'rental_disputed', targetType: 'rental_order', targetRef: orderNo
+    });
+    await conn.commit();
+    res.json({ success: true, message: '争议已登记，等待管理员处理' });
+  } catch {
+    await conn.rollback();
+    res.status(500).json({ error: '服务器错误' });
+  } finally { conn.release(); }
+});
+
+function validRentalReference(value) {
+  return typeof value === 'string' && /^[A-Za-z0-9._:\/-]{4,80}$/.test(value);
+}
+
+app.put('/api/admin/rental/orders/:orderNo/confirm-refund', adminMiddleware, async (req, res) => {
+  const { orderNo } = req.params;
+  const { refunded_amount: refundedAmount, refund_reference: refundReference } = req.body;
+  if (!validRentalReference(refundReference) ||
+      !Number.isFinite(Number(refundedAmount)) || Number(refundedAmount) < 0) {
+    return res.status(400).json({ error: '退款金额或外部退款凭据无效' });
+  }
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [orders] = await conn.execute(
+      'SELECT * FROM rental_orders WHERE order_no = ? FOR UPDATE', [orderNo]
+    );
+    const [workflows] = await conn.execute(
+      `SELECT payment_status, disputed_at, resolved_at
+       FROM rental_order_workflow WHERE order_no = ? FOR UPDATE`, [orderNo]
+    );
+    const [reviews] = await conn.execute(
+      'SELECT order_no FROM rental_refund_reviews WHERE order_no = ? FOR UPDATE', [orderNo]
+    );
+    const order = orders[0];
+    if (!order || !['pending', 'active'].includes(order.status) || !workflows.length ||
+        workflows[0].payment_status !== 'paid' ||
+        Math.round(Number(refundedAmount) * 100) !==
+          Math.round(Number(order.total_price) * 100) || reviews.length ||
+        workflows[0].resolved_at) {
+      await conn.rollback();
+      return res.status(409).json({ error: '订单尚未满足核实退款条件，或退款已登记' });
+    }
+    await conn.execute(
+      `INSERT INTO rental_refund_reviews
+       (order_no, refunded_amount, refund_reference, confirmed_by)
+       VALUES (?, ?, ?, ?)`,
+      [orderNo, refundedAmount, refundReference, req.userId]
+    );
+    if (workflows[0].disputed_at) {
+      await conn.execute(
+        `INSERT INTO rental_settlement_resolutions
+         (order_no, decision, resolution_reference, decided_by)
+         VALUES (?, 'cancelled', ?, ?)`,
+        [orderNo, refundReference, req.userId]
+      );
+      await conn.execute(
+        'UPDATE rental_order_workflow SET resolved_at = NOW() WHERE order_no = ?', [orderNo]
+      );
+    }
+    const [updated] = await conn.execute(
+      'UPDATE rental_orders SET status = ? WHERE id = ? AND status = ?',
+      ['cancelled', order.id, order.status]
+    );
+    if (updated.affectedRows !== 1) throw new Error('订单状态已变化');
+    if (Number(order.credits_used) > 0) {
+      await postAccountDelta(conn, {
+        userId: order.renter_id, accountType: 'qy_credits',
+        delta: Number(order.credits_used),
+        entryKey: `rental:${orderNo}:credits_refund`, sourceType: 'rental_order',
+        sourceRef: orderNo, actorUserId: req.userId
+      });
+    }
+    await recordOperation(conn, {
+      eventKey: `rental:${orderNo}:refund_confirmed`, actorUserId: req.userId,
+      action: 'rental_refund_confirmed', targetType: 'rental_order', targetRef: orderNo
+    });
+    await conn.commit();
+    res.json({ success: true, message: '已核实退款或无现金应退，并取消订单' });
+  } catch (err) {
+    await conn.rollback();
+    res.status(err.code === 'ER_DUP_ENTRY' ? 409 : 500).json({
+      error: err.code === 'ER_DUP_ENTRY' ? '退款核对编号已用于其他订单' : '服务器错误'
+    });
+  } finally { conn.release(); }
+});
+
+app.put('/api/admin/rental/orders/:orderNo/resolve-dispute', adminMiddleware, async (req, res) => {
+  const { orderNo } = req.params;
+  const { decision, resolution_reference: reference } = req.body;
+  if (decision !== 'completed' || !validRentalReference(reference)) {
+    return res.status(400).json({ error: '裁决内容或凭据无效' });
+  }
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [orders] = await conn.execute(
+      'SELECT * FROM rental_orders WHERE order_no = ? FOR UPDATE', [orderNo]
+    );
+    const [workflows] = await conn.execute(
+      `SELECT payment_status, owner_complete_requested_at, disputed_at, resolved_at
+       FROM rental_order_workflow WHERE order_no = ? FOR UPDATE`, [orderNo]
+    );
+    const order = orders[0];
+    if (!order || order.status !== 'active' || !workflows.length ||
+        workflows[0].payment_status !== 'paid' ||
+        !workflows[0].owner_complete_requested_at ||
+        !workflows[0].disputed_at || workflows[0].resolved_at) {
+      await conn.rollback();
+      return res.status(409).json({ error: '争议订单尚未满足结算条件' });
+    }
+    await conn.execute(
+      `INSERT INTO rental_settlement_resolutions
+       (order_no, decision, resolution_reference, decided_by)
+       VALUES (?, 'completed', ?, ?)`,
+      [orderNo, reference, req.userId]
+    );
+    const [updated] = await conn.execute(
+      'UPDATE rental_orders SET status = ? WHERE id = ? AND status = ?',
+      ['completed', order.id, 'active']
+    );
+    if (updated.affectedRows !== 1) throw new Error('订单状态已变化');
+    await postRentalOwnerEarning(conn, order, req.userId);
+    await conn.execute(
+      'UPDATE rental_order_workflow SET resolved_at = NOW() WHERE order_no = ?', [orderNo]
+    );
+    await recordOperation(conn, {
+      eventKey: `rental:${orderNo}:resolved_completed`, actorUserId: req.userId,
+      action: 'rental_dispute_resolved_completed',
+      targetType: 'rental_order', targetRef: orderNo
+    });
+    await conn.commit();
+    res.json({ success: true });
+  } catch {
     await conn.rollback();
     res.status(500).json({ error: '服务器错误' });
   } finally { conn.release(); }

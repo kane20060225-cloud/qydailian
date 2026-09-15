@@ -5,7 +5,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const MIGRATION_DIR = path.join(__dirname, '..', 'migrations');
-const B5_FILES = ['20260915_b5_accounting.sql', '20260915_b5_workflows.sql'];
+const B5_FILES = [
+  '20260915_b5_accounting.sql',
+  '20260915_b5_workflows.sql',
+  '20260915_b5_rental_resolution.sql'
+];
 const MIGRATION_LOCK = 'qydailian_b5_migrations';
 const REQUIRED_SCHEMA = Object.freeze({
   account_ledger: { columns: {
@@ -26,7 +30,19 @@ const REQUIRED_SCHEMA = Object.freeze({
   manual_payment_evidence: { columns: {
     business_ref: 'varchar(30)', filename: 'varchar(255)',
     expected_amount: 'decimal(10,2)', reviewer_user_id: 'int'
-  } }
+  } },
+  rental_payment_reviews: { columns: {
+    order_no: 'varchar(30)', evidence_id: 'bigint unsigned',
+    payment_reference: 'varchar(80)', confirmed_by: 'int'
+  }, unique: ['order_no', 'payment_reference'] },
+  rental_refund_reviews: { columns: {
+    order_no: 'varchar(30)', refunded_amount: 'decimal(10,2)',
+    refund_reference: 'varchar(80)', confirmed_by: 'int'
+  }, unique: ['order_no', 'refund_reference'] },
+  rental_settlement_resolutions: { columns: {
+    order_no: 'varchar(30)', decision: "enum('completed','cancelled')",
+    resolution_reference: 'varchar(80)', decided_by: 'int'
+  }, unique: 'order_no' }
 });
 
 function parseMigration(sql) {
@@ -99,9 +115,11 @@ async function verifyTableSchema(conn, statement) {
       `SELECT column_name, non_unique FROM information_schema.statistics
        WHERE table_schema = DATABASE() AND table_name = ?`, [table]
     );
-    if (!indexes.some((index) => index.column_name === expected.unique &&
-        Number(index.non_unique) === 0)) {
-      throw new Error(`Migration unique constraint conflict: ${table}.${expected.unique}`);
+    for (const column of Array.isArray(expected.unique) ? expected.unique : [expected.unique]) {
+      if (!indexes.some((index) => index.column_name === column &&
+          Number(index.non_unique) === 0)) {
+        throw new Error(`Migration unique constraint conflict: ${table}.${column}`);
+      }
     }
   }
 }

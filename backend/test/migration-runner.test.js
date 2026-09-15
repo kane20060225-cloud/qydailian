@@ -9,8 +9,8 @@ const {
 
 test('B5 migration SQL is additive and contains only versioned tables', () => {
   const migrations = loadMigrations();
-  assert.equal(migrations.length, 2);
-  assert.deepEqual(migrations.map((migration) => migration.statements.length), [2, 3]);
+  assert.equal(migrations.length, 3);
+  assert.deepEqual(migrations.map((migration) => migration.statements.length), [2, 3, 3]);
   assert.ok(migrations.every((migration) => migration.checksum.length === 64));
   assert.throws(() => parseMigration('DROP TABLE users;'), /additive/);
   assert.throws(() => parseMigration('DELETE FROM users;'), /additive/);
@@ -27,7 +27,8 @@ test('plan mode does not create a migrations table or run DDL', async () => {
   };
   assert.deepEqual(await runMigrations(conn), [
     { version: '20260915_b5_accounting', status: 'pending' },
-    { version: '20260915_b5_workflows', status: 'pending' }
+    { version: '20260915_b5_workflows', status: 'pending' },
+    { version: '20260915_b5_rental_resolution', status: 'pending' }
   ]);
   assert.equal(calls.length, 1);
   assert.match(calls[0], /information_schema\.tables/);
@@ -51,7 +52,15 @@ test('apply holds a lock, records checksum and is idempotent', async () => {
       final_status: "enum('completed')", finalized_by: 'int' },
     manual_payment_evidence: { business_ref: 'varchar(30)',
       filename: 'varchar(255)', expected_amount: 'decimal(10,2)',
-      reviewer_user_id: 'int' }
+      reviewer_user_id: 'int' },
+    rental_payment_reviews: { order_no: 'varchar(30)', evidence_id: 'bigint unsigned',
+      payment_reference: 'varchar(80)', confirmed_by: 'int' },
+    rental_refund_reviews: { order_no: 'varchar(30)',
+      refunded_amount: 'decimal(10,2)', refund_reference: 'varchar(80)',
+      confirmed_by: 'int' },
+    rental_settlement_resolutions: { order_no: 'varchar(30)',
+      decision: "enum('completed','cancelled')",
+      resolution_reference: 'varchar(80)', decided_by: 'int' }
   };
   const conn = {
     async query(sql) {
@@ -69,7 +78,10 @@ test('apply holds a lock, records checksum and is idempotent', async () => {
       if (sql.includes('information_schema.statistics')) {
         const unique = currentTable === 'account_ledger' ? 'entry_key'
           : currentTable === 'operation_audit' ? 'event_key' : 'order_no';
-        return [[{ column_name: unique, non_unique: 0 }]];
+        const columns = [unique];
+        if (currentTable === 'rental_payment_reviews') columns.push('payment_reference');
+        if (currentTable === 'rental_refund_reviews') columns.push('refund_reference');
+        return [columns.map((column_name) => ({ column_name, non_unique: 0 }))];
       }
       if (sql.startsWith('SELECT version')) {
         return [[...versions.entries()].map(([version, checksum]) => ({ version, checksum }))];

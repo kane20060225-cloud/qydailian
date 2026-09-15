@@ -765,6 +765,84 @@ const statusFilter = getEl('statusFilter');
 const refreshOrdersBtn = getEl('refreshOrdersBtn');
 const adminOrderList = getEl('adminOrderList');
 
+function rentalSafeText(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+}
+
+async function loadAdminRentalOrders() {
+    const container = getEl('adminRentalOrderList');
+    const token = safeGetItem('token');
+    if (!container || !token) return;
+    try {
+        const res = await fetch(`${API_BASE}/admin/rental/orders`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const orders = await res.json();
+        if (!res.ok || !Array.isArray(orders)) throw new Error('加载失败');
+        if (!orders.length) { container.innerHTML = '<p>暂无租号订单</p>'; return; }
+        let html = '<table><tr><th>订单</th><th>双方</th><th>现金/积分</th><th>状态</th><th>凭证</th><th>操作</th></tr>';
+        orders.forEach(o => {
+            const no = rentalSafeText(o.order_no);
+            const screenshot = o.evidence_filename && /^rental_\d+_\d+\.png$/.test(o.evidence_filename) ?
+                `<a href="/uploads/${encodeURIComponent(o.evidence_filename)}" target="_blank" rel="noopener">查看截图</a>` : '无';
+            html += `<tr><td>${no}</td><td>${rentalSafeText(o.renter_name)} → ${rentalSafeText(o.owner_name)}</td>
+                <td>¥${rentalSafeText(o.total_price)} / ${rentalSafeText(o.credits_used)} 积分</td>
+                <td>${rentalSafeText(o.status)}；${rentalSafeText(o.payment_status)}${o.disputed_at ? '；争议中' : ''}</td>
+                <td>${screenshot}；${rentalSafeText(o.evidence_status || '未提交')}；预期 ¥${rentalSafeText(o.expected_amount || 0)}
+                    ${o.payment_reference ? `；收款编号 ${rentalSafeText(o.payment_reference)}` : ''}
+                    ${o.refund_reference ? `；退款编号 ${rentalSafeText(o.refund_reference)}` : ''}</td>
+                <td>
+                    ${o.status === 'pending' && o.payment_status === 'submitted' ? `<button class="admin-rental-review-btn" data-order="${no}" data-approved="true">核实收款</button><button class="admin-rental-review-btn" data-order="${no}" data-approved="false">驳回凭证</button>` : ''}
+                    ${(o.status === 'pending' || o.status === 'active') && o.payment_status === 'paid' ? `<button class="admin-rental-refund-btn" data-order="${no}" data-amount="${rentalSafeText(o.total_price)}">核实退款并取消</button>` : ''}
+                    ${o.status === 'active' && o.disputed_at && o.owner_complete_requested_at && !o.resolved_at ? `<button class="admin-rental-resolve-btn" data-order="${no}">裁决完成</button>` : ''}
+                </td></tr>`;
+        });
+        container.innerHTML = html + '</table>';
+    } catch { container.innerHTML = '<p>租号订单加载失败</p>'; }
+}
+
+getEl('refreshAdminRentalBtn')?.addEventListener('click', loadAdminRentalOrders);
+document.addEventListener('click', async (e) => {
+    const button = e.target.closest?.('.admin-rental-review-btn, .admin-rental-refund-btn, .admin-rental-resolve-btn');
+    if (!button) return;
+    const token = safeGetItem('token');
+    const orderNo = button.dataset.order;
+    if (!token || !orderNo) return;
+    let endpoint;
+    let body;
+    if (button.classList.contains('admin-rental-review-btn')) {
+        const approved = button.dataset.approved === 'true';
+        const reference = approved ? window.prompt('先核对实际入账，再填写收款交易/核对编号：') : null;
+        if (approved && !reference) return;
+        if (!window.confirm(approved ? '已逐笔核实实际收款，确定通过？' : '确定驳回付款凭证？')) return;
+        endpoint = 'review-payment';
+        body = { approved, payment_reference: reference };
+    } else if (button.classList.contains('admin-rental-refund-btn')) {
+        const amount = Number(button.dataset.amount);
+        const reference = window.prompt(amount === 0 ?
+            '无现金应退：填写人工核对编号后取消并退积分：' :
+            `先在收款渠道确认已全额退款 ¥${amount.toFixed(2)}，再填写退款交易编号：`);
+        if (!reference || !window.confirm('已核实退款或无现金应退，确定取消并退还抵扣积分？')) return;
+        endpoint = 'confirm-refund';
+        body = { refunded_amount: amount, refund_reference: reference };
+    } else {
+        const reference = window.prompt('先核实双方争议，再填写处理凭据编号：');
+        if (!reference || !window.confirm('确定裁决已完成并计入出租方收益？')) return;
+        endpoint = 'resolve-dispute';
+        body = { decision: 'completed', resolution_reference: reference };
+    }
+    try {
+        const res = await fetch(`${API_BASE}/admin/rental/orders/${encodeURIComponent(orderNo)}/${endpoint}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` }, body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        showToast(res.ok ? '租号订单已处理' : '❌ ' + (data.error || '处理失败'));
+        if (res.ok) loadAdminRentalOrders();
+    } catch { showToast('网络错误'); }
+});
+
 async function loadAdminOrders() {
     const token = safeGetItem('token'); if (!token || !adminOrderList) return;
     const status = statusFilter ? statusFilter.value : '';
@@ -983,6 +1061,7 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
             const el = getEl('adminOrdersSection');
             if (el) el.style.display = 'block';
             loadAdminOrders();
+            loadAdminRentalOrders();
         } else if (target === 'custom') {
             const el = getEl('adminCustomSection');
             if (el) el.style.display = 'block';
@@ -2680,13 +2759,26 @@ async function loadRentedOrders() {
         const res = await fetch(`${API_BASE}/rental/my-rented`, { headers: { 'Authorization': `Bearer ${token}` } });
         const orders = await res.json();
         if (!orders.length) { container.innerHTML = '<p>暂无租用记录</p>'; return; }
-        let html = '<table><tr><th>订单号</th><th>账号</th><th>出租方</th><th>类型</th><th>数量</th><th>金额</th><th>状态</th><th>操作</th></tr>';
+        let html = '<table><tr><th>订单号</th><th>账号</th><th>出租方</th><th>类型</th><th>数量</th><th>金额</th><th>状态</th><th>付款/结算</th><th>操作</th></tr>';
         orders.forEach(o => {
+            const canCancel = (o.status === 'pending' || o.status === 'active') &&
+                (o.payment_status === 'unpaid' || o.payment_status === 'rejected') &&
+                !o.disputed_at && !o.owner_complete_requested_at;
+            const canSubmitEvidence = o.status === 'pending' && Number(o.total_price) > 0 &&
+                (o.payment_status === 'unpaid' || o.payment_status === 'rejected');
             html += `<tr>
                 <td>${o.order_no}</td><td>${o.game_uid || '未知'}</td><td>${o.owner_name}</td>
                 <td>${o.rental_type}</td><td>${o.quantity}</td><td>¥${o.total_price}</td>
                 <td>${o.status}</td>
-                <td>${o.status === 'pending' || o.status === 'active' ? `<button class="cancel-rental-btn" data-order="${o.order_no}">取消</button>` : ''}</td>
+                <td>${o.disputed_at ? '争议处理中' : o.owner_complete_requested_at && o.status === 'active' ? '待租用方确认完成' :
+                    o.payment_status === 'paid' ? '已确认收款' : o.payment_status === 'submitted' ? '付款待人工核实' :
+                    o.payment_status === 'rejected' ? '付款凭证未通过' : '待付款'}</td>
+                <td>
+                    ${canSubmitEvidence ? `<button class="rental-pay-evidence-btn" data-order="${o.order_no}">上传付款截图</button>` : ''}
+                    ${o.status === 'active' && o.owner_complete_requested_at && !o.disputed_at ? `<button class="rental-confirm-completion-btn" data-order="${o.order_no}">确认完成</button>` : ''}
+                    ${o.status === 'active' && o.payment_status === 'paid' && !o.disputed_at ? `<button class="rental-dispute-btn" data-order="${o.order_no}">发起争议</button>` : ''}
+                    ${canCancel ? `<button class="cancel-rental-btn" data-order="${o.order_no}">取消</button>` : ''}
+                </td>
             </tr>`;
         });
         html += '</table>';
@@ -2730,16 +2822,20 @@ async function loadMyRentalOrders() {
         const res = await fetch(`${API_BASE}/rental/my-orders`, { headers: { 'Authorization': `Bearer ${token}` } });
         const orders = await res.json();
         if (!orders.length) { container.innerHTML = '<p>暂无出租订单</p>'; return; }
-        let html = '<table><tr><th>订单号</th><th>租客</th><th>类型</th><th>数量</th><th>金额</th><th>状态</th><th>操作</th></tr>';
+        let html = '<table><tr><th>订单号</th><th>租客</th><th>类型</th><th>数量</th><th>金额</th><th>状态</th><th>付款/结算</th><th>操作</th></tr>';
         orders.forEach(o => {
             html += `<tr>
                 <td>${o.order_no}</td><td>${o.renter_name}</td>
                 <td>${o.rental_type}</td><td>${o.quantity}</td><td>¥${o.total_price}</td>
                 <td>${o.status}</td>
+                <td>${o.disputed_at ? '争议处理中' : o.owner_complete_requested_at && o.status === 'active' ? '待租用方确认' :
+                    o.payment_status === 'paid' ? '已确认收款' : o.payment_status === 'submitted' ? '付款待人工核实' :
+                    o.payment_status === 'rejected' ? '付款凭证未通过' : '待付款'}</td>
                 <td>
-                    ${o.status === 'pending' ? `<button class="confirm-rental-btn" data-order="${o.order_no}">确认</button>` : ''}
-                    ${o.status === 'active' ? `<button class="complete-rental-btn" data-order="${o.order_no}">完成</button>` : ''}
-                    ${o.status === 'pending' || o.status === 'active' ? `<button class="cancel-rental-btn" data-order="${o.order_no}">取消</button>` : ''}
+                    ${o.status === 'pending' && o.payment_status === 'paid' && !o.disputed_at ? `<button class="confirm-rental-btn" data-order="${o.order_no}">确认租用</button>` : ''}
+                    ${o.status === 'active' && o.payment_status === 'paid' && !o.disputed_at && !o.owner_complete_requested_at ? `<button class="complete-rental-btn" data-order="${o.order_no}">申请完成</button>` : ''}
+                    ${o.status === 'active' && o.payment_status === 'paid' && !o.disputed_at ? `<button class="rental-dispute-btn" data-order="${o.order_no}">发起争议</button>` : ''}
+                    ${(o.payment_status === 'unpaid' || o.payment_status === 'rejected') && (o.status === 'pending' || o.status === 'active') ? `<button class="cancel-rental-btn" data-order="${o.order_no}">取消</button>` : ''}
                 </td>
             </tr>`;
         });
@@ -2804,7 +2900,7 @@ document.addEventListener('click', async (e) => {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (res.ok) { showToast('✅ 已完成，收益已计入'); loadMyRentalOrders(); loadRentalEarnings(); }
+            if (res.ok) { showToast('已申请完成，等待租用方确认；收益尚未计入'); loadMyRentalOrders(); }
             else { const data = await res.json(); showToast('❌ ' + (data.error || '失败')); }
         } catch (err) { showToast('网络错误'); }
     }
@@ -2820,6 +2916,54 @@ document.addEventListener('click', async (e) => {
             if (res.ok) { showToast('已取消'); loadRentedOrders(); loadMyRentalOrders(); }
             else { const data = await res.json(); showToast('❌ ' + (data.error || '失败')); }
         } catch (err) { showToast('网络错误'); }
+    }
+
+    if (e.target.classList.contains('rental-confirm-completion-btn') ||
+        e.target.classList.contains('rental-dispute-btn')) {
+        const orderNo = e.target.dataset.order;
+        const dispute = e.target.classList.contains('rental-dispute-btn');
+        if (dispute && !window.confirm('发起争议后需由管理员处理，确定继续吗？')) return;
+        try {
+            const res = await fetch(`${API_BASE}/rental/orders/${encodeURIComponent(orderNo)}/${dispute ? 'dispute' : 'confirm-completion'}`, {
+                method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            showToast(res.ok ? (dispute ? '争议已登记' : '已确认完成，出租收益已计入') : '❌ ' + (data.error || '操作失败'));
+            if (res.ok) { loadRentedOrders(); loadMyRentalOrders(); loadRentalEarnings(); }
+        } catch { showToast('网络错误'); }
+    }
+
+    if (e.target.classList.contains('rental-pay-evidence-btn')) {
+        const orderNo = e.target.dataset.order;
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/png,image/jpeg';
+        fileInput.onchange = async () => {
+            const file = fileInput.files?.[0];
+            if (!file || file.size > 5 * 1024 * 1024) { showToast('请选择不超过 5MB 的付款截图'); return; }
+            try {
+                const screenshot = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+                const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+                const uploaded = await fetch(`${API_BASE}/rental/upload-screenshot`, {
+                    method: 'POST', headers, body: JSON.stringify({ screenshot })
+                });
+                const uploadData = await uploaded.json();
+                if (!uploaded.ok || !uploadData.filename) throw new Error(uploadData.error || '截图上传失败');
+                const attached = await fetch(`${API_BASE}/rental/orders/${encodeURIComponent(orderNo)}/payment-evidence`, {
+                    method: 'POST', headers, body: JSON.stringify({ filename: uploadData.filename })
+                });
+                const data = await attached.json();
+                if (!attached.ok) throw new Error(data.error || '凭证关联失败');
+                showToast('付款截图已提交，等待管理员核实实际收款');
+                loadRentedOrders();
+            } catch (err) { showToast('❌ ' + (err.message || '网络错误')); }
+        };
+        fileInput.click();
     }
 });
 
