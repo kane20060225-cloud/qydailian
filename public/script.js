@@ -15,12 +15,6 @@ function safeSetItem(key, value) {
         showToast('⚠️ 浏览器存储异常，请检查空间或隐私设置');
         return false;
     }
-    // 额外将 token 写入 Cookie，兼容 QQ 等 localStorage 异常的环境
-    if (key === 'token') {
-        try {
-            document.cookie = 'token=' + encodeURIComponent(value) + '; path=/; max-age=' + (7*24*60*60) + '; SameSite=Lax';
-        } catch (e2) {}
-    }
     return true;
 }
 
@@ -29,13 +23,11 @@ function safeGetItem(key, fallback = null) {
         const val = localStorage.getItem(key);
         if (val !== null) return val;
     } catch (e) {}
-    // 如果 localStorage 取不到且是 token，则尝试从 Cookie 读取
-    if (key === 'token') {
-        const match = document.cookie.match(/(?:^|;\s*)token=([^;]*)/);
-        if (match) return decodeURIComponent(match[1]);
-    }
     return fallback;
 }
+
+// 清除旧版本写入的可由脚本读取的 JWT Cookie；不再使用 Cookie 存储令牌。
+document.cookie = 'token=; path=/; max-age=0; SameSite=Lax';
 
 // ==================== 快捷获取 DOM 元素 ====================
 const getEl = (id) => document.getElementById(id);
@@ -131,7 +123,8 @@ while (tankList.length < 100) tankList.push("随机坦克" + (tankList.length + 
 const originalFetch = window.fetch;
 window.fetch = async function(...args) {
   const response = await originalFetch(...args);
-  if (response.status === 401) {
+  const requestHeaders = new Headers(args[1]?.headers || args[0]?.headers || {});
+  if (response.status === 401 && requestHeaders.has('Authorization')) {
     // 清除本地登录状态
     safeSetItem('token', '');
     safeSetItem('username', '');
@@ -550,11 +543,23 @@ function checkLoginStatus() {
     if (boosterPanelBtn) boosterPanelBtn.style.display = (role === 'booster' || role === 'admin') ? 'block' : 'none';
     if (leagueAdminBtn) leagueAdminBtn.style.display = (role === 'admin') ? 'block' : 'none';
 }
-if (logoutBtn) logoutBtn.addEventListener('click', () => {
+if (logoutBtn) logoutBtn.addEventListener('click', async () => {
+    const token = safeGetItem('token');
+    let revoked = false;
+    if (token) {
+        try {
+            const response = await fetch(`${API_BASE}/auth/logout`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            revoked = response.ok;
+        } catch (_) {}
+    }
     safeSetItem('token', ''); safeSetItem('username', ''); safeSetItem('role', '');
+    safeSetItem('userId', '');
     checkLoginStatus();
     if (userDropdown) userDropdown.style.display = 'none';
-    showToast('👋 已退出登录');
+    showToast(revoked ? '👋 已退出所有设备' : '本机已退出；服务器撤销未确认，请检查网络后重新登录');
 });
 if (userMenuBtn) userMenuBtn.addEventListener('click', (e) => { e.stopPropagation(); if (userDropdown) userDropdown.style.display = userDropdown.style.display === 'block' ? 'none' : 'block'; });
 // ✅ 新增这一行：阻止下拉菜单内的点击冒泡到 document
@@ -2093,7 +2098,11 @@ function bindAccountSecurityEvents() {
         });
         const data = await res.json();
         getEl('passwordMsg').textContent = data.message || data.error;
-        if (res.ok) { getEl('oldPassword').value = ''; getEl('newPassword').value = ''; }
+        if (res.ok) {
+            if (data.token) safeSetItem('token', data.token);
+            getEl('oldPassword').value = '';
+            getEl('newPassword').value = '';
+        }
     });
 
     getEl('changePhoneBtn')?.addEventListener('click', async () => {

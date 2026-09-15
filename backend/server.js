@@ -2,11 +2,11 @@ require('dotenv').config({ path: __dirname + '/.env', quiet: true });
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const mysql = require('mysql2/promise');
 const path = require('path');
 const fs = require('fs');
 const { createFieldCipher } = require('./lib/field-encryption');
+const { createAuthMiddleware, issueSessionToken } = require('./lib/auth-session');
 const {
   RECHARGE_AMOUNT,
   RECHARGE_TICKETS,
@@ -152,6 +152,7 @@ async function initDB() {
         id INT AUTO_INCREMENT PRIMARY KEY,
         username VARCHAR(30) NOT NULL UNIQUE,
         password_hash VARCHAR(255) NOT NULL,
+        token_version INT UNSIGNED NOT NULL DEFAULT 0,
         email VARCHAR(100),
         phone VARCHAR(20),
         balance DECIMAL(10,2) DEFAULT 0.00,
@@ -674,12 +675,18 @@ app.post('/api/auth/login', async (req, res) => {
   let connection;
   try {
     connection = await pool.getConnection();
-    const [rows] = await connection.execute('SELECT * FROM users WHERE username = ?', [username]);
+    const [rows] = await connection.execute(
+      `SELECT id, username, password_hash, token_version, email, phone, balance,
+              reputation, referral_code, role, created_at, booster_identity,
+              booster_points, qy_credits, vip_level
+       FROM users WHERE username = ?`,
+      [username]
+    );
     if (rows.length === 0) return res.status(401).json({ error: '用户名或密码错误' });
     const user = rows[0];
     const validPassword = await bcrypt.compare(password, user.password_hash);
     if (!validPassword) return res.status(401).json({ error: '用户名或密码错误' });
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    const token = issueSessionToken(user.id, user.token_version, JWT_SECRET);
 
     try {
       const ua = (req.headers['user-agent'] || '').substring(0, 65535);
@@ -709,27 +716,44 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // ---------- JWT 中间件 ----------
-function authMiddleware(req, res, next) {
-  const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) return res.status(401).json({ error: '未提供认证令牌' });
-  const token = header.split(' ')[1];
-  try { const decoded = jwt.verify(token, JWT_SECRET); req.userId = decoded.userId; next(); }
-  catch(err) { return res.status(401).json({ error: '令牌无效或已过期' }); }
-}
+const authMiddleware = createAuthMiddleware(pool, JWT_SECRET);
 function adminMiddleware(req, res, next) {
   authMiddleware(req, res, async () => {
-    const [rows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
-    if (rows.length === 0 || rows[0].role !== 'admin') return res.status(403).json({ error: '无管理员权限' });
-    next();
+    try {
+      const [rows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
+      if (rows.length === 0 || rows[0].role !== 'admin') return res.status(403).json({ error: '无管理员权限' });
+      next();
+    } catch {
+      res.status(503).json({ error: '暂时无法验证管理员权限' });
+    }
   });
 }
 function boosterMiddleware(req, res, next) {
   authMiddleware(req, res, async () => {
-    const [rows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
-    if (rows.length === 0 || (rows[0].role !== 'booster' && rows[0].role !== 'admin')) return res.status(403).json({ error: '需要打手或管理员权限' });
-    next();
+    try {
+      const [rows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
+      if (rows.length === 0 || (rows[0].role !== 'booster' && rows[0].role !== 'admin')) return res.status(403).json({ error: '需要打手或管理员权限' });
+      next();
+    } catch {
+      res.status(503).json({ error: '暂时无法验证打手权限' });
+    }
   });
 }
+
+app.post('/api/auth/logout', authMiddleware, async (req, res) => {
+  try {
+    const [result] = await pool.execute(
+      'UPDATE users SET token_version = token_version + 1 WHERE id = ? AND token_version = ?',
+      [req.userId, req.tokenVersion]
+    );
+    if (result.affectedRows !== 1) {
+      return res.status(409).json({ error: '登录状态已失效' });
+    }
+    res.json({ success: true, message: '已退出所有设备' });
+  } catch {
+    res.status(503).json({ error: '暂时无法退出登录' });
+  }
+});
 
 const identityWeights = { gold: 4, silver: 3, standard: 2, budget: 1 };
 function canTakeOrder(boosterIdentity, requiredIdentity) {
@@ -842,10 +866,14 @@ app.get('/api/user/credits', authMiddleware, async (req, res) => {
 // ---------- 用户设置 API ----------
 app.get('/api/user/settings', authMiddleware, async (req, res) => {
   try {
-    const [rows] = await pool.execute('SELECT * FROM user_settings WHERE user_id = ?', [req.userId]);
+    const settingsSql = `SELECT user_id, theme, language, notify_order_update,
+      notify_promotion, privacy_show_phone_to_booster, privacy_show_email_to_booster,
+      default_client_type, default_urgent, default_remark_template, two_factor_enabled
+      FROM user_settings WHERE user_id = ?`;
+    const [rows] = await pool.execute(settingsSql, [req.userId]);
     if (!rows.length) {
       await pool.execute('INSERT INTO user_settings (user_id) VALUES (?)', [req.userId]);
-      const [newRows] = await pool.execute('SELECT * FROM user_settings WHERE user_id = ?', [req.userId]);
+      const [newRows] = await pool.execute(settingsSql, [req.userId]);
       return res.json(newRows[0]);
     }
     res.json(rows[0]);
@@ -857,6 +885,10 @@ app.put('/api/user/settings', authMiddleware, async (req, res) => {
   const { theme, language, notify_order_update, notify_promotion, privacy_show_phone_to_booster,
           privacy_show_email_to_booster, default_client_type, default_urgent, default_remark_template,
           two_factor_enabled } = req.body;
+
+  if (two_factor_enabled !== undefined) {
+    return res.status(400).json({ error: '二次认证尚未实现，不能在设置中启用' });
+  }
 
   try {
     const fields = [];
@@ -870,7 +902,6 @@ app.put('/api/user/settings', authMiddleware, async (req, res) => {
     if (default_client_type !== undefined) { fields.push('default_client_type = ?'); values.push(default_client_type); }
     if (default_urgent !== undefined) { fields.push('default_urgent = ?'); values.push(default_urgent); }
     if (default_remark_template !== undefined) { fields.push('default_remark_template = ?'); values.push(default_remark_template); }
-    if (two_factor_enabled !== undefined) { fields.push('two_factor_enabled = ?'); values.push(two_factor_enabled); }
 
     if (fields.length === 0) return res.json({ success: true, message: '无更新字段' });
 
@@ -899,13 +930,24 @@ app.put('/api/user/change-password', authMiddleware, async (req, res) => {
   if (!oldPassword || !newPassword) return res.status(400).json({ error: '请提供原密码和新密码' });
   if (newPassword.length < 6) return res.status(400).json({ error: '新密码至少6位' });
   try {
-    const [rows] = await pool.execute('SELECT password_hash FROM users WHERE id = ?', [req.userId]);
+    const [rows] = await pool.execute(
+      'SELECT password_hash, token_version FROM users WHERE id = ?',
+      [req.userId]
+    );
     if (!rows.length) return res.status(404).json({ error: '用户不存在' });
     const valid = await bcrypt.compare(oldPassword, rows[0].password_hash);
     if (!valid) return res.status(400).json({ error: '原密码不正确' });
     const password_hash = await bcrypt.hash(newPassword, 12);
-    await pool.execute('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash, req.userId]);
-    res.json({ success: true, message: '密码已更新' });
+    const [result] = await pool.execute(
+      `UPDATE users SET password_hash = ?, token_version = token_version + 1
+       WHERE id = ? AND password_hash = ? AND token_version = ?`,
+      [password_hash, req.userId, rows[0].password_hash, req.tokenVersion]
+    );
+    if (result.affectedRows !== 1) {
+      return res.status(409).json({ error: '密码或登录状态已变化，请重新登录后再试' });
+    }
+    const token = issueSessionToken(req.userId, req.tokenVersion + 1, JWT_SECRET);
+    res.json({ success: true, message: '密码已更新，其他设备已退出', token });
   } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
@@ -1783,17 +1825,7 @@ app.post('/api/upload-image', authMiddleware, async (req, res) => {
 });
 
 // ==================== 三方订单 API ====================
-app.post('/api/third-party-orders', async (req, res, next) => {
-  const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) return res.status(401).json({ error: '未提供令牌' });
-  try {
-    const token = header.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.userId = decoded.userId;
-  } catch (err) {
-    return res.status(401).json({ error: '令牌无效' });
-  }
-
+app.post('/api/third-party-orders', authMiddleware, async (req, res, next) => {
   const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
   if (userRows.length === 0 || (userRows[0].role !== 'admin' && userRows[0].role !== 'booster')) {
     return res.status(403).json({ error: '无权限，仅管理员或打手可创建' });
@@ -1816,17 +1848,7 @@ app.post('/api/third-party-orders', async (req, res, next) => {
   }
 });
 
-app.get('/api/third-party-orders', async (req, res, next) => {
-  const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) return res.status(401).json({ error: '未提供令牌' });
-  try {
-    const token = header.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.userId = decoded.userId;
-  } catch (err) {
-    return res.status(401).json({ error: '令牌无效' });
-  }
-
+app.get('/api/third-party-orders', authMiddleware, async (req, res, next) => {
   const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
   if (userRows.length === 0) return res.status(401).json({ error: '用户不存在' });
 
