@@ -51,6 +51,7 @@ function getUseCredits() {
 
 // ==================== 配置 ====================
 const API_BASE = '/api';
+const rentalClient = RentalClient.createRentalClient({ getToken: () => safeGetItem('token') });
 
 const projectDetails = {
     silver: { name:'银币', a:{desc:'有紫狗牌有高级银币/百万',price:7.8}, b:{desc:'无紫狗牌有高级银币/百万',price:10.8}, c:{desc:'无紫狗牌无高级银币/百万',price:13.8} },
@@ -771,33 +772,21 @@ function rentalSafeText(value) {
 }
 
 let adminRentalAccountPage = 1;
-function rentalAccountScreenshots(raw) {
-    let names = raw;
-    if (typeof names === 'string') {
-        try { names = JSON.parse(names); } catch { return []; }
-    }
-    return Array.isArray(names) ? names.filter(name =>
-        typeof name === 'string' && /^rental_\d+_\d+\.png$/.test(name)).slice(0, 3) : [];
-}
+const rentalAccountScreenshots = RentalClient.screenshotNames;
 
 async function loadAdminRentalAccounts() {
     const container = getEl('adminRentalAccountList');
     const token = safeGetItem('token');
     if (!container || !token) return;
     const status = getEl('adminRentalAccountStatus')?.value || '';
-    const params = new URLSearchParams({ page: String(adminRentalAccountPage) });
-    if (status) params.set('status', status);
     try {
-        const res = await fetch(`${API_BASE}/admin/rental/accounts?${params}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+        const { accounts, total } = await rentalClient.getAdminAccounts({
+            status, page: adminRentalAccountPage
         });
-        const accounts = await res.json();
-        if (!res.ok || !Array.isArray(accounts)) throw new Error(accounts.error || '申请加载失败');
-        const total = Number(res.headers.get('X-Total-Count')) || 0;
         if (!accounts.length) {
             container.innerHTML = '<p>当前筛选没有出租账号申请</p>';
         } else {
-            const statusText = { pending: '待审核', active: '已上架', suspended: '已下架/未通过' };
+            const statusText = RentalClient.accountStatusLabels;
             let html = '<table><tr><th>ID/账号UID</th><th>出租方</th><th>客户端</th><th>时租/天租</th><th>状态</th><th>资料</th><th>操作</th></tr>';
             accounts.forEach(a => {
                 const id = Number(a.id);
@@ -851,20 +840,15 @@ document.addEventListener('click', async (e) => {
     if (!button) return;
     const id = Number(button.dataset.id);
     const approved = button.dataset.approved === 'true';
-    const token = safeGetItem('token');
-    if (!token || !Number.isSafeInteger(id) || id <= 0) return;
+    if (!Number.isSafeInteger(id) || id <= 0) return;
     if (!window.confirm(approved ?
         '已核对账号资料和截图，确定审核通过并在租号大厅上架？' :
         '确定驳回或强制下架这个出租账号？')) return;
     try {
-        const res = await fetch(`${API_BASE}/admin/rental/accounts/${id}/review`, {
-            method: 'PUT', headers: { 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}` }, body: JSON.stringify({ approved })
-        });
-        const data = await res.json();
-        showToast(res.ok ? data.message : '❌ ' + (data.error || '审核失败'));
-        if (res.ok) loadAdminRentalAccounts();
-    } catch { showToast('网络错误'); }
+        const data = await rentalClient.reviewAccount(id, approved);
+        showToast(data.message || '审核已完成');
+        loadAdminRentalAccounts();
+    } catch (err) { showToast('❌ ' + (err.message || '审核失败')); }
 });
 
 async function loadAdminRentalOrders() {
@@ -2644,27 +2628,28 @@ document.querySelectorAll('.rental-tab').forEach(tab => {
 });
 
 // 加载租号大厅
-async function loadRentalHall() {
+async function loadRentalHall(force = false) {
     const container = getEl('rentalHallList');
     if (!container) return;
     container.innerHTML = '加载中...';
     try {
-        const res = await fetch(`${API_BASE}/rental/accounts`);
-        const accounts = await res.json();
+        const accounts = await rentalClient.getHall({ force });
         if (!accounts.length) { container.innerHTML = '<p>暂无可租账号</p>'; return; }
         let html = '';
         accounts.forEach(acc => {
-            const screenshots = acc.screenshots ? JSON.parse(acc.screenshots) : [];
-            const imgHtml = screenshots.length ? `<img src="/uploads/${screenshots[0]}" style="width:100%; height:140px; object-fit:cover; border-radius:8px;">` : '';
+            const id = Number(acc.id);
+            if (!Number.isSafeInteger(id) || id <= 0) return;
+            const screenshots = RentalClient.screenshotNames(acc.screenshots);
+            const imgHtml = screenshots.length ? `<img src="/uploads/${encodeURIComponent(screenshots[0])}" alt="账号截图" style="width:100%; height:140px; object-fit:cover; border-radius:8px;">` : '';
             html += `
-            <div class="rental-account-card" data-id="${acc.id}">
+            <div class="rental-account-card" data-id="${id}">
                 ${imgHtml}
-                <h4>${acc.game_uid || '未知UID'}</h4>
-                <p>客户端：${acc.client_type} | 出租方：${acc.owner_name}</p>
-                <p>信誉：${acc.owner_reputation} | 身份：${acc.owner_identity || 'standard'}</p>
-                <p>时租：¥${acc.hourly_price} / 天租：¥${acc.daily_price}</p>
-                <p style="font-size:0.75rem; color:var(--text-muted);">可用时段：${acc.available_time_desc || '无限制'}</p>
-                <button class="rental-detail-btn" data-id="${acc.id}">查看详情</button>
+                <h4>${rentalSafeText(acc.game_uid || '未知UID')}</h4>
+                <p>客户端：${rentalSafeText(acc.client_type)} | 出租方：${rentalSafeText(acc.owner_name)}</p>
+                <p>信誉：${rentalSafeText(acc.owner_reputation)} | 身份：${rentalSafeText(acc.owner_identity || 'standard')}</p>
+                <p>时租：¥${rentalSafeText(acc.hourly_price)} / 天租：¥${rentalSafeText(acc.daily_price)}</p>
+                <p style="font-size:0.75rem; color:var(--text-muted);">可用时段：${rentalSafeText(acc.available_time_desc || '无限制')}</p>
+                <button class="rental-detail-btn" data-id="${id}">查看详情</button>
             </div>`;
         });
         container.innerHTML = html;
@@ -2679,24 +2664,24 @@ async function loadRentalHall() {
         container.innerHTML = '<p style="color:var(--red)">加载失败</p>';
     }
 }
+getEl('refreshRentalHallBtn')?.addEventListener('click', () => loadRentalHall(true));
 
 // 查看账号详情弹窗（含坦克清单和租用表单）
 async function showRentalAccountDetail(accountId) {
     const token = safeGetItem('token');
     if (!token) { showToast('请先登录'); return; }
     try {
-        const res = await fetch(`${API_BASE}/rental/accounts/${accountId}`);
-        const account = await res.json();
-        const screenshots = account.screenshots ? JSON.parse(account.screenshots) : [];
-        const imgHtml = screenshots.map(s => `<img src="/uploads/${s}" style="max-width:100px; border-radius:6px;">`).join('');
+        const account = await rentalClient.getAccount(accountId);
+        const screenshots = RentalClient.screenshotNames(account.screenshots);
+        const imgHtml = screenshots.map(s => `<img src="/uploads/${encodeURIComponent(s)}" alt="账号截图" style="max-width:100px; border-radius:6px;">`).join('');
         let html = `
-            <p><strong>出租方：</strong>${account.owner_name}（信誉 ${account.owner_reputation}）</p>
-            <p><strong>客户端：</strong>${account.client_type}</p>
-            <p><strong>游戏UID：</strong>${account.game_uid || '未填写'}</p>
+            <p><strong>出租方：</strong>${rentalSafeText(account.owner_name)}（信誉 ${rentalSafeText(account.owner_reputation)}）</p>
+            <p><strong>客户端：</strong>${rentalSafeText(account.client_type)}</p>
+            <p><strong>游戏UID：</strong>${rentalSafeText(account.game_uid || '未填写')}</p>
             <p><strong>坦克清单：</strong></p>
-            <pre style="white-space:pre-wrap; max-height:200px; overflow-y:auto; background:#0f172a; padding:8px; border-radius:6px;">${account.tank_list || '未填写'}</pre>
-            <p><strong>可用时段：</strong>${account.available_time_desc || '无限制'}</p>
-            <p><strong>规则：</strong>${account.rules || '无'}</p>
+            <pre style="white-space:pre-wrap; max-height:200px; overflow-y:auto; background:#0f172a; padding:8px; border-radius:6px;">${rentalSafeText(account.tank_list || '未填写')}</pre>
+            <p><strong>可用时段：</strong>${rentalSafeText(account.available_time_desc || '无限制')}</p>
+            <p><strong>规则：</strong>${rentalSafeText(account.rules || '无')}</p>
             <p><strong>截图：</strong></p><div style="display:flex; gap:6px; flex-wrap:wrap;">${imgHtml}</div>
             <hr>
             <p><strong>租用</strong></p>
@@ -2761,7 +2746,8 @@ function updateRentalPrice() {
     if (!account) return;
     const type = getEl('rentalType')?.value || 'hour';
     const qty = parseInt(getEl('rentalQuantity')?.value) || 1;
-    const unitPrice = type === 'hour' ? account.hourly_price : account.daily_price;
+    const unitPrice = Number(type === 'hour' ? account.hourly_price : account.daily_price);
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) return;
     const total = unitPrice * qty;
     const credits = parseInt(getEl('rentalUseCredits')?.value) || 0;
     const discount = Math.min(credits / 100, total);
@@ -2894,8 +2880,7 @@ async function loadMyRentalAccounts() {
     const token = safeGetItem('token');
     if (!token) { container.innerHTML = '<p>请先登录</p>'; return; }
     try {
-        const res = await fetch(`${API_BASE}/rental/my-accounts`, { headers: { 'Authorization': `Bearer ${token}` } });
-        const accounts = await res.json();
+        const accounts = await rentalClient.getMyAccounts();
         if (!accounts.length) { container.innerHTML = '<p>你还没有发布出租账号</p>'; return; }
         let html = '<p>待审核账号不会在租号大厅展示；仅管理员可通过“管理面板 → 租号审核”上架。</p><table><tr><th>UID</th><th>客户端</th><th>时租/天租</th><th>状态</th><th>操作</th></tr>';
         accounts.forEach(a => {
@@ -2966,19 +2951,10 @@ document.addEventListener('click', async (e) => {
         const id = e.target.dataset.id;
         const status = e.target.dataset.status;
         try {
-            const res = await fetch(`${API_BASE}/rental/accounts/${id}/status`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ status })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                showToast(status === 'pending' ? '已申请重新审核，等待管理员处理' : '已下架');
-                loadMyRentalAccounts();
-            } else {
-                showToast('❌ ' + (data.error || '操作失败'));
-            }
-        } catch (err) { showToast('网络错误'); }
+            await rentalClient.changeAccountStatus(id, status);
+            showToast(status === 'pending' ? '已申请重新审核，等待管理员处理' : '已下架');
+            loadMyRentalAccounts();
+        } catch (err) { showToast('❌ ' + (err.message || '操作失败')); }
     }
 
     // 确认租用
