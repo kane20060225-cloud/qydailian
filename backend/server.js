@@ -9,6 +9,7 @@ const fs = require('fs');
 const { createFieldCipher } = require('./lib/field-encryption');
 const { createAuthMiddleware, issueSessionToken } = require('./lib/auth-session');
 const { generateTotpSecret, verifyTotpCode } = require('./lib/totp');
+const { createRecoveryCodes, hashRecoveryCode } = require('./lib/recovery-codes');
 const {
   RECHARGE_AMOUNT,
   RECHARGE_TICKETS,
@@ -59,6 +60,8 @@ function revealOrderCredentials(order, { includePassword = true } = {}) {
 }
 
 const app = express();
+// 只信任本机 Nginx 转发的客户端 IP；直连 3000 端口的外部请求不能伪造 X-Forwarded-For。
+app.set('trust proxy', 'loopback');
 
 const repositoryPublicDir = path.join(__dirname, '..', 'public');
 const legacyPublicDir = path.join(__dirname, 'public');
@@ -219,6 +222,20 @@ async function initDB() {
         two_factor_enabled TINYINT(1) DEFAULT 0,
         two_factor_secret TEXT,
         two_factor_last_step BIGINT NOT NULL DEFAULT -1,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS user_two_factor_recovery_codes (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        code_hash CHAR(64) NOT NULL,
+        active TINYINT(1) NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        used_at TIMESTAMP NULL DEFAULT NULL,
+        UNIQUE KEY uq_two_factor_code_hash (user_id, code_hash),
+        KEY idx_two_factor_active (user_id, active),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
@@ -699,7 +716,7 @@ app.post('/api/auth/register', ipRegisterLimit, async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  const { username, password, twoFactorCode } = req.body;
+  const { username, password, twoFactorCode, recoveryCode } = req.body;
   if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
     return res.status(400).json({ error: '用户名和密码不能为空' });
   }
@@ -730,31 +747,63 @@ app.post('/api/auth/login', async (req, res) => {
       [user.id]
     );
     const factor = factorRows[0];
+    let nextTokenVersion = user.token_version;
     if (factor?.two_factor_enabled) {
-      if (!twoFactorCode) return res.status(401).json({ error: '请输入二次认证验证码', requiresTwoFactor: true });
-      let verifiedStep;
-      try {
-        const secret = sensitiveFieldCipher.decrypt(factor.two_factor_secret, TWO_FACTOR_SECRET_CONTEXT);
-        verifiedStep = verifyTotpCode(secret, twoFactorCode, Number(factor.two_factor_last_step));
-      } catch {
-        return res.status(503).json({ error: '二次认证配置无法验证，请联系管理员' });
+      if (!twoFactorCode && !recoveryCode) {
+        return res.status(401).json({ error: '请输入二次认证验证码或一次性恢复码', requiresTwoFactor: true });
       }
-      if (verifiedStep === null) {
-        recordLoginFailure(attemptKey);
-        return res.status(401).json({ error: '二次认证验证码无效', requiresTwoFactor: true });
-      }
-      const [used] = await connection.execute(
-        `UPDATE user_settings SET two_factor_last_step = ?
-         WHERE user_id = ? AND two_factor_enabled = 1 AND two_factor_last_step < ?`,
-        [verifiedStep, user.id, verifiedStep]
-      );
-      if (used.affectedRows !== 1) {
-        recordLoginFailure(attemptKey);
-        return res.status(401).json({ error: '验证码已使用，请等待下一组验证码', requiresTwoFactor: true });
+      if (!twoFactorCode && recoveryCode) {
+        const codeHash = hashRecoveryCode(recoveryCode);
+        if (!codeHash) {
+          recordLoginFailure(attemptKey);
+          return res.status(401).json({ error: '恢复码无效', requiresTwoFactor: true });
+        }
+        await connection.beginTransaction();
+        const [consumed] = await connection.execute(
+          `UPDATE user_two_factor_recovery_codes SET active = 0, used_at = CURRENT_TIMESTAMP
+           WHERE user_id = ? AND code_hash = ? AND active = 1`,
+          [user.id, codeHash]
+        );
+        if (consumed.affectedRows !== 1) {
+          await connection.rollback();
+          recordLoginFailure(attemptKey);
+          return res.status(401).json({ error: '恢复码无效或已使用', requiresTwoFactor: true });
+        }
+        const [revoked] = await connection.execute(
+          'UPDATE users SET token_version = token_version + 1 WHERE id = ? AND token_version = ?',
+          [user.id, user.token_version]
+        );
+        if (revoked.affectedRows !== 1) {
+          await connection.rollback();
+          return res.status(409).json({ error: '账号登录状态已变化，请重新尝试' });
+        }
+        await connection.commit();
+        nextTokenVersion += 1;
+      } else {
+        let verifiedStep;
+        try {
+          const secret = sensitiveFieldCipher.decrypt(factor.two_factor_secret, TWO_FACTOR_SECRET_CONTEXT);
+          verifiedStep = verifyTotpCode(secret, twoFactorCode, Number(factor.two_factor_last_step));
+        } catch {
+          return res.status(503).json({ error: '二次认证配置无法验证，请联系管理员' });
+        }
+        if (verifiedStep === null) {
+          recordLoginFailure(attemptKey);
+          return res.status(401).json({ error: '二次认证验证码无效', requiresTwoFactor: true });
+        }
+        const [used] = await connection.execute(
+          `UPDATE user_settings SET two_factor_last_step = ?
+           WHERE user_id = ? AND two_factor_enabled = 1 AND two_factor_last_step < ?`,
+          [verifiedStep, user.id, verifiedStep]
+        );
+        if (used.affectedRows !== 1) {
+          recordLoginFailure(attemptKey);
+          return res.status(401).json({ error: '验证码已使用，请等待下一组验证码', requiresTwoFactor: true });
+        }
       }
     }
     loginAttempts.delete(attemptKey);
-    const token = issueSessionToken(user.id, user.token_version, JWT_SECRET);
+    const token = issueSessionToken(user.id, nextTokenVersion, JWT_SECRET);
 
     try {
       const ua = (req.headers['user-agent'] || '').substring(0, 65535);
@@ -776,6 +825,7 @@ app.post('/api/auth/login', async (req, res) => {
       booster_points: user.booster_points, qy_credits: user.qy_credits, vip_level: user.vip_level
     }});
   } catch(err) {
+    if (connection) await connection.rollback().catch(() => {});
     console.error('登录错误:', err);
     res.status(500).json({ error: '服务器内部错误' });
   } finally {
@@ -872,6 +922,13 @@ app.post('/api/auth/two-factor/confirm', authMiddleware, async (req, res) => {
       await connection.rollback();
       return res.status(409).json({ error: '二次认证状态已变化' });
     }
+    const recoveryCodes = createRecoveryCodes();
+    for (const recoveryCode of recoveryCodes) {
+      await connection.execute(
+        'INSERT INTO user_two_factor_recovery_codes (user_id, code_hash) VALUES (?, ?)',
+        [req.userId, hashRecoveryCode(recoveryCode)]
+      );
+    }
     const [revoked] = await connection.execute(
       'UPDATE users SET token_version = token_version + 1 WHERE id = ? AND token_version = ?',
       [req.userId, req.tokenVersion]
@@ -881,8 +938,10 @@ app.post('/api/auth/two-factor/confirm', authMiddleware, async (req, res) => {
       return res.status(409).json({ error: '登录状态已变化，请重新登录' });
     }
     await connection.commit();
-    res.json({ success: true, message: '二次认证已启用，其他设备已退出',
-      token: issueSessionToken(req.userId, req.tokenVersion + 1, JWT_SECRET) });
+    res.set('Cache-Control', 'no-store').json({
+      success: true, message: '二次认证已启用，其他设备已退出', recoveryCodes,
+      token: issueSessionToken(req.userId, req.tokenVersion + 1, JWT_SECRET)
+    });
   } catch {
     if (connection) await connection.rollback().catch(() => {});
     res.status(503).json({ error: '暂时无法启用二次认证' });
@@ -892,7 +951,7 @@ app.post('/api/auth/two-factor/confirm', authMiddleware, async (req, res) => {
 });
 
 app.post('/api/auth/two-factor/disable', authMiddleware, async (req, res) => {
-  const { password, code } = req.body;
+  const { password, code, recoveryCode } = req.body;
   if (typeof password !== 'string' || !password) return res.status(400).json({ error: '请输入当前密码' });
   let connection;
   try {
@@ -905,20 +964,42 @@ app.post('/api/auth/two-factor/disable', authMiddleware, async (req, res) => {
       [req.userId]
     );
     if (!settings[0]?.two_factor_enabled) return res.status(409).json({ error: '二次认证未启用' });
-    const secret = sensitiveFieldCipher.decrypt(settings[0].two_factor_secret, TWO_FACTOR_SECRET_CONTEXT);
-    const step = verifyTotpCode(secret, code, Number(settings[0].two_factor_last_step));
-    if (step === null) return res.status(401).json({ error: '二次认证验证码无效' });
+    let step = null;
+    let recoveryHash = null;
+    if (code) {
+      const secret = sensitiveFieldCipher.decrypt(settings[0].two_factor_secret, TWO_FACTOR_SECRET_CONTEXT);
+      step = verifyTotpCode(secret, code, Number(settings[0].two_factor_last_step));
+      if (step === null) return res.status(401).json({ error: '二次认证验证码无效' });
+    } else {
+      recoveryHash = hashRecoveryCode(recoveryCode);
+      if (!recoveryHash) return res.status(401).json({ error: '请输入有效的验证码或一次性恢复码' });
+    }
     connection = await pool.getConnection();
     await connection.beginTransaction();
+    if (recoveryHash) {
+      const [consumed] = await connection.execute(
+        `UPDATE user_two_factor_recovery_codes SET active = 0, used_at = CURRENT_TIMESTAMP
+         WHERE user_id = ? AND code_hash = ? AND active = 1`,
+        [req.userId, recoveryHash]
+      );
+      if (consumed.affectedRows !== 1) {
+        await connection.rollback();
+        return res.status(401).json({ error: '恢复码无效或已使用' });
+      }
+    }
     const [result] = await connection.execute(
       `UPDATE user_settings SET two_factor_enabled = 0, two_factor_secret = NULL, two_factor_last_step = -1
-       WHERE user_id = ? AND two_factor_enabled = 1 AND two_factor_last_step < ?`,
-      [req.userId, step]
+       WHERE user_id = ? AND two_factor_enabled = 1${step === null ? '' : ' AND two_factor_last_step < ?'}`,
+      step === null ? [req.userId] : [req.userId, step]
     );
     if (result.affectedRows !== 1) {
       await connection.rollback();
       return res.status(409).json({ error: '验证码已使用或状态已变化' });
     }
+    await connection.execute(
+      'UPDATE user_two_factor_recovery_codes SET active = 0 WHERE user_id = ? AND active = 1',
+      [req.userId]
+    );
     const [revoked] = await connection.execute(
       'UPDATE users SET token_version = token_version + 1 WHERE id = ? AND token_version = ?',
       [req.userId, req.tokenVersion]

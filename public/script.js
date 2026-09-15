@@ -596,9 +596,10 @@ if (loginForm) loginForm.addEventListener('submit', async (e) => {
     const username = getEl('loginUsername')?.value.trim();
     const password = getEl('loginPassword')?.value;
     const twoFactorCode = getEl('loginTwoFactorCode')?.value.trim();
+    const recoveryCode = getEl('loginRecoveryCode')?.value.trim();
     if (!username || !password) { if (loginError) loginError.textContent = '用户名和密码不能为空'; return; }
     try {
-        const res = await fetch(`${API_BASE}/auth/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, password, twoFactorCode }) });
+        const res = await fetch(`${API_BASE}/auth/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, password, twoFactorCode, recoveryCode }) });
         const data = await res.json();
         if (res.ok && data.success) {
             safeSetItem('token', data.token);
@@ -610,6 +611,7 @@ if (loginForm) loginForm.addEventListener('submit', async (e) => {
             if (loginModal) loginModal.style.display = 'none';
             if (loginError) loginError.textContent = '';
             if (getEl('loginTwoFactorCode')) getEl('loginTwoFactorCode').value = '';
+            if (getEl('loginRecoveryCode')) getEl('loginRecoveryCode').value = '';
             if (getEl('loginTwoFactorGroup')) getEl('loginTwoFactorGroup').style.display = 'none';
             showToast('✅ 登录成功！');
         } else {
@@ -2087,8 +2089,10 @@ function renderAccountSecurity() {
                 <code id="twoFactorSecret"></code>
             </div>
             <input type="text" id="twoFactorCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="身份验证器 6 位验证码" class="remark-input" style="margin:8px 0;">
+            ${factorEnabled ? '<input type="text" id="twoFactorRecoveryInput" autocomplete="off" placeholder="或输入一次性恢复码" class="remark-input" style="margin-bottom:8px;">' : ''}
             <button id="twoFactorConfirmBtn" class="submit-btn" style="display:none">确认启用</button>
             ${factorEnabled ? '<button id="twoFactorDisableBtn" class="submit-btn">关闭二次认证</button>' : ''}
+            <pre id="twoFactorRecoveryCodes" style="display:none;white-space:pre-wrap"></pre>
             <p id="twoFactorMessage"></p>
         </div>`;
 
@@ -2129,6 +2133,9 @@ function bindTwoFactorEvents() {
                 window._userSettings.two_factor_enabled = 1;
                 renderAccountSecurity();
                 getEl('twoFactorMessage').textContent = data.message;
+                const codes = getEl('twoFactorRecoveryCodes');
+                codes.textContent = `请立即离线保存以下一次性恢复码。它们只显示这一次；每个只能使用一次。\n${data.recoveryCodes.join('\n')}`;
+                codes.style.display = 'block';
             }
         } catch { message.textContent = '网络错误，请重试'; }
     });
@@ -2136,7 +2143,8 @@ function bindTwoFactorEvents() {
         try {
             const { response, data } = await request('disable', {
                 password: getEl('twoFactorPassword').value,
-                code: getEl('twoFactorCode').value.trim()
+                code: getEl('twoFactorCode').value.trim(),
+                recoveryCode: getEl('twoFactorRecoveryInput').value.trim()
             });
             message.textContent = data.message || data.error || '关闭失败';
             if (response.ok) {

@@ -6,6 +6,8 @@ const bcrypt = require('bcryptjs');
 const mysql = require('mysql2/promise');
 const { issueSessionToken } = require('../lib/auth-session');
 const { totpCode } = require('../lib/totp');
+const { createFieldCipher } = require('../lib/field-encryption');
+const { createRecoveryCodes, hashRecoveryCode } = require('../lib/recovery-codes');
 
 process.env.JWT_SECRET = 'totp-http-test-only-jwt';
 process.env.DATA_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString('base64');
@@ -21,7 +23,8 @@ const state = {
   passwordHash: null,
   enabled: 0,
   encryptedSecret: null,
-  lastStep: -1
+  lastStep: -1,
+  codes: new Map()
 };
 
 const fakePool = {
@@ -70,11 +73,24 @@ const fakePool = {
       return [{ affectedRows: 1 }];
     }
     if (query.startsWith('UPDATE user_settings SET two_factor_enabled = 0')) {
-      if (!state.enabled || state.lastStep >= params[1]) return [{ affectedRows: 0 }];
+      if (!state.enabled || (params.length > 1 && state.lastStep >= params[1])) return [{ affectedRows: 0 }];
       state.enabled = 0;
       state.encryptedSecret = null;
       state.lastStep = -1;
       return [{ affectedRows: 1 }];
+    }
+    if (query === 'INSERT INTO user_two_factor_recovery_codes (user_id, code_hash) VALUES (?, ?)') {
+      state.codes.set(params[1], true);
+      return [{ affectedRows: 1 }];
+    }
+    if (query.startsWith('UPDATE user_two_factor_recovery_codes SET active = 0, used_at')) {
+      if (!state.codes.get(params[1])) return [{ affectedRows: 0 }];
+      state.codes.set(params[1], false);
+      return [{ affectedRows: 1 }];
+    }
+    if (query === 'UPDATE user_two_factor_recovery_codes SET active = 0 WHERE user_id = ? AND active = 1') {
+      for (const key of state.codes.keys()) state.codes.set(key, false);
+      return [{ affectedRows: 8 }];
     }
     if (query === 'UPDATE users SET token_version = token_version + 1 WHERE id = ? AND token_version = ?') {
       if (params[0] !== state.userId || params[1] !== state.tokenVersion) return [{ affectedRows: 0 }];
@@ -90,7 +106,7 @@ const fakePool = {
     let snapshot;
     return {
       execute: this.execute.bind(this),
-      async beginTransaction() { snapshot = { ...state }; },
+      async beginTransaction() { snapshot = { ...state, codes: new Map(state.codes) }; },
       async rollback() { if (snapshot) Object.assign(state, snapshot); },
       async commit() { snapshot = null; },
       release() {}
@@ -121,6 +137,7 @@ test('TOTP binding, login replay protection and password-protected disabling', a
   state.enabled = 0;
   state.encryptedSecret = null;
   state.lastStep = -1;
+  state.codes = new Map();
   const base = await serve(t);
   const currentStep = Math.floor(Date.now() / 30000);
   const token = issueSessionToken(state.userId, state.tokenVersion, process.env.JWT_SECRET);
@@ -147,6 +164,8 @@ test('TOTP binding, login replay protection and password-protected disabling', a
   });
   assert.equal(confirm.status, 200);
   const confirmed = await confirm.json();
+  assert.equal(confirmed.recoveryCodes.length, 8);
+  assert.equal(state.codes.size, 8);
   assert.equal(state.tokenVersion, 1);
   const oldSession = await fetch(`${base}/api/user/settings`, {
     headers: { Authorization: `Bearer ${token}` }
@@ -195,6 +214,46 @@ test('TOTP binding, login replay protection and password-protected disabling', a
   assert.equal(newSession.status, 200);
   assert.equal(state.enabled, 0);
   assert.equal(state.encryptedSecret, null);
+  assert.equal([...state.codes.values()].every((active) => !active), true);
+});
+
+test('one-time recovery login and recovery-assisted disabling revoke old sessions', async (t) => {
+  state.passwordHash = await bcrypt.hash('recover-local-password', 4);
+  state.enabled = 1;
+  state.lastStep = -1;
+  const cipher = createFieldCipher(process.env.DATA_ENCRYPTION_KEY);
+  state.encryptedSecret = cipher.encrypt('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', 'user_settings.two_factor_secret');
+  const codes = createRecoveryCodes(2);
+  state.codes = new Map(codes.map((code) => [hashRecoveryCode(code), true]));
+  const base = await serve(t);
+  const oldToken = issueSessionToken(state.userId, state.tokenVersion, process.env.JWT_SECRET);
+  const login = (recoveryCode) => fetch(`${base}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'test-user', password: 'recover-local-password', recoveryCode })
+  });
+  const recovered = await login(codes[0]);
+  assert.equal(recovered.status, 200);
+  const recoveredToken = (await recovered.json()).token;
+  assert.equal(state.codes.get(hashRecoveryCode(codes[0])), false);
+  const oldSession = await fetch(`${base}/api/user/settings`, {
+    headers: { Authorization: `Bearer ${oldToken}` }
+  });
+  assert.equal(oldSession.status, 401);
+  assert.equal((await login(codes[0])).status, 401);
+
+  const disable = await fetch(`${base}/api/auth/two-factor/disable`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recoveredToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: 'recover-local-password', recoveryCode: codes[1] })
+  });
+  assert.equal(disable.status, 200);
+  assert.equal(state.enabled, 0);
+  assert.equal([...state.codes.values()].every((active) => !active), true);
+  const after = await fetch(`${base}/api/user/settings`, {
+    headers: { Authorization: `Bearer ${recoveredToken}` }
+  });
+  assert.equal(after.status, 401);
 });
 
 test('login throttles repeated invalid passwords for one IP and username', async (t) => {
@@ -210,4 +269,10 @@ test('login throttles repeated invalid passwords for one IP and username', async
     assert.equal((await request()).status, 401);
   }
   assert.equal((await request()).status, 429);
+  const forwardedClient = await fetch(`${base}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '198.51.100.42' },
+    body: JSON.stringify({ username: 'rate-limit-test-user', password: 'incorrect' })
+  });
+  assert.equal(forwardedClient.status, 401);
 });
