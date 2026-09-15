@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const mysql = require('mysql2/promise');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('node:crypto');
 const { createFieldCipher } = require('./lib/field-encryption');
 const { createAuthMiddleware, issueSessionToken } = require('./lib/auth-session');
 const { generateTotpSecret, verifyTotpCode } = require('./lib/totp');
@@ -1943,36 +1944,117 @@ app.get('/api/rental/my-accounts', authMiddleware, async (req, res) => {
 });
 
 app.put('/api/rental/accounts/:id/status', authMiddleware, async (req, res) => {
-  const { status } = req.body;
-  if (!['active','suspended'].includes(status)) return res.status(400).json({ error: '无效状态' });
-  try {
-    const [result] = await pool.execute(
-      'UPDATE rental_accounts SET status = ? WHERE id = ? AND owner_id = ?',
-      [status, req.params.id, req.userId]
-    );
-    if (result.affectedRows === 0) return res.status(404).json({ error: '账号不存在或无权操作' });
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: '服务器错误' });
+  const status = req.body?.status;
+  const accountId = Number(req.params.id);
+  if (!Number.isSafeInteger(accountId) || accountId <= 0 ||
+      !['pending', 'suspended'].includes(status)) {
+    return res.status(400).json({ error: '只能下架或申请重新审核，不能自行上架' });
   }
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [accounts] = await conn.execute(
+      'SELECT id, status FROM rental_accounts WHERE id = ? AND owner_id = ? FOR UPDATE',
+      [accountId, req.userId]
+    );
+    if (!accounts.length) {
+      await conn.rollback();
+      return res.status(404).json({ error: '账号不存在或无权操作' });
+    }
+    const previous = accounts[0].status;
+    if ((status === 'suspended' && previous !== 'active') ||
+        (status === 'pending' && previous !== 'suspended')) {
+      await conn.rollback();
+      return res.status(409).json({ error: '账号状态已变化，请刷新后重试' });
+    }
+    const [result] = await conn.execute(
+      'UPDATE rental_accounts SET status = ? WHERE id = ? AND owner_id = ? AND status = ?',
+      [status, accountId, req.userId, previous]
+    );
+    if (result.affectedRows !== 1) throw new Error('账号状态已变化');
+    await recordOperation(conn, {
+      eventKey: `rental_account:${accountId}:${crypto.randomUUID()}`,
+      actorUserId: req.userId,
+      action: status === 'pending' ? 'rental_account_rereview_requested' : 'rental_account_suspended_by_owner',
+      targetType: 'rental_account', targetRef: String(accountId)
+    });
+    await conn.commit();
+    res.json({ success: true, status });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ error: '服务器错误' });
+  } finally { conn.release(); }
 });
 
 app.put('/api/admin/rental/accounts/:id/review', adminMiddleware, async (req, res) => {
-  const { approved } = req.body;
-  try {
-    const newStatus = approved ? 'active' : 'suspended';
-    await pool.execute('UPDATE rental_accounts SET status = ? WHERE id = ?', [newStatus, req.params.id]);
-    res.json({ success: true, message: approved ? '已上架' : '已拒绝/下架' });
-  } catch (err) {
-    res.status(500).json({ error: '服务器错误' });
+  const approved = req.body?.approved;
+  const accountId = Number(req.params.id);
+  if (typeof approved !== 'boolean' || !Number.isSafeInteger(accountId) || accountId <= 0) {
+    return res.status(400).json({ error: '审核参数无效' });
   }
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [accounts] = await conn.execute(
+      'SELECT id, status FROM rental_accounts WHERE id = ? FOR UPDATE', [accountId]
+    );
+    if (!accounts.length) {
+      await conn.rollback();
+      return res.status(404).json({ error: '出租账号不存在' });
+    }
+    const previous = accounts[0].status;
+    if ((approved && !['pending', 'suspended'].includes(previous)) ||
+        (!approved && !['pending', 'active'].includes(previous))) {
+      await conn.rollback();
+      return res.status(409).json({ error: '账号状态已变化，请刷新后重试' });
+    }
+    const newStatus = approved ? 'active' : 'suspended';
+    const [result] = await conn.execute(
+      'UPDATE rental_accounts SET status = ? WHERE id = ? AND status = ?',
+      [newStatus, accountId, previous]
+    );
+    if (result.affectedRows !== 1) throw new Error('账号状态已变化');
+    await recordOperation(conn, {
+      eventKey: `rental_account:${accountId}:${crypto.randomUUID()}`,
+      actorUserId: req.userId,
+      action: approved ? 'rental_account_approved' :
+        previous === 'pending' ? 'rental_account_rejected' : 'rental_account_suspended_by_admin',
+      targetType: 'rental_account', targetRef: String(accountId)
+    });
+    await conn.commit();
+    res.json({ success: true, status: newStatus,
+      message: approved ? '审核通过，已上架' : '已拒绝或下架' });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ error: '服务器错误' });
+  } finally { conn.release(); }
 });
 
 app.get('/api/admin/rental/accounts', adminMiddleware, async (req, res) => {
+  const status = req.query.status || '';
+  const page = Number(req.query.page || 1);
+  if (status && !['pending', 'active', 'suspended'].includes(status)) {
+    return res.status(400).json({ error: '筛选状态无效' });
+  }
+  if (!Number.isSafeInteger(page) || page < 1 || page > 10000) {
+    return res.status(400).json({ error: '页码无效' });
+  }
   try {
-    const [rows] = await pool.execute(
-      `SELECT ra.*, u.username AS owner_name FROM rental_accounts ra JOIN users u ON ra.owner_id = u.id ORDER BY ra.created_at DESC`
+    const where = status ? 'WHERE ra.status = ?' : '';
+    const filters = status ? [status] : [];
+    const [counts] = await pool.execute(
+      `SELECT COUNT(*) AS total FROM rental_accounts ra ${where}`, filters
     );
+    const [rows] = await pool.execute(
+      `SELECT ra.id, ra.owner_id, ra.game_uid, ra.client_type,
+              ra.tank_list, ra.hourly_price, ra.daily_price,
+              ra.available_time_desc, ra.screenshots, ra.rules,
+              ra.status, ra.created_at, u.username AS owner_name
+       FROM rental_accounts ra JOIN users u ON ra.owner_id = u.id
+       ${where} ORDER BY ra.created_at DESC, ra.id DESC LIMIT ? OFFSET ?`,
+      [...filters, 25, (page - 1) * 25]
+    );
+    res.set('X-Total-Count', String(counts[0].total));
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: '服务器错误' });

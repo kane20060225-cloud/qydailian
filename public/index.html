@@ -443,6 +443,7 @@
         <div class="container">
             <div class="admin-tabs" style="display:flex; gap:10px; margin-bottom:15px; flex-wrap: wrap;">
                 <button class="admin-tab active" data-admintab="orders">📋 订单管理</button>
+                <button class="admin-tab" data-admintab="rental">🎮 租号审核</button>
                 <button class="admin-tab" data-admintab="custom">✏️ 定制需求</button>
                 <button class="admin-tab" data-admintab="boosters">👥 打手管理</button>
                 <button class="admin-tab" data-admintab="roles">👑 角色管理</button>
@@ -462,6 +463,26 @@
                     <button id="refreshOrdersBtn">刷新</button>
                 </div>
                 <div id="adminOrderList" class="admin-order-list">加载中...</div>
+            </div>
+            <div id="adminRentalSection" style="display:none;">
+                <h3>出租账号申请审核</h3>
+                <p>先核对账号资料与截图，再通过或驳回。只有管理员能让账号上架。</p>
+                <div class="admin-filter">
+                    <label for="adminRentalAccountStatus">筛选状态：</label>
+                    <select id="adminRentalAccountStatus">
+                        <option value="pending">待审核</option>
+                        <option value="">全部</option>
+                        <option value="active">已上架</option>
+                        <option value="suspended">已下架/未通过</option>
+                    </select>
+                    <button id="refreshAdminRentalAccountsBtn" type="button">刷新申请</button>
+                </div>
+                <div id="adminRentalAccountList" class="admin-order-list">加载中...</div>
+                <div id="adminRentalAccountPaging" class="rental-admin-paging">
+                    <button id="adminRentalPrevPage" type="button">上一页</button>
+                    <span id="adminRentalPageInfo">第 1 页</span>
+                    <button id="adminRentalNextPage" type="button">下一页</button>
+                </div>
                 <h3 style="margin-top:24px;">租号人工付款与结算</h3>
                 <p>确认实际收款或外部退款后再操作；这里不会自动发起支付宝退款。</p>
                 <button id="refreshAdminRentalBtn" type="button">刷新租号订单</button>

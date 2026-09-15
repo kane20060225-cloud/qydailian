@@ -563,6 +563,11 @@ button:disabled {
     padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.8rem; white-space: nowrap;
 }
 .admin-order-list th { background: rgba(240,160,80,0.1); color: var(--accent); }
+.rental-admin-paging { display: flex; align-items: center; gap: 12px; margin: 12px 0 22px; }
+.rental-admin-paging button { padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: #111927; color: var(--text); cursor: pointer; }
+.rental-admin-paging button:disabled { opacity: 0.45; cursor: not-allowed; }
+#adminRentalAccountList details { max-width: 360px; white-space: normal; }
+#adminRentalAccountList details p { margin: 6px 0; overflow-wrap: anywhere; }
 .status-select {
     padding: 4px; border-radius: 4px; border: 1px solid var(--border);
     background: #111927; color: var(--text); font-size: 0.75rem;

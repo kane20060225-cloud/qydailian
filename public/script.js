@@ -770,6 +770,103 @@ function rentalSafeText(value) {
         ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 }
 
+let adminRentalAccountPage = 1;
+function rentalAccountScreenshots(raw) {
+    let names = raw;
+    if (typeof names === 'string') {
+        try { names = JSON.parse(names); } catch { return []; }
+    }
+    return Array.isArray(names) ? names.filter(name =>
+        typeof name === 'string' && /^rental_\d+_\d+\.png$/.test(name)).slice(0, 3) : [];
+}
+
+async function loadAdminRentalAccounts() {
+    const container = getEl('adminRentalAccountList');
+    const token = safeGetItem('token');
+    if (!container || !token) return;
+    const status = getEl('adminRentalAccountStatus')?.value || '';
+    const params = new URLSearchParams({ page: String(adminRentalAccountPage) });
+    if (status) params.set('status', status);
+    try {
+        const res = await fetch(`${API_BASE}/admin/rental/accounts?${params}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const accounts = await res.json();
+        if (!res.ok || !Array.isArray(accounts)) throw new Error(accounts.error || '申请加载失败');
+        const total = Number(res.headers.get('X-Total-Count')) || 0;
+        if (!accounts.length) {
+            container.innerHTML = '<p>当前筛选没有出租账号申请</p>';
+        } else {
+            const statusText = { pending: '待审核', active: '已上架', suspended: '已下架/未通过' };
+            let html = '<table><tr><th>ID/账号UID</th><th>出租方</th><th>客户端</th><th>时租/天租</th><th>状态</th><th>资料</th><th>操作</th></tr>';
+            accounts.forEach(a => {
+                const id = Number(a.id);
+                if (!Number.isSafeInteger(id) || id <= 0) return;
+                const screenshotLinks = rentalAccountScreenshots(a.screenshots).map((name, index) =>
+                    `<a href="/uploads/${encodeURIComponent(name)}" target="_blank" rel="noopener">截图 ${index + 1}</a>`).join(' ');
+                html += `<tr>
+                    <td>${id} / ${rentalSafeText(a.game_uid || '未填写')}</td>
+                    <td>${rentalSafeText(a.owner_name)}</td><td>${rentalSafeText(a.client_type)}</td>
+                    <td>¥${rentalSafeText(a.hourly_price)} / ¥${rentalSafeText(a.daily_price)}</td>
+                    <td>${statusText[a.status] || rentalSafeText(a.status)}</td>
+                    <td><details><summary>查看资料</summary>
+                        <p>坦克：${rentalSafeText(a.tank_list || '未填写')}</p>
+                        <p>时段：${rentalSafeText(a.available_time_desc || '不限')}</p>
+                        <p>规则：${rentalSafeText(a.rules || '无')}</p>${screenshotLinks || '无截图'}
+                    </details></td>
+                    <td>
+                        ${a.status === 'pending' || a.status === 'suspended' ? `<button class="admin-rental-account-review-btn" data-id="${id}" data-approved="true">${a.status === 'pending' ? '审核通过' : '重新上架'}</button>` : ''}
+                        ${a.status === 'pending' || a.status === 'active' ? `<button class="admin-rental-account-review-btn" data-id="${id}" data-approved="false">${a.status === 'pending' ? '驳回' : '强制下架'}</button>` : ''}
+                    </td></tr>`;
+            });
+            container.innerHTML = html + '</table>';
+        }
+        const pages = Math.max(1, Math.ceil(total / 25));
+        const info = getEl('adminRentalPageInfo');
+        if (info) info.textContent = `第 ${adminRentalAccountPage} / ${pages} 页，共 ${total} 条`;
+        const prev = getEl('adminRentalPrevPage');
+        const next = getEl('adminRentalNextPage');
+        if (prev) prev.disabled = adminRentalAccountPage <= 1;
+        if (next) next.disabled = adminRentalAccountPage >= pages;
+    } catch (err) {
+        container.textContent = err.message || '申请加载失败';
+    }
+}
+
+getEl('adminRentalAccountStatus')?.addEventListener('change', () => {
+    adminRentalAccountPage = 1;
+    loadAdminRentalAccounts();
+});
+getEl('refreshAdminRentalAccountsBtn')?.addEventListener('click', loadAdminRentalAccounts);
+getEl('adminRentalPrevPage')?.addEventListener('click', () => {
+    if (adminRentalAccountPage > 1) adminRentalAccountPage--;
+    loadAdminRentalAccounts();
+});
+getEl('adminRentalNextPage')?.addEventListener('click', () => {
+    adminRentalAccountPage++;
+    loadAdminRentalAccounts();
+});
+document.addEventListener('click', async (e) => {
+    const button = e.target.closest?.('.admin-rental-account-review-btn');
+    if (!button) return;
+    const id = Number(button.dataset.id);
+    const approved = button.dataset.approved === 'true';
+    const token = safeGetItem('token');
+    if (!token || !Number.isSafeInteger(id) || id <= 0) return;
+    if (!window.confirm(approved ?
+        '已核对账号资料和截图，确定审核通过并在租号大厅上架？' :
+        '确定驳回或强制下架这个出租账号？')) return;
+    try {
+        const res = await fetch(`${API_BASE}/admin/rental/accounts/${id}/review`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` }, body: JSON.stringify({ approved })
+        });
+        const data = await res.json();
+        showToast(res.ok ? data.message : '❌ ' + (data.error || '审核失败'));
+        if (res.ok) loadAdminRentalAccounts();
+    } catch { showToast('网络错误'); }
+});
+
 async function loadAdminRentalOrders() {
     const container = getEl('adminRentalOrderList');
     const token = safeGetItem('token');
@@ -1051,7 +1148,7 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
         const target = tab.dataset.admintab;
 
         // 隐藏所有子面板（包括新增的 adminChestSection）
-        ['adminOrdersSection', 'adminCustomSection', 'adminBoostersSection', 'adminRolesSection', 'adminContentSection', 'adminShopSection', 'adminChestSection'].forEach(id => {
+        ['adminOrdersSection', 'adminRentalSection', 'adminCustomSection', 'adminBoostersSection', 'adminRolesSection', 'adminContentSection', 'adminShopSection', 'adminChestSection'].forEach(id => {
             const el = getEl(id);
             if (el) el.style.display = 'none';
         });
@@ -1061,6 +1158,10 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
             const el = getEl('adminOrdersSection');
             if (el) el.style.display = 'block';
             loadAdminOrders();
+        } else if (target === 'rental') {
+            const el = getEl('adminRentalSection');
+            if (el) el.style.display = 'block';
+            loadAdminRentalAccounts();
             loadAdminRentalOrders();
         } else if (target === 'custom') {
             const el = getEl('adminCustomSection');
@@ -2796,15 +2897,16 @@ async function loadMyRentalAccounts() {
         const res = await fetch(`${API_BASE}/rental/my-accounts`, { headers: { 'Authorization': `Bearer ${token}` } });
         const accounts = await res.json();
         if (!accounts.length) { container.innerHTML = '<p>你还没有发布出租账号</p>'; return; }
-        let html = '<table><tr><th>UID</th><th>客户端</th><th>时租/天租</th><th>状态</th><th>操作</th></tr>';
+        let html = '<p>待审核账号不会在租号大厅展示；仅管理员可通过“管理面板 → 租号审核”上架。</p><table><tr><th>UID</th><th>客户端</th><th>时租/天租</th><th>状态</th><th>操作</th></tr>';
         accounts.forEach(a => {
             html += `<tr>
-                <td>${a.game_uid || '—'}</td><td>${a.client_type}</td>
-                <td>¥${a.hourly_price} / ¥${a.daily_price}</td>
-                <td>${a.status}</td>
+                <td>${rentalSafeText(a.game_uid || '—')}</td><td>${rentalSafeText(a.client_type)}</td>
+                <td>¥${rentalSafeText(a.hourly_price)} / ¥${rentalSafeText(a.daily_price)}</td>
+                <td>${a.status === 'pending' ? '待管理员审核' : a.status === 'active' ? '已上架' : '已下架/未通过'}</td>
                 <td>
                     ${a.status === 'active' ? `<button class="shelve-btn" data-id="${a.id}" data-status="suspended">下架</button>` : ''}
-                    ${a.status === 'suspended' ? `<button class="shelve-btn" data-id="${a.id}" data-status="active">上架</button>` : ''}
+                    ${a.status === 'suspended' ? `<button class="shelve-btn" data-id="${a.id}" data-status="pending">申请重新审核</button>` : ''}
+                    ${a.status === 'pending' ? '等待审核' : ''}
                 </td>
             </tr>`;
         });
@@ -2871,7 +2973,7 @@ document.addEventListener('click', async (e) => {
             });
             const data = await res.json();
             if (res.ok) {
-                showToast(status === 'active' ? '已上架' : '已下架');
+                showToast(status === 'pending' ? '已申请重新审核，等待管理员处理' : '已下架');
                 loadMyRentalAccounts();
             } else {
                 showToast('❌ ' + (data.error || '操作失败'));
