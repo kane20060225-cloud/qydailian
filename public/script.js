@@ -258,6 +258,9 @@ document.querySelectorAll('.back-btn').forEach(btn => {
         showSection(target);
     });
 });
+document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => showSection(btn.dataset.navTarget));
+});
 if (profileBtn) profileBtn.addEventListener('click', () => showSection('profile'));
 if (adminPanelBtn) adminPanelBtn.addEventListener('click', () => showSection('admin'));
 if (boosterPanelBtn) boosterPanelBtn.addEventListener('click', () => showSection('booster'));
@@ -269,12 +272,18 @@ function showSection(target) {
 
     if (target === 'mainMenu') {
         if (mainMenu) mainMenu.style.display = 'flex';
+        document.body.dataset.currentSection = 'mainMenu';
+        document.querySelectorAll('.mobile-nav-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.navTarget === 'mainMenu'));
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
     }
 
     const targetSection = sections[target];
     if (!targetSection) return;
     targetSection.style.display = 'block';
+    document.body.dataset.currentSection = target;
+    document.querySelectorAll('.mobile-nav-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.navTarget === target));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 
     switch (target) {
         case 'profile':
@@ -698,15 +707,15 @@ async function loadOrders() {
         if (!Array.isArray(orders) || orders.length === 0) { list.innerHTML = '<p style="color:var(--text-muted)">暂无订单</p>'; return; }
         const statusMap = { pending: '待接单', playing: '代练中', done: '已完成' };
         const paymentStatusMap = { unpaid: '未支付', pending: '待确认', paid: '已支付' };
-        let html = '<table class="order-table"><tr><th>订单号</th><th>项目</th><th>金额</th><th>状态</th><th>支付</th><th>操作</th><th>时间</th></tr>';
+        let html = '<table class="order-table"><thead><tr><th>订单号</th><th>项目</th><th>金额</th><th>状态</th><th>支付</th><th>操作</th><th>时间</th></tr></thead><tbody>';
         orders.forEach(o => {
             let actionHtml = '';
             if (o.payment_status === 'unpaid') actionHtml = `<button class="upload-payment-btn" data-order="${o.order_no}">上传凭证</button>`;
             else if (o.payment_status === 'paid') actionHtml = '已确认';
             else actionHtml = '审核中';
-            html += `<tr><td>${o.order_no}</td><td>${o.project} - ${o.detail}</td><td>¥${o.total_price}</td><td><span class="order-status status-${o.status}">${statusMap[o.status]||o.status}</span></td><td><span class="payment-status payment-${o.payment_status}">${paymentStatusMap[o.payment_status]||'未知'}</span></td><td>${actionHtml}</td><td>${new Date(o.created_at).toLocaleString()}</td></tr>`;
+            html += `<tr><td data-label="订单号">${o.order_no}</td><td data-label="项目">${o.project} - ${o.detail}</td><td data-label="金额" class="order-price">¥${o.total_price}</td><td data-label="状态"><span class="order-status status-${o.status}">${statusMap[o.status]||o.status}</span></td><td data-label="支付"><span class="payment-status payment-${o.payment_status}">${paymentStatusMap[o.payment_status]||'未知'}</span></td><td data-label="下一步" class="table-actions">${actionHtml}</td><td data-label="下单时间">${new Date(o.created_at).toLocaleString()}</td></tr>`;
         });
-        html += '</table>';
+        html += '</tbody></table>';
         list.innerHTML = html;
     } catch (err) { list.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }

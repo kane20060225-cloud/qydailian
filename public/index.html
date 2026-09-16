@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blitz情谊工具站</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=20260916-ui1">
 </head>
 <body>
     <!-- 顶部栏 -->
@@ -35,39 +35,55 @@
 
     <!-- 主菜单 -->
     <main id="mainMenu" class="main-menu">
-        <h2 class="menu-title">选择服务板块</h2>
-        <div class="menu-grid">
-            <div class="menu-card" data-target="boost">
-                <span class="menu-icon">⚡</span>
-                <h3>代练下单</h3>
-                <p>银币/经验/胜率/场均/M章/三环/评级</p>
+        <section class="home-hero" aria-labelledby="homeTitle">
+            <div class="hero-copy">
+                <span class="hero-eyebrow">WOTB 玩家服务与实用工具</span>
+                <h1 id="homeTitle">更快完成下单，<br>更清楚掌握进度</h1>
+                <p>代练、账号租借与常用计算工具集中在一个地方。价格即时计算，订单登录后可持续跟踪。</p>
+                <div class="hero-actions">
+                    <button class="menu-card hero-primary" data-target="boost">立即代练下单 <span aria-hidden="true">→</span></button>
+                    <button class="menu-card hero-secondary" data-target="rental">浏览可租账号</button>
+                </div>
+                <div class="hero-trust" aria-label="服务特点">
+                    <span>价格透明</span><span>进度可查</span><span>人工客服</span>
+                </div>
             </div>
-            <div class="menu-card" data-target="tools">
-                <span class="menu-icon">🧮</span>
-                <h3>独立工具</h3>
-                <p>自助计算器 / 开箱模拟器 / 这把玩什么</p>
+            <div class="hero-panel" aria-label="下单流程">
+                <span class="hero-panel-label">下单只需三步</span>
+                <ol>
+                    <li><span>01</span><div><strong>选择服务</strong><small>项目与方案清楚对比</small></div></li>
+                    <li><span>02</span><div><strong>填写信息</strong><small>实时查看价格变化</small></div></li>
+                    <li><span>03</span><div><strong>提交跟踪</strong><small>在个人中心查看进度</small></div></li>
+                </ol>
             </div>
-            <div class="menu-card" data-target="news">
-                <span class="menu-icon">📰</span>
-                <h3>游戏新闻</h3>
-                <p>最新公告与活动资讯</p>
+        </section>
+
+        <section class="home-section" aria-labelledby="coreServicesTitle">
+            <div class="home-section-heading">
+                <div><span>核心服务</span><h2 id="coreServicesTitle">今天想完成什么？</h2></div>
+                <p>优先展示最常用的两项服务</p>
             </div>
-            <div class="menu-card" data-target="announcement">
-                <span class="menu-icon">📢</span>
-                <h3>站内公告</h3>
-                <p>注意事项 & 收款码</p>
+            <div class="service-grid">
+                <button class="menu-card service-card service-card-primary" data-target="boost">
+                    <span class="menu-icon">⚡</span><span class="service-copy"><strong>代练下单</strong><small>银币、经验、胜率、场均、M章、三环与评级</small></span><span class="service-arrow">开始下单 →</span>
+                </button>
+                <button class="menu-card service-card" data-target="rental">
+                    <span class="menu-icon">🎮</span><span class="service-copy"><strong>账号租借</strong><small>查找可租账号，也可以发布自己的账号</small></span><span class="service-arrow">进入租号大厅 →</span>
+                </button>
             </div>
-            <div class="menu-card" data-target="league">
-                <span class="menu-icon">🏆</span>
-                <h3>联赛相关</h3>
-                <p>积分榜 & 赛事新闻</p>
+        </section>
+
+        <section class="home-section" aria-labelledby="quickAccessTitle">
+            <div class="home-section-heading">
+                <div><span>快捷入口</span><h2 id="quickAccessTitle">工具与资讯</h2></div>
             </div>
-            <div class="menu-card" data-target="rental">
-                <span class="menu-icon">🎮</span>
-                <h3>账号租借</h3>
-                <p>租用/出租坦克账号，安全便捷</p>
+            <div class="quick-grid">
+                <button class="menu-card quick-card" data-target="tools"><span class="menu-icon">🧮</span><span><strong>独立工具</strong><small>计算器、开箱模拟器、随机坦克</small></span></button>
+                <button class="menu-card quick-card" data-target="announcement"><span class="menu-icon">📢</span><span><strong>站内公告</strong><small>下单须知与服务说明</small></span></button>
+                <button class="menu-card quick-card" data-target="news"><span class="menu-icon">📰</span><span><strong>游戏新闻</strong><small>最新公告与活动资讯</small></span></button>
+                <button class="menu-card quick-card" data-target="league"><span class="menu-icon">🏆</span><span><strong>联赛相关</strong><small>积分榜与赛事新闻</small></span></button>
             </div>
-        </div>
+        </section>
     </main>
 
     <!-- ==================== 板块一：代练下单 ==================== -->
@@ -76,7 +92,12 @@
             <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
             <h2 class="section-heading">⚡ 代练下单</h2>
         </div>
-        <div class="container">
+        <div class="container boost-container">
+            <div class="boost-progress" aria-label="下单流程">
+                <span class="active"><b>1</b>选择服务</span><i></i><span><b>2</b>填写信息</span><i></i><span><b>3</b>确认提交</span>
+            </div>
+            <div class="boost-layout">
+                <div class="boost-form">
             <!-- 代练项目 -->
             <section class="card">
                 <div class="card-header"><span class="card-num">01</span><h3>选择代练项目</h3><span class="badge-required">必选</span></div>
@@ -168,6 +189,8 @@
                 <p class="remark-hint">备注内容将附加在订单信息中，方便客服处理。</p>
             </section>
 
+                </div>
+                <aside class="boost-summary">
             <!-- 加急服务 + 价格展示（含积分抵扣） -->
             <section class="card">
                 <div class="card-header"><span class="card-num">⚡</span><h3>加急服务</h3></div>
@@ -214,6 +237,8 @@
                 </div>
                 <p class="contact-note">💡 下单后请主动联系客服，发送复制的订单信息，客服将尽快为您安排打手。</p>
             </section>
+                </aside>
+            </div>
         </div>
     </div>
 
@@ -935,7 +960,12 @@
         <button class="submit-btn" id="saveChestConfigBtn">💾 保存配置</button>
     </div>
 </div>
-
+    <nav class="mobile-nav" aria-label="移动端主导航">
+        <button class="mobile-nav-btn active" data-nav-target="mainMenu"><span>⌂</span><small>首页</small></button>
+        <button class="mobile-nav-btn" data-nav-target="boost"><span>⚡</span><small>代练</small></button>
+        <button class="mobile-nav-btn" data-nav-target="rental"><span>🎮</span><small>租号</small></button>
+        <button class="mobile-nav-btn" data-nav-target="profile"><span>◉</span><small>我的</small></button>
+    </nav>
 
     <script src="ui-runtime.js"></script>
     <script src="rental-client.js"></script>
