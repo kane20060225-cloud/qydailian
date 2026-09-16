@@ -326,48 +326,6 @@ async function initDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-    // 联赛相关表
-    await pool.execute(`
-      CREATE TABLE IF NOT EXISTS league_seasons (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(50) NOT NULL,
-        current_round INT DEFAULT 1,
-        current_day INT DEFAULT 1,
-        prev_rank_json TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-    `);
-    await pool.execute(`
-      CREATE TABLE IF NOT EXISTS league_points_rules (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        season_id INT NOT NULL,
-        round_num INT NOT NULL,
-        day_num INT NOT NULL,
-        rank_position INT NOT NULL,
-        points INT NOT NULL,
-        FOREIGN KEY (season_id) REFERENCES league_seasons(id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-    `);
-    await pool.execute(`
-      CREATE TABLE IF NOT EXISTS league_teams (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(50) NOT NULL UNIQUE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-    `);
-    await pool.execute(`
-      CREATE TABLE IF NOT EXISTS league_scores (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        season_id INT NOT NULL,
-        team_id INT NOT NULL,
-        round_num INT NOT NULL,
-        day_num INT NOT NULL,
-        rank_position INT NOT NULL,
-        points INT NOT NULL,
-        FOREIGN KEY (season_id) REFERENCES league_seasons(id) ON DELETE CASCADE,
-        FOREIGN KEY (team_id) REFERENCES league_teams(id) ON DELETE CASCADE,
-        UNIQUE KEY unique_score (season_id, team_id, round_num, day_num)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-    `);
 
     // 积分商城商品表
     await pool.execute(`
@@ -498,16 +456,6 @@ async function initDB() {
       CREATE TABLE IF NOT EXISTS game_news (
         id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(200) NOT NULL,
-        content TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-    `);
-    await pool.execute(`
-      CREATE TABLE IF NOT EXISTS league_news (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        title VARCHAR(200) NOT NULL,
-        summary VARCHAR(500) DEFAULT '',
         content TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -1645,151 +1593,6 @@ app.delete('/api/admin/custom-requests/:id', adminMiddleware, async (req, res) =
   catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-// ---------- 联赛管理 ----------
-app.get('/api/admin/leagues', adminMiddleware, async (req, res) => {
-  try { const [rows] = await pool.execute('SELECT * FROM league_seasons ORDER BY id DESC'); res.json(rows); }
-  catch(err) { res.status(500).json({ error: '服务器错误' }); }
-});
-app.post('/api/admin/leagues', adminMiddleware, async (req, res) => {
-  const { id, name, current_round, current_day } = req.body;
-  if (!name) return res.status(400).json({ error: '请输入赛季名称' });
-  try {
-    if (id) {
-      await pool.execute('UPDATE league_seasons SET name=?, current_round=?, current_day=? WHERE id=?', [name, current_round||1, current_day||1, id]);
-      res.json({ success: true, message: '赛季已更新' });
-    } else {
-      const [result] = await pool.execute('INSERT INTO league_seasons (name) VALUES (?)', [name]);
-      res.json({ success: true, id: result.insertId });
-    }
-  } catch(err) { res.status(500).json({ error: '服务器错误' }); }
-});
-app.delete('/api/admin/leagues/:id', adminMiddleware, async (req, res) => {
-  try { await pool.execute('DELETE FROM league_seasons WHERE id=?', [req.params.id]); res.json({ success: true }); }
-  catch(err) { res.status(500).json({ error: '服务器错误' }); }
-});
-app.get('/api/admin/leagues/:id/rules', adminMiddleware, async (req, res) => {
-  try {
-    const [rows] = await pool.execute('SELECT * FROM league_points_rules WHERE season_id=? ORDER BY round_num, day_num, rank_position', [req.params.id]);
-    res.json(rows);
-  } catch(err) { res.status(500).json({ error: '服务器错误' }); }
-});
-app.post('/api/admin/leagues/:id/rules', adminMiddleware, async (req, res) => {
-  const { rules } = req.body;
-  const seasonId = req.params.id;
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    await conn.beginTransaction();
-    await conn.execute('DELETE FROM league_points_rules WHERE season_id=?', [seasonId]);
-    if (rules && rules.length) {
-      const sql = 'INSERT INTO league_points_rules (season_id, round_num, day_num, rank_position, points) VALUES ?';
-      const values = rules.map(r => [seasonId, r.round_num, r.day_num, r.rank_position, r.points]);
-      await conn.query(sql, [values]);
-    }
-    await conn.commit();
-    res.json({ success: true, message: '积分规则已更新' });
-  } catch(err) { if (conn) await conn.rollback(); res.status(500).json({ error: '服务器错误' }); }
-  finally { if (conn) conn.release(); }
-});
-app.get('/api/admin/teams', adminMiddleware, async (req, res) => {
-  try { const [rows] = await pool.execute('SELECT * FROM league_teams ORDER BY id'); res.json(rows); }
-  catch(err) { res.status(500).json({ error: '服务器错误' }); }
-});
-app.post('/api/admin/teams', adminMiddleware, async (req, res) => {
-  const { id, name } = req.body;
-  if (!name) return res.status(400).json({ error: '队伍名必填' });
-  try {
-    if (id) await pool.execute('UPDATE league_teams SET name=? WHERE id=?', [name, id]);
-    else await pool.execute('INSERT INTO league_teams (name) VALUES (?)', [name]);
-    res.json({ success: true });
-  } catch(err) { res.status(500).json({ error: err.code === 'ER_DUP_ENTRY' ? '队伍名重复' : '服务器错误' }); }
-});
-app.delete('/api/admin/teams/:id', adminMiddleware, async (req, res) => {
-  try { await pool.execute('DELETE FROM league_teams WHERE id=?', [req.params.id]); res.json({ success: true }); }
-  catch(err) { res.status(500).json({ error: '服务器错误' }); }
-});
-app.get('/api/admin/leagues/:seasonId/scores/:round/:day', adminMiddleware, async (req, res) => {
-  const { seasonId, round, day } = req.params;
-  try {
-    const [scores] = await pool.execute(
-      `SELECT ls.*, lt.name as team_name FROM league_scores ls JOIN league_teams lt ON ls.team_id=lt.id WHERE ls.season_id=? AND ls.round_num=? AND ls.day_num=?`,
-      [seasonId, round, day]
-    );
-    res.json(scores);
-  } catch(err) { res.status(500).json({ error: '服务器错误' }); }
-});
-app.post('/api/admin/leagues/:seasonId/scores', adminMiddleware, async (req, res) => {
-  const { seasonId } = req.params;
-  const { round_num, day_num, scores } = req.body;
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    await conn.beginTransaction();
-    for (let s of scores) {
-      const [r] = await conn.execute(
-        'SELECT points FROM league_points_rules WHERE season_id=? AND round_num=? AND day_num=? AND rank_position=?',
-        [seasonId, round_num, day_num, s.rank_position]
-      );
-      const points = r.length ? r[0].points : 0;
-      await conn.execute(
-        `INSERT INTO league_scores (season_id, team_id, round_num, day_num, rank_position, points)
-         VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE rank_position=?, points=?`,
-        [seasonId, s.team_id, round_num, day_num, s.rank_position, points, s.rank_position, points]
-      );
-    }
-    const [teamPoints] = await conn.execute(
-      `SELECT team_id, SUM(points) as total FROM league_scores WHERE season_id=? GROUP BY team_id ORDER BY total DESC`,
-      [seasonId]
-    );
-    const newRank = teamPoints.map((tp, idx) => ({ team_id: tp.team_id, total: tp.total, rank: idx+1 }));
-    const newRankJson = JSON.stringify(newRank);
-    const [seasonRows] = await conn.execute('SELECT prev_rank_json FROM league_seasons WHERE id=?', [seasonId]);
-    const oldRank = seasonRows[0]?.prev_rank_json ? JSON.parse(seasonRows[0].prev_rank_json) : [];
-    const oldMap = {};
-    oldRank.forEach((t, idx) => oldMap[t.team_id] = idx+1);
-    newRank.forEach(t => {
-      const oldPos = oldMap[t.team_id];
-      t.change = oldPos ? (oldPos - t.rank) : 0;
-    });
-    await conn.execute('UPDATE league_seasons SET prev_rank_json=? WHERE id=?', [newRankJson, seasonId]);
-    await conn.commit();
-    res.json({ success: true, rankings: newRank });
-  } catch(err) { if (conn) await conn.rollback(); res.status(500).json({ error: '服务器错误' }); }
-  finally { if (conn) conn.release(); }
-});
-app.get('/api/league/:seasonId/rankings', async (req, res) => {
-  const { seasonId } = req.params;
-  try {
-    const [season] = await pool.execute('SELECT * FROM league_seasons WHERE id=?', [seasonId]);
-    if (!season.length) return res.status(404).json({ error: '赛季不存在' });
-    const [teams] = await pool.execute('SELECT * FROM league_teams ORDER BY id');
-    const [scores] = await pool.execute(
-      `SELECT team_id, round_num, day_num, SUM(points) as points FROM league_scores WHERE season_id=? GROUP BY team_id, round_num, day_num`,
-      [seasonId]
-    );
-    const teamScoreMap = {};
-    teams.forEach(t => teamScoreMap[t.id] = { name: t.name, rounds: {}, total: 0 });
-    scores.forEach(s => {
-      const key = `R${s.round_num}D${s.day_num}`;
-      if (teamScoreMap[s.team_id]) {
-        teamScoreMap[s.team_id].rounds[key] = s.points;
-        teamScoreMap[s.team_id].total += s.points;
-      }
-    });
-    const rankingArray = Object.entries(teamScoreMap)
-      .map(([team_id, data]) => ({ team_id: parseInt(team_id), ...data }))
-      .sort((a, b) => b.total - a.total);
-    const prevRankJson = season[0].prev_rank_json;
-    const oldMap = {};
-    if (prevRankJson) JSON.parse(prevRankJson).forEach((t, idx) => oldMap[t.team_id] = idx+1);
-    rankingArray.forEach((t, idx) => {
-      t.rank = idx + 1;
-      const oldPos = oldMap[t.team_id];
-      t.change = oldPos ? (oldPos - t.rank) : 0;
-    });
-    res.json({ season: season[0], rankings: rankingArray });
-  } catch(err) { res.status(500).json({ error: '服务器错误' }); }
-});
 
 // ---------- 打手管理 ----------
 app.get('/api/admin/boosters', adminMiddleware, async (req, res) => {
@@ -2505,12 +2308,6 @@ app.get('/api/game-news', async (req, res) => {
   } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-app.get('/api/league-news', async (req, res) => {
-  try {
-    const [rows] = await pool.execute('SELECT * FROM league_news ORDER BY created_at DESC LIMIT 20');
-    res.json(rows);
-  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
-});
 
 app.get('/api/admin/announcements', adminMiddleware, async (req, res) => {
   try { const [rows] = await pool.execute('SELECT * FROM announcements ORDER BY created_at DESC'); res.json(rows); }
@@ -2518,10 +2315,6 @@ app.get('/api/admin/announcements', adminMiddleware, async (req, res) => {
 });
 app.get('/api/admin/game-news', adminMiddleware, async (req, res) => {
   try { const [rows] = await pool.execute('SELECT * FROM game_news ORDER BY created_at DESC'); res.json(rows); }
-  catch (err) { res.status(500).json({ error: '服务器错误' }); }
-});
-app.get('/api/admin/league-news', adminMiddleware, async (req, res) => {
-  try { const [rows] = await pool.execute('SELECT * FROM league_news ORDER BY created_at DESC'); res.json(rows); }
   catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
@@ -2553,19 +2346,6 @@ app.post('/api/admin/game-news', adminMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-app.post('/api/admin/league-news', adminMiddleware, async (req, res) => {
-  const { id, title, summary, content } = req.body;
-  if (!title || !content) return res.status(400).json({ error: '标题和内容必填' });
-  try {
-    if (id) {
-      await pool.execute('UPDATE league_news SET title=?, summary=?, content=? WHERE id=?', [title, summary || '', content, id]);
-      res.json({ success: true, message: '已更新' });
-    } else {
-      await pool.execute('INSERT INTO league_news (title, summary, content) VALUES (?, ?, ?)', [title, summary || '', content]);
-      res.json({ success: true, message: '已创建' });
-    }
-  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
-});
 
 app.delete('/api/admin/announcements/:id', adminMiddleware, async (req, res) => {
   try { await pool.execute('DELETE FROM announcements WHERE id=?', [req.params.id]); res.json({ success: true }); }
@@ -2573,10 +2353,6 @@ app.delete('/api/admin/announcements/:id', adminMiddleware, async (req, res) => 
 });
 app.delete('/api/admin/game-news/:id', adminMiddleware, async (req, res) => {
   try { await pool.execute('DELETE FROM game_news WHERE id=?', [req.params.id]); res.json({ success: true }); }
-  catch (err) { res.status(500).json({ error: '服务器错误' }); }
-});
-app.delete('/api/admin/league-news/:id', adminMiddleware, async (req, res) => {
-  try { await pool.execute('DELETE FROM league_news WHERE id=?', [req.params.id]); res.json({ success: true }); }
   catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 

@@ -140,7 +140,6 @@ button:disabled {
 #sectionProfile .container,
 #sectionAdmin .container,
 #sectionBooster .container,
-#sectionLeagueAdmin .container,
 #sectionSettings .container {   /* 设置面板也加宽 */
     max-width: 1200px;
 }
@@ -677,118 +676,7 @@ button:disabled {
 }
 .hall-btn:hover { background: rgba(240,160,80,0.2); box-shadow: 0 0 8px var(--accent-glow); }
 
-/* ==================== 联赛相关板块 ==================== */
-.league-tabs { display: flex; gap: 10px; margin-bottom: 16px; }
-.league-tab {
-    padding: 6px 20px; border-radius: 20px; border: 1px solid var(--border);
-    background: transparent; color: var(--text-secondary); font-weight: 600; cursor: pointer; transition: all var(--transition);
-}
-.league-tab.active { border-color: var(--accent); background: rgba(240,160,80,0.1); color: var(--accent); }
-
-.league-news-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
-.league-news-card {
-    background: #0f172a; border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 20px; cursor: pointer; transition: all var(--transition);
-}
-.league-news-card:hover { border-color: var(--accent); box-shadow: 0 0 14px var(--accent-glow); transform: translateY(-2px); }
-.league-news-card h4 { color: var(--accent); margin-bottom: 8px; font-size: 1rem; }
-.league-card-time { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 10px; }
-.league-card-summary { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; }
-#leagueDetailContent { white-space: pre-wrap; word-break: break-word; line-height: 1.8; color: var(--text-secondary); }
-
-#leagueStandingsContainer { overflow-x: auto; }
-#leagueStandingsContainer table { width: 100%; border-collapse: collapse; min-width: 800px; margin-top: 10px; }
-#leagueStandingsContainer th, #leagueStandingsContainer td {
-    padding: 8px 6px; border: 1px solid var(--border); text-align: center; font-size: 0.85rem; color: var(--text);
-}
-#leagueStandingsContainer th { background: rgba(240,160,80,0.15); color: var(--accent); font-weight: 600; }
-#leagueStandingsContainer tr:hover td { background: rgba(240,160,80,0.05); }
-
-/* ==================== 联赛管理（全屏） ==================== */
-.league-admin-menu { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
-.league-admin-btn {
-    padding: 8px 20px; border-radius: 20px; border: 1px solid var(--border);
-    background: transparent; color: var(--text-secondary); font-weight: 600; cursor: pointer; transition: all var(--transition);
-}
-.league-admin-btn.active { border-color: var(--accent); background: rgba(240,160,80,0.1); color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
-.league-admin-btn:hover { border-color: var(--accent); background: rgba(240,160,80,0.08); }
-
-.league-panel { margin-top: 16px; }
-.league-panel h4 { color: var(--accent); margin-bottom: 12px; }
-
-/* 队伍列表样式 */
-.league-panel ul { list-style: none; padding: 0; }
-.league-panel ul li {
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: nowrap;
-    color: var(--text);
-}
-.league-panel ul li span.team-name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.league-panel ul li button {
-    margin-left: auto;
-    padding: 4px 12px;
-    border-radius: 6px;
-    border: 1px solid var(--accent);
-    background: rgba(240,160,80,0.1);
-    color: var(--accent);
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: all var(--transition);
-    white-space: nowrap;
-}
-.league-panel ul li button:hover { background: rgba(240,160,80,0.2); box-shadow: 0 0 8px var(--accent-glow); }
-
-/* 联赛配置中的输入框 */
-#seasonName, #rulesSection input[type="number"], .league-panel input[type="text"], .league-panel input[type="number"] {
-    padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border);
-    background: #111927; color: var(--text); font-size: 0.85rem; margin-right: 8px;
-}
-#rulesSection input[type="number"] { width: 60px; }
-
-/* 联赛面板中的通用按钮 */
-.league-panel > button,
-.league-panel .add-btn,
-.league-panel button {
-    padding: 6px 14px;
-    border-radius: 6px;
-    border: 1px solid var(--accent);
-    background: rgba(240,160,80,0.1);
-    color: var(--accent);
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: all var(--transition);
-    margin-right: 8px;
-}
-.league-panel > button:hover,
-.league-panel .add-btn:hover,
-.league-panel button:hover {
-    background: rgba(240,160,80,0.2);
-    box-shadow: 0 0 8px var(--accent-glow);
-}
-
-/* 队伍添加行 */
-.league-panel .team-add-row {
-    display: flex; align-items: center; gap: 8px; margin-top: 12px;
-}
-.league-panel .team-add-row input {
-    flex: 1;
-    padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border);
-    background: #111927; color: var(--text); font-size: 0.85rem;
-}
-.league-panel .team-add-row button {
-    padding: 6px 16px; border-radius: 6px; border: 1px solid var(--accent);
-    background: rgba(240,160,80,0.1); color: var(--accent); cursor: pointer; transition: all var(--transition);
-}
-.league-panel .team-add-row button:hover { background: rgba(240,160,80,0.2); }
+.shop-items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
 
 /* ==================== 设置面板布局 ==================== */
 .settings-layout {
@@ -998,8 +886,7 @@ body.theme-light .order-table th,
 body.theme-light .admin-order-list th,
 body.theme-light .booster-tab-content th,
 body.theme-light #adminShopList th,
-body.theme-light #tpOrderList th,
-body.theme-light #leagueStandingsContainer th {
+body.theme-light #tpOrderList th {
     background: #f5f5f7;
     color: var(--text-secondary);
     font-weight: 600;
@@ -1039,7 +926,6 @@ body.theme-light .settings-nav-btn.active {
 
 /* ---------- 新闻/租号/内容卡片 ---------- */
 body.theme-light .news-item,
-body.theme-light .league-news-card,
 body.theme-light .rental-account-card,
 body.theme-light .content-item-card {
     background: #ffffff;

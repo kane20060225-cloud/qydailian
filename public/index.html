@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blitz情谊工具站</title>
-    <link rel="stylesheet" href="style.css?v=20260916-ui1">
+    <link rel="stylesheet" href="style.css?v=20260916-b10">
     <link rel="stylesheet" href="order-center.css?v=20260916-oc1">
 </head>
 <body>
@@ -25,7 +25,6 @@
                    <button id="profileBtn">👤 个人中心</button>
                    <button id="adminPanelBtn" style="display:none;">🛠️ 管理面板</button>
                    <button id="boosterPanelBtn" style="display:none;">⚔️ 打手面板</button>
-                   <button id="leagueAdminBtn" style="display:none;">🏆 联赛管理</button>
                    <button id="thirdPartyOrdersBtn">📦 三方订单</button>
                    <button id="settingsBtn">⚙️ 设置</button>
                    <button id="logoutBtn">🚪 退出登录</button>
@@ -82,7 +81,6 @@
                 <button class="menu-card quick-card" data-target="tools"><span class="menu-icon">🧮</span><span><strong>独立工具</strong><small>计算器、开箱模拟器、随机坦克</small></span></button>
                 <button class="menu-card quick-card" data-target="announcement"><span class="menu-icon">📢</span><span><strong>站内公告</strong><small>下单须知与服务说明</small></span></button>
                 <button class="menu-card quick-card" data-target="news"><span class="menu-icon">📰</span><span><strong>游戏新闻</strong><small>最新公告与活动资讯</small></span></button>
-                <button class="menu-card quick-card" data-target="league"><span class="menu-icon">🏆</span><span><strong>联赛相关</strong><small>积分榜与赛事新闻</small></span></button>
             </div>
         </section>
     </main>
@@ -328,29 +326,6 @@
         </div>
     </div>
 
-    <!-- 板块五：联赛相关 -->
-    <div id="sectionLeague" class="content-section" style="display: none;">
-        <div class="section-top">
-            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
-            <h2 class="section-heading">🏆 联赛相关</h2>
-        </div>
-        <div class="container">
-            <div class="league-tabs">
-                <button class="league-tab active" data-league-view="standings">📊 积分榜</button>
-                <button class="league-tab" data-league-view="news">📰 新闻</button>
-            </div>
-
-            <div id="leagueStandingsView">
-                <div id="leagueStandingsContainer" style="overflow-x:auto;">
-                    <p style="color: var(--text-muted);">选择赛季后加载积分榜...</p>
-                </div>
-            </div>
-
-            <div id="leagueNewsView" style="display:none;">
-                <div class="league-news-grid" id="leagueNewsGrid"></div>
-            </div>
-        </div>
-    </div>
 
     <!-- ==================== 板块六：账号租借 ==================== -->
     <div id="sectionRental" class="content-section" style="display: none;">
@@ -542,7 +517,6 @@
                 <div class="content-manager-tabs" style="display:flex; gap:10px; margin-bottom:16px;">
                     <button class="content-mgr-tab active" data-ctype="announcements">📢 站内公告</button>
                     <button class="content-mgr-tab" data-ctype="game-news">📰 游戏新闻</button>
-                    <button class="content-mgr-tab" data-ctype="league-news">🏆 联赛新闻</button>
                 </div>
                 <div id="contentManagerView" style="margin-top:12px;"></div>
             </div>
@@ -587,23 +561,6 @@
         </div>
     </div>
 
-    <!-- ==================== 全屏页面：联赛管理 ==================== -->
-    <div id="sectionLeagueAdmin" class="content-section" style="display: none;">
-        <div class="section-top">
-            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
-            <h2 class="section-heading">🏆 联赛管理</h2>
-        </div>
-        <div class="container">
-            <div class="league-admin-menu">
-                <button class="league-admin-btn active" data-panel="league-config">📅 联赛配置</button>
-                <button class="league-admin-btn" data-panel="league-teams">👥 队伍表</button>
-                <button class="league-admin-btn" data-panel="league-scores">📊 成绩表</button>
-            </div>
-            <div id="leagueConfigPanel" class="league-panel"></div>
-            <div id="leagueTeamsPanel" class="league-panel" style="display:none;"></div>
-            <div id="leagueScoresPanel" class="league-panel" style="display:none;"></div>
-        </div>
-    </div>
 
     <!-- ==================== 积分商城页面 ==================== -->
     <div id="sectionQYShop" class="content-section" style="display: none;">
@@ -612,7 +569,7 @@
             <h2 class="section-heading">🎁 积分商城</h2>
         </div>
         <div class="container">
-            <div id="shopItemsContainer" class="league-news-grid"></div>
+            <div id="shopItemsContainer" class="shop-items-grid"></div>
         </div>
     </div>
 
@@ -786,17 +743,6 @@
         </div>
     </div>
 
-    <!-- 联赛详情弹窗 -->
-    <div class="modal-overlay" id="leagueDetailModal" style="display: none;">
-        <div class="modal-card" style="max-width: 600px;">
-            <div class="modal-header">
-                <h3 id="leagueDetailTitle">联赛详情</h3>
-                <button class="modal-close" id="closeLeagueDetailBtn">&times;</button>
-            </div>
-            <p id="leagueDetailTime" style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 12px;"></p>
-            <div id="leagueDetailContent" style="line-height: 1.8; font-size: 0.95rem;"></div>
-        </div>
-    </div>
 
     <!-- 内容编辑弹窗 -->
     <div class="modal-overlay" id="contentEditorModal" style="display: none;">
@@ -1021,6 +967,6 @@
     <script src="ui-runtime.js"></script>
     <script src="rental-client.js"></script>
     <script src="order-center.js?v=20260916-oc1"></script>
-    <script src="script.js?v=20260916-oc1"></script>
+    <script src="script.js?v=20260916-b10"></script>
 </body>
 </html>

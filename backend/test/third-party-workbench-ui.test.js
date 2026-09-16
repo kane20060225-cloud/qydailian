@@ -19,7 +19,7 @@ test('clicking the third-party menu button opens its section exactly once', () =
   vm.runInNewContext(navigation, {
     document: { querySelectorAll: () => [] },
     getEl: (id) => id === 'thirdPartyOrdersBtn' ? button : null,
-    profileBtn: null, adminPanelBtn: null, boosterPanelBtn: null, leagueAdminBtn: null,
+    profileBtn: null, adminPanelBtn: null, boosterPanelBtn: null,
     showSection: (target) => calls.push(target)
   });
   for (const listener of listeners) listener();
