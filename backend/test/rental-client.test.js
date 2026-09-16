@@ -82,6 +82,23 @@ test('review validates boolean and invalidates the public hall cache', async () 
   assert.deepEqual(JSON.parse(review.options.body), { approved: true });
 });
 
+test('archive and deleted-list requests use authenticated recoverable actions', async () => {
+  const calls = [];
+  const client = createRentalClient({ getToken: () => 'synthetic-token',
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return response(url.includes('my-accounts') ? [] : { success: true, message: 'ok' });
+    } });
+  await client.getMyAccounts({ deleted: true });
+  await client.changeAccountArchive(7, 'archive');
+  await client.changeAccountArchive(7, 'restore', { admin: true });
+  assert.equal(calls[0].url, '/api/rental/my-accounts?deleted=1');
+  assert.equal(calls[1].url, '/api/rental/accounts/7/archive');
+  assert.equal(calls[2].url, '/api/admin/rental/accounts/7/restore');
+  assert.equal(calls[1].options.method, 'POST');
+  await assert.rejects(client.changeAccountArchive(7, 'remove'), /操作无效/);
+});
+
 test('API client surfaces server errors without treating failed JSON as account data', async () => {
   const client = createRentalClient({ fetchImpl: async () =>
     response({ error: '服务器错误' }, { status: 500 }) });

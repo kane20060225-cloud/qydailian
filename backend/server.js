@@ -1887,7 +1887,7 @@ app.get('/api/rental/accounts', async (req, res) => {
               u.booster_identity AS owner_identity
        FROM rental_accounts ra
        JOIN users u ON ra.owner_id = u.id
-       WHERE ra.status = 'active'
+       WHERE ra.status = 'active' AND ra.deleted_at IS NULL
        ORDER BY ra.created_at DESC`
     );
     res.json(rows);
@@ -1903,7 +1903,7 @@ app.get('/api/rental/accounts/:id', async (req, res) => {
       `SELECT ra.*, u.username AS owner_name, u.reputation AS owner_reputation
        FROM rental_accounts ra
        JOIN users u ON ra.owner_id = u.id
-       WHERE ra.id = ?`,
+       WHERE ra.id = ? AND ra.status = 'active' AND ra.deleted_at IS NULL`,
       [req.params.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: '账号不存在' });
@@ -1939,7 +1939,8 @@ app.post('/api/rental/accounts', authMiddleware, async (req, res) => {
 app.get('/api/rental/my-accounts', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      'SELECT * FROM rental_accounts WHERE owner_id = ? ORDER BY created_at DESC',
+      `SELECT * FROM rental_accounts WHERE owner_id = ? AND deleted_at IS ${req.query.deleted === '1' ? 'NOT NULL' : 'NULL'}
+       ORDER BY created_at DESC, id DESC`,
       [req.userId]
     );
     res.json(rows);
@@ -1959,7 +1960,7 @@ app.put('/api/rental/accounts/:id/status', authMiddleware, async (req, res) => {
   try {
     await conn.beginTransaction();
     const [accounts] = await conn.execute(
-      'SELECT id, status FROM rental_accounts WHERE id = ? AND owner_id = ? FOR UPDATE',
+      'SELECT id, status, deleted_at FROM rental_accounts WHERE id = ? AND owner_id = ? FOR UPDATE',
       [accountId, req.userId]
     );
     if (!accounts.length) {
@@ -1967,13 +1968,17 @@ app.put('/api/rental/accounts/:id/status', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '账号不存在或无权操作' });
     }
     const previous = accounts[0].status;
+    if (accounts[0].deleted_at) {
+      await conn.rollback();
+      return res.status(409).json({ error: '已删除账号须先恢复并重新审核' });
+    }
     if ((status === 'suspended' && previous !== 'active') ||
         (status === 'pending' && previous !== 'suspended')) {
       await conn.rollback();
       return res.status(409).json({ error: '账号状态已变化，请刷新后重试' });
     }
     const [result] = await conn.execute(
-      'UPDATE rental_accounts SET status = ? WHERE id = ? AND owner_id = ? AND status = ?',
+      'UPDATE rental_accounts SET status = ? WHERE id = ? AND owner_id = ? AND status = ? AND deleted_at IS NULL',
       [status, accountId, req.userId, previous]
     );
     if (result.affectedRows !== 1) throw new Error('账号状态已变化');
@@ -2001,13 +2006,17 @@ app.put('/api/admin/rental/accounts/:id/review', adminMiddleware, async (req, re
   try {
     await conn.beginTransaction();
     const [accounts] = await conn.execute(
-      'SELECT id, status FROM rental_accounts WHERE id = ? FOR UPDATE', [accountId]
+      'SELECT id, status, deleted_at FROM rental_accounts WHERE id = ? FOR UPDATE', [accountId]
     );
     if (!accounts.length) {
       await conn.rollback();
       return res.status(404).json({ error: '出租账号不存在' });
     }
     const previous = accounts[0].status;
+    if (accounts[0].deleted_at) {
+      await conn.rollback();
+      return res.status(409).json({ error: '已删除账号须先恢复，不能直接审核' });
+    }
     if ((approved && !['pending', 'suspended'].includes(previous)) ||
         (!approved && !['pending', 'active'].includes(previous))) {
       await conn.rollback();
@@ -2015,7 +2024,7 @@ app.put('/api/admin/rental/accounts/:id/review', adminMiddleware, async (req, re
     }
     const newStatus = approved ? 'active' : 'suspended';
     const [result] = await conn.execute(
-      'UPDATE rental_accounts SET status = ? WHERE id = ? AND status = ?',
+      'UPDATE rental_accounts SET status = ? WHERE id = ? AND status = ? AND deleted_at IS NULL',
       [newStatus, accountId, previous]
     );
     if (result.affectedRows !== 1) throw new Error('账号状态已变化');
@@ -2035,18 +2044,83 @@ app.put('/api/admin/rental/accounts/:id/review', adminMiddleware, async (req, re
   } finally { conn.release(); }
 });
 
+async function changeRentalAccountArchive(req, res, { restore, admin }) {
+  const accountId = Number(req.params.id);
+  if (!Number.isSafeInteger(accountId) || accountId <= 0) {
+    return res.status(400).json({ error: '出租账号 ID 无效' });
+  }
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [accounts] = await conn.execute(
+      admin ? 'SELECT id, deleted_at FROM rental_accounts WHERE id = ? FOR UPDATE' :
+        'SELECT id, deleted_at FROM rental_accounts WHERE id = ? AND owner_id = ? FOR UPDATE',
+      admin ? [accountId] : [accountId, req.userId]
+    );
+    if (!accounts.length) {
+      await conn.rollback();
+      return res.status(404).json({ error: '账号不存在或无权操作' });
+    }
+    if (restore ? !accounts[0].deleted_at : !!accounts[0].deleted_at) {
+      await conn.rollback();
+      return res.status(409).json({ error: '账号状态已变化，请刷新后重试' });
+    }
+    if (!restore) {
+      const [occupied] = await conn.execute(
+        'SELECT id FROM rental_orders WHERE account_id = ? AND status IN (?, ?) LIMIT 1',
+        [accountId, 'pending', 'active']
+      );
+      if (occupied.length) {
+        await conn.rollback();
+        return res.status(409).json({ error: '账号有进行中租单，须先完成或取消后再删除' });
+      }
+    }
+    const [result] = await conn.execute(
+      restore ? `UPDATE rental_accounts SET deleted_at = NULL, status = 'pending'
+                 WHERE id = ? AND deleted_at IS NOT NULL` :
+        `UPDATE rental_accounts SET deleted_at = UTC_TIMESTAMP(), status = 'suspended'
+         WHERE id = ? AND deleted_at IS NULL`, [accountId]
+    );
+    if (result.affectedRows !== 1) throw new Error('账号状态已变化');
+    await recordOperation(conn, {
+      eventKey: `rental_account:${accountId}:${crypto.randomUUID()}`,
+      actorUserId: req.userId,
+      action: restore ? 'rental_account_restored_for_review' :
+        admin ? 'rental_account_archived_by_admin' : 'rental_account_archived_by_owner',
+      targetType: 'rental_account', targetRef: String(accountId)
+    });
+    await conn.commit();
+    res.json({ success: true, status: restore ? 'pending' : 'deleted',
+      message: restore ? '已恢复为待审核，请等待管理员处理' : '已删除展示，历史租单仍保留' });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ error: '服务器错误' });
+  } finally { conn.release(); }
+}
+
+app.post('/api/rental/accounts/:id/archive', authMiddleware, (req, res) =>
+  changeRentalAccountArchive(req, res, { restore: false, admin: false }));
+app.post('/api/rental/accounts/:id/restore', authMiddleware, (req, res) =>
+  changeRentalAccountArchive(req, res, { restore: true, admin: false }));
+app.post('/api/admin/rental/accounts/:id/archive', adminMiddleware, (req, res) =>
+  changeRentalAccountArchive(req, res, { restore: false, admin: true }));
+app.post('/api/admin/rental/accounts/:id/restore', adminMiddleware, (req, res) =>
+  changeRentalAccountArchive(req, res, { restore: true, admin: true }));
+
 app.get('/api/admin/rental/accounts', adminMiddleware, async (req, res) => {
   const status = req.query.status || '';
   const page = Number(req.query.page || 1);
-  if (status && !['pending', 'active', 'suspended'].includes(status)) {
+  if (status && !['pending', 'active', 'suspended', 'deleted'].includes(status)) {
     return res.status(400).json({ error: '筛选状态无效' });
   }
   if (!Number.isSafeInteger(page) || page < 1 || page > 10000) {
     return res.status(400).json({ error: '页码无效' });
   }
   try {
-    const where = status ? 'WHERE ra.status = ?' : '';
-    const filters = status ? [status] : [];
+    const where = status === 'deleted' ? 'WHERE ra.deleted_at IS NOT NULL' :
+      status ? 'WHERE ra.deleted_at IS NULL AND ra.status = ?' :
+        'WHERE ra.deleted_at IS NULL';
+    const filters = status && status !== 'deleted' ? [status] : [];
     const [counts] = await pool.execute(
       `SELECT COUNT(*) AS total FROM rental_accounts ra ${where}`, filters
     );
@@ -2056,7 +2130,7 @@ app.get('/api/admin/rental/accounts', adminMiddleware, async (req, res) => {
       `SELECT ra.id, ra.owner_id, ra.game_uid, ra.client_type,
               ra.tank_list, ra.hourly_price, ra.daily_price,
               ra.available_time_desc, ra.screenshots, ra.rules,
-              ra.status, ra.created_at, u.username AS owner_name
+              ra.status, ra.deleted_at, ra.created_at, u.username AS owner_name
        FROM rental_accounts ra JOIN users u ON ra.owner_id = u.id
        ${where} ORDER BY ra.created_at DESC, ra.id DESC LIMIT ? OFFSET ?`,
       [...filters, 25, (page - 1) * 25]
@@ -2077,7 +2151,7 @@ app.post('/api/rental/orders', authMiddleware, async (req, res) => {
     await conn.beginTransaction();
 
     const [accounts] = await conn.execute(
-      'SELECT * FROM rental_accounts WHERE id = ? AND status = ? FOR UPDATE',
+      'SELECT * FROM rental_accounts WHERE id = ? AND status = ? AND deleted_at IS NULL FOR UPDATE',
       [account_id, 'active']
     );
     if (accounts.length === 0) throw new Error('账号不可租用');

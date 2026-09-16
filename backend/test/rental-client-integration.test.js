@@ -12,7 +12,7 @@ test('rental client loads before the website script and centralizes account requ
   const script = fs.readFileSync(path.join(publicDir, 'script.js'), 'utf8');
   assert.match(html, /<script src="rental-client\.js"><\/script>\s*<script src="script\.js"><\/script>/);
   for (const method of ['getHall', 'getAccount', 'getMyAccounts',
-    'getAdminAccounts', 'reviewAccount', 'changeAccountStatus']) {
+    'getAdminAccounts', 'reviewAccount', 'changeAccountStatus', 'changeAccountArchive']) {
     assert.match(script, new RegExp(`rentalClient\\.${method}\\(`));
   }
   assert.doesNotMatch(script, /JSON\.parse\((?:acc|account)\.screenshots\)/);

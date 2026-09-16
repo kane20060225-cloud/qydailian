@@ -78,14 +78,14 @@
             return (await requestJson(`/rental/accounts/${checkedId(id)}`)).data;
         }
 
-        async function getMyAccounts() {
-            const { data } = await requestJson('/rental/my-accounts', { auth: true });
+        async function getMyAccounts({ deleted = false } = {}) {
+            const { data } = await requestJson(`/rental/my-accounts${deleted ? '?deleted=1' : ''}`, { auth: true });
             if (!Array.isArray(data)) throw new Error('出租账号列表响应无效');
             return data;
         }
 
         async function getAdminAccounts({ status = '', page = 1 } = {}) {
-            if (status && !['pending', 'active', 'suspended'].includes(status)) {
+            if (status && !['pending', 'active', 'suspended', 'deleted'].includes(status)) {
                 throw new Error('筛选状态无效');
             }
             if (!Number.isSafeInteger(page) || page < 1 || page > 10000) {
@@ -135,8 +135,18 @@
             return data;
         }
 
+        async function changeAccountArchive(id, action, { admin = false } = {}) {
+            if (!['archive', 'restore'].includes(action)) throw new Error('账号操作无效');
+            const prefix = admin ? '/admin' : '';
+            const { data } = await requestJson(`${prefix}/rental/accounts/${checkedId(id)}/${action}`,
+                { method: 'POST', auth: true });
+            invalidateHall();
+            return data;
+        }
+
         return { requestJson, getHall, getAccount, getMyAccounts, getAdminAccounts,
-            reviewAccount, uploadScreenshot, changeAccountStatus, invalidateHall };
+            reviewAccount, uploadScreenshot, changeAccountStatus, changeAccountArchive,
+            invalidateHall };
     }
 
     root.RentalClient = { createRentalClient, screenshotNames, accountStatusLabels };
