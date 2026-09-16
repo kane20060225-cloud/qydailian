@@ -176,6 +176,7 @@ const connection = {
       state.audit.push(params);
       return [{ affectedRows: 1 }];
     }
+    if(q.startsWith('INSERT INTO order_management_events')){state.audit.push(params);return [{affectedRows:1}];}
     throw new Error(`Unexpected fake SQL: ${q}`);
   }
 };
@@ -356,7 +357,7 @@ test('rejected screenshot may be resubmitted but not treated as paid', async (t)
   assert.equal((await submit('rental_3_1700000000000.png')).status, 200);
   assert.equal((await fetch(`${base}/api/admin/rental/orders/RNT-TEST/review-payment`, {
     method: 'PUT', headers: { Authorization: `Bearer ${admin}`,
-      'Content-Type': 'application/json' }, body: JSON.stringify({ approved: false })
+      'Content-Type': 'application/json' }, body: JSON.stringify({ approved: false, reason: '截图无法确认入账，请提供交易详情' })
   })).status, 200);
   assert.equal(state.workflows[0].payment_status, 'rejected');
   assert.equal(state.payments.length, 0);
@@ -406,7 +407,7 @@ test('dispute blocks renter payout; administrator resolution settles once', asyn
     method: 'PUT', headers: { Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json' }, body: body && JSON.stringify(body)
   });
-  assert.equal((await put('/api/rental/orders/RNT-TEST/dispute', renter)).status, 200);
+  assert.equal((await put('/api/rental/orders/RNT-TEST/dispute', renter, {reason:'交接账号与说明不符'})).status, 200);
   assert.equal((await put('/api/rental/orders/RNT-TEST/confirm-completion', renter)).status, 409);
   assert.equal(state.ownerEarnings, 0);
   assert.equal((await put('/api/admin/rental/orders/RNT-TEST/resolve-dispute', admin,

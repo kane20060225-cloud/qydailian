@@ -1,4 +1,5 @@
 'use strict';
+const {operational}=require('./order-guidance');
 
 const TYPES = Object.freeze(['boost', 'rental', 'recharge', 'shop', 'third_party']);
 const STATES = Object.freeze({
@@ -20,10 +21,13 @@ SELECT 'boost' AS order_type, o.order_no AS order_ref, CONCAT(o.project,' · ',o
  WHEN o.status IN ('done','playing') AND o.payment_status!='paid' THEN 'exception' WHEN o.status='playing' THEN 'in_progress'
  WHEN o.status='pending' AND o.payment_status='paid' THEN 'awaiting_assignment'
  WHEN o.status='pending' AND o.payment_status='pending' THEN 'payment_review'
+ WHEN o.status='pending' AND o.payment_status='unpaid' AND o.total_price=0 THEN 'payment_review'
  WHEN o.status='pending' THEN 'pending_payment' ELSE 'exception' END AS state,
  CASE WHEN o.status IN ('done','playing') AND o.payment_status!='paid' THEN 'exception'
  WHEN o.status!='done' AND o.payment_status='pending' THEN 'payment'
+ WHEN o.status='pending' AND o.payment_status='unpaid' AND o.total_price=0 THEN 'payment'
  WHEN o.status='pending' AND o.payment_status='paid' AND o.booster_id IS NULL AND o.hall_status IS NULL THEN 'review'
+ WHEN o.status='pending' AND o.payment_status='paid' AND o.booster_id IS NULL THEN 'assignment'
  ELSE NULL END AS admin_task, u.username AS customer_name, b.username AS assignee_name
 FROM orders o JOIN users u ON u.id=o.user_id LEFT JOIN users b ON b.id=o.booster_id
 UNION ALL
@@ -36,7 +40,9 @@ SELECT 'rental', o.order_no, CONCAT('账号租用 · ',o.quantity,IF(o.rental_ty
  WHEN o.status='active' THEN 'in_progress' WHEN w.payment_status='paid' THEN 'awaiting_activation'
  WHEN w.payment_status='submitted' THEN 'payment_review' ELSE 'pending_payment' END,
  CASE WHEN w.disputed_at IS NOT NULL AND w.resolved_at IS NULL AND o.status IN ('pending','active') THEN 'refund'
- WHEN o.status='pending' AND w.payment_status='submitted' THEN 'payment' ELSE NULL END,
+ WHEN o.status='pending' AND w.payment_status='submitted' THEN 'payment'
+ WHEN o.status='pending' AND w.payment_status='paid' THEN 'activation'
+ WHEN o.status='active' AND w.owner_complete_requested_at IS NOT NULL THEN 'acceptance' ELSE NULL END,
  u.username,b.username
 FROM rental_orders o JOIN users u ON u.id=o.renter_id JOIN users b ON b.id=o.owner_id
  LEFT JOIN rental_order_workflow w ON w.order_no=o.order_no
@@ -82,9 +88,46 @@ FROM third_party_orders o JOIN users u ON u.id=o.creator_id
 `;
 
 const REMOVED_SQL = `CASE WHEN r.state_snapshot=c.state AND r.payment_snapshot=COALESCE(c.payment_status,'') THEN r.removed_at ELSE NULL END`;
-const READ_MODEL_SQL = `SELECT c.*, a.archived_at, ${REMOVED_SQL} AS removed_at, DATE_ADD(${REMOVED_SQL},INTERVAL 14 DAY) AS purge_after, r.reason AS removal_reason FROM (${ORDER_UNION_SQL}) c
+const TASK_SQL = `CASE WHEN dq.status='pending' THEN 'deletion' ELSE c.admin_task END`;
+const STAGE_SQL = `CASE WHEN c.state='payment_review' THEN history.submitted_at
+ WHEN c.state IN ('awaiting_assignment','awaiting_activation') THEN history.paid_at
+ WHEN c.state='in_progress' THEN history.started_at
+ WHEN c.state='awaiting_acceptance' THEN COALESCE(history.acceptance_at,rw.owner_complete_requested_at,tw.complete_requested_at)
+ WHEN c.state='dispute' THEN COALESCE(history.disputed_at,rw.disputed_at)
+ WHEN c.state IN ('completed','credited') THEN COALESCE(history.completed_at,c.credited_at)
+ WHEN c.state='rejected' THEN tw.updated_at
+ WHEN c.state='pending' THEN tw.last_resubmitted_at ELSE NULL END`;
+const READ_MODEL_SQL = `SELECT c.*, a.archived_at, ${REMOVED_SQL} AS removed_at, DATE_ADD(${REMOVED_SQL},INTERVAL 14 DAY) AS purge_after, r.reason AS removal_reason,
+ ${STAGE_SQL} AS stage_recorded_at, bo.urgent, dq.status AS deletion_status, dq.reason AS deletion_reason, dq.review_note AS deletion_review_note,
+ dq.created_at AS deletion_requested_at, COALESCE(dq.retain_records,0) AS retention_protected,
+ GREATEST(c.created_at,COALESCE(history.updated_at,c.created_at),COALESCE(a.archived_at,c.created_at),COALESCE(rw.updated_at,c.created_at),COALESCE(tw.updated_at,c.created_at),COALESCE(c.credited_at,c.created_at)) AS last_updated_at
+ FROM (${ORDER_UNION_SQL}) c
  LEFT JOIN order_management_state a ON a.order_type=c.order_type AND a.order_ref=c.order_ref
- LEFT JOIN order_removals r ON r.order_type=c.order_type AND r.order_ref=c.order_ref`;
+ LEFT JOIN order_removals r ON r.order_type=c.order_type AND r.order_ref=c.order_ref
+ LEFT JOIN order_deletion_requests dq ON dq.order_type=c.order_type AND dq.order_ref=c.order_ref
+ LEFT JOIN orders bo ON c.order_type='boost' AND bo.order_no=c.order_ref
+ LEFT JOIN rental_order_workflow rw ON c.order_type='rental' AND rw.order_no=c.order_ref
+ LEFT JOIN third_party_order_workflow tw ON c.order_type='third_party' AND tw.order_no=c.order_ref
+ LEFT JOIN (SELECT target_type,target_ref,MAX(created_at) AS updated_at,
+ MAX(CASE WHEN action IN ('manual_payment_submitted','rental_payment_submitted') THEN created_at END) AS submitted_at,
+ MAX(CASE WHEN action IN ('manual_payment_confirmed','manual_payment_confirmed_without_evidence','payment_confirmed','rental_payment_confirmed') THEN created_at END) AS paid_at,
+ MAX(CASE WHEN action IN ('order_taken','rental_activated') THEN created_at END) AS started_at,
+ MAX(CASE WHEN action IN ('rental_completion_requested') THEN created_at END) AS acceptance_at,
+ MAX(CASE WHEN action='rental_disputed' THEN created_at END) AS disputed_at,
+ MAX(CASE WHEN action IN ('order_completed','rental_completed_by_renter','rental_dispute_resolved_completed') THEN created_at END) AS completed_at
+ FROM operation_audit GROUP BY target_type,target_ref) history
+ ON history.target_ref=c.order_ref AND history.target_type=CASE c.order_type WHEN 'boost' THEN 'order' WHEN 'rental' THEN 'rental_order' WHEN 'recharge' THEN 'payment_order' WHEN 'third_party' THEN 'third_party_order' ELSE 'shop_purchase' END`;
+
+function sortClause(filters,admin) {
+  if (!admin || filters.sort==='newest') return ' ORDER BY c.created_at DESC,c.order_type,c.order_ref';
+  const age=`TIMESTAMPDIFF(SECOND,COALESCE(${STAGE_SQL},c.created_at),NOW())/3600`;
+  const urgency=`CASE WHEN ${REMOVED_SQL} IS NOT NULL OR c.admin_task IS NULL THEN 0
+   WHEN c.state IN ('dispute','exception','credit_pending') THEN 3
+   WHEN (c.state='payment_review' AND ${age}>=4) OR (c.state IN ('awaiting_assignment','awaiting_activation') AND ${age}>=8)
+   OR (c.state IN ('awaiting_acceptance','pending') AND ${age}>=24) OR bo.urgent=1 THEN 2 ELSE 1 END`;
+  return filters.sort==='waiting' ? ` ORDER BY (${TASK_SQL} IS NOT NULL) DESC,COALESCE(dq.created_at,${STAGE_SQL},c.created_at) ASC,c.order_type,c.order_ref`
+    : ` ORDER BY (dq.status='pending') DESC,${urgency} DESC,COALESCE(dq.created_at,${STAGE_SQL},c.created_at) ASC,c.order_type,c.order_ref`;
+}
 
 function visibleOrdersSql(type, refSql) {
   if (!TYPES.includes(type) || !['orders.order_no','o.order_no','ro.order_no','t.order_no'].includes(refSql)) throw new Error('Invalid order visibility source');
@@ -98,7 +141,9 @@ function parseFilters(query = {}) {
   const validStates = new Set(['todo', ...Object.values(STATES).flatMap(Object.keys)]);
   if (state && !validStates.has(state)) throw new Error('无效订单状态');
   const task = String(query.task || '');
-  if (task && !['review','payment','acceptance','exception','refund'].includes(task)) throw new Error('无效待办类型');
+  if (task && !['review','payment','assignment','activation','acceptance','exception','refund','deletion'].includes(task)) throw new Error('无效待办类型');
+  const sort=String(query.sort || 'priority');
+  if (!['priority','waiting','newest'].includes(sort)) throw new Error('无效排序方式');
   const search = String(query.search || '').trim().slice(0, 100);
   const from = String(query.from || '');
   const to = String(query.to || '');
@@ -108,7 +153,7 @@ function parseFilters(query = {}) {
   if (from && to && from > to) throw new Error('起始日期不能晚于结束日期');
   const page = Number(query.page || 1);
   if (!Number.isSafeInteger(page) || page < 1 || page > 100000) throw new Error('无效页码');
-  return { type, state, task, search, from, to, page, channel: String(query.channel || '').slice(0, 30),
+  return { type, state, task, search, from, to, page, sort, channel: String(query.channel || '').slice(0, 30),
     archived: query.archived === '1', trash: query.trash === '1' };
 }
 
@@ -130,13 +175,14 @@ function filterClause(filters, { admin, userId, role, includeState = true }) {
   if (filters.to) { conditions.push('c.created_at<DATE_ADD(?,INTERVAL 1 DAY)'); params.push(filters.to); }
   if (filters.channel) { conditions.push('c.payment_channel=?'); params.push(filters.channel); }
   if (includeState && filters.state === 'todo') {
-    conditions.push(admin ? 'c.admin_task IS NOT NULL' : "c.state IN ('pending_payment','rejected','awaiting_activation','awaiting_acceptance','credit_pending','exception','dispute')");
+    conditions.push(admin ? `${TASK_SQL} IS NOT NULL` : "c.state IN ('pending_payment','rejected','awaiting_activation','awaiting_acceptance','credit_pending','exception','dispute')");
   } else if (includeState && filters.state) { conditions.push('c.state=?'); params.push(filters.state); }
-  if (includeState && filters.task) { conditions.push('c.admin_task=?'); params.push(filters.task); }
+  if (includeState && filters.task) { conditions.push(`${TASK_SQL}=?`); params.push(filters.task); }
   return { sql: conditions.length ? ' WHERE ' + conditions.join(' AND ') : '', params };
 }
 
 function decorateOrder(row, userId, admin) {
+  if(row.deletion_status==='pending')row={...row,admin_task:'deletion',stage_recorded_at:row.deletion_requested_at};
   const own = Number(row.customer_id) === Number(userId);
   const related = Number(row.related_user_id) === Number(userId);
   const actions = [];
@@ -150,16 +196,21 @@ function decorateOrder(row, userId, admin) {
       if (['exception','credit_pending'].includes(row.state)) actions.push('resolve_recharge');
     }
   } else if (row.order_type === 'boost') {
-    if (own && row.payment_status === 'unpaid' && !['completed','closed'].includes(row.state)) actions.push('boost_payment');
+    if (own && row.payment_status === 'unpaid' && Number(row.amount)>0 && row.state==='pending_payment') actions.push('boost_payment');
     if (admin && row.state === 'payment_review') actions.push('boost_confirm_payment');
     if (admin && row.state === 'awaiting_assignment' && row.admin_task === 'review') actions.push('boost_dispatch');
   } else if (row.order_type === 'rental') {
     if (admin || own || related) actions.push('rental_manage');
   } else if (row.order_type === 'third_party') actions.push('third_party_manage');
   if ((admin || own) && ['boost','rental'].includes(row.order_type) && row.state === 'pending_payment' && row.payment_status === 'unpaid') actions.push('cancel_unpaid');
+  if ((admin || own) && row.order_type==='boost' && row.state==='payment_review' && row.payment_status==='unpaid' && Number(row.amount)===0) actions.push('cancel_unpaid');
   if (admin && ['completed','credited','closed'].includes(row.state)) actions.push(row.archived_at ? 'unarchive' : 'archive');
   if (admin && require('./order-cleanup').removable(row)) actions.push('remove');
-  return { ...row, state_label: STATES[row.order_type]?.[row.state] || '状态待核对', actions };
+  const reviewable=require('./order-deletion').reviewable(row);
+  if(admin && row.deletion_status==='pending')actions.unshift('review_deletion');
+  else if(admin && reviewable && !actions.includes('remove'))actions.push('reviewed_remove');
+  if(!admin && own && reviewable && row.deletion_status!=='pending')actions.push('request_deletion');
+  return { ...row, ...operational(row), state_label: STATES[row.order_type]?.[row.state] || '状态待核对', actions };
 }
 
 function csvCell(value) {
@@ -168,4 +219,4 @@ function csvCell(value) {
   return '"' + text.replace(/"/g, '""') + '"';
 }
 
-module.exports = { TYPES, STATES, READ_MODEL_SQL, parseFilters, filterClause, decorateOrder, csvCell, visibleOrdersSql };
+module.exports = { TYPES, STATES, READ_MODEL_SQL, parseFilters, filterClause, decorateOrder, csvCell, visibleOrdersSql, sortClause };

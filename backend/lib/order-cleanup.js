@@ -5,6 +5,7 @@ const SOURCES = Object.freeze({boost:['orders','order_no','order'],rental:['rent
 const TERMINAL = ['completed','credited','closed'];
 const TRASH_RETENTION_DAYS = 14;
 function purgeEligibility(order) {
+  if(Number(order.retention_protected))return false;
   if (order.payment_status === 'paid' || order.payment_status === 'pending' || order.payment_status === 'submitted') return false;
   return (order.order_type === 'boost' && ['pending_payment','closed'].includes(order.state) && order.payment_status === 'unpaid') ||
     (order.order_type === 'rental' && order.state === 'closed') ||
@@ -58,7 +59,7 @@ async function purgeOrder({pool,recordOperation,type,ref}) {
 }
 async function purgeExpiredTrash(deps) {
   const [rows]=await deps.pool.execute(`SELECT c.order_type,c.order_ref FROM (${READ_MODEL_SQL}) c
-    WHERE c.removed_at<=DATE_SUB(NOW(),INTERVAL 14 DAY)
+    WHERE c.removed_at<=DATE_SUB(NOW(),INTERVAL 14 DAY) AND c.retention_protected=0
     AND ((c.order_type='boost' AND c.state IN ('pending_payment','closed') AND c.payment_status='unpaid') OR
       (c.order_type='rental' AND c.state='closed' AND c.payment_status NOT IN ('paid','submitted','pending')) OR
       (c.order_type='third_party' AND c.state IN ('pending','rejected') AND c.payment_status='unpaid') OR

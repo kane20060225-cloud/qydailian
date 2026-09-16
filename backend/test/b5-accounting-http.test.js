@@ -153,6 +153,12 @@ test('shop purchase posts one debit and inventory change atomically', async (t) 
   assert.equal(state.ledger.length, 1);
 });
 
+test('full credit boost discount reports the real zero amount and remains pending manual review',async t=>{
+ reset();const base=await serve(t),token=issueSessionToken(3,0,process.env.JWT_SECRET);
+ const response=await fetch(`${base}/api/orders`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({project:'test',detail:'test',quantity:1,player_name:'test',price:2,total_price:2,use_credits:200,game_account:'synthetic',game_password:'synthetic'})});
+ assert.equal(response.status,201);const data=await response.json();assert.equal(data.total_price,0);assert.equal(data.credits_used,200);assert.equal(data.state,'payment_review');assert.equal(state.users[3].qy_credits,0);assert.equal(state.ledger[0][3],-200);assert.equal(state.audit.length,1);
+});
+
 test('paid booster completion posts earnings and rewards only once', async (t) => {
   reset();
   state.orders = [{ order_no: 'WOT-TEST', user_id: 3, booster_id: 7,

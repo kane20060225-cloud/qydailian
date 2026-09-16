@@ -16,6 +16,7 @@ const { decorateOrder } = require('../lib/order-center');
     {order_type:'recharge',order_ref:'RC1700000000000HISTORY',title:'历史测试充值',customer_id:7,customer_name:'测试客户',amount:6,amount_unit:'money',payment_status:'paid',payment_channel:'支付宝',business_status:'paid',state:resolved==='test_closed'?'closed':resolved?'credited':'exception',created_at:new Date().toISOString(),admin_task:resolved?null:'exception'}
   ];
   app.get('/api/order-center',(_,res)=>res.json({orders:rows().map(r=>decorateOrder(r,1,true)),total:2,summary:[]}));
+  app.get('/api/order-center/metrics',(_,res)=>res.json({assignment_hours:null,completion_hours:null,dispute_rate:null,repeat_rate:null}));
   app.get('/api/order-center/timeout',(_,res)=>res.json({settings:{enabled,hours:24},candidates:cancelled?[]:[{type:'boost',ref:'TEST-UNPAID',created_at:new Date().toISOString()}],limit:200}));
   app.put('/api/order-center/timeout',(req,res)=>{enabled=req.body.enabled;res.json({success:true});});
   app.post('/api/order-center/timeout/run',(req,res)=>{assert.deepEqual(req.body.orders,[{type:'boost',ref:'TEST-UNPAID'}]);assert.equal(req.body.confirmation,'CLOSE_PREVIEWED_UNPAID_ORDERS');timeoutRequests++;cancelled=true;res.json({closed:1,skipped:0});});

@@ -97,7 +97,7 @@ const pool = {
     if (q === 'SELECT role FROM users WHERE id = ?') {
       return [[{ role: params[0] === 99 ? 'admin' : 'user' }]];
     }
-    if (q.startsWith('SELECT ra.*, u.username AS owner_name, u.reputation AS owner_reputation')) {
+    if (q.startsWith('SELECT ra.*,') && q.includes('u.username AS owner_name, u.reputation AS owner_reputation')) {
       if (q.includes('WHERE ra.id = ?')) {
         return [state.accounts.filter((a) => a.id === Number(params[0]) &&
           a.status === 'active' && !a.deleted_at)];

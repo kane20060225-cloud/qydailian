@@ -56,12 +56,16 @@ async function loadUserCreditsForBoost() {
     const data = await res.json();
     const el = getEl('availableCredits');
     if (el) el.textContent = data.qy_credits || 0;
+    refreshPrice();
+    BoostCheckout.sync();
   } catch (e) {}
 }
 
 function getUseCredits() {
   const input = getEl('useCreditsInput');
-  return input ? parseInt(input.value) || 0 : 0;
+  const p=projectDetails[getSelectedProject()],d=p?.[getSelectedDetail()];
+  const gross=Math.round((d?.price || 0)*getQty()*getPlayerRate()*(isUrgent()?1.1:1)*100);
+  return Math.max(0, Math.min(parseInt(input?.value) || 0, parseInt(getEl('availableCredits')?.textContent) || 0, gross));
 }
 
 // ==================== 配置 ====================
@@ -187,8 +191,6 @@ const basePriceDisplay = getEl('basePriceDisplay');
 const qtyMultDisplay = getEl('qtyMultiplierDisplay');
 const playerMultDisplay = getEl('playerMultiplierDisplay');
 const totalPriceDisplay = getEl('totalPriceDisplay');
-const copyBtn = getEl('copyBtn');
-const copyFeedback = getEl('copyFeedback');
 const submitOrderBtn = getEl('submitOrderBtn');
 
 // 计算器
@@ -243,7 +245,7 @@ function initOrderNotifications() {
 }
 function init() {
     OrderCenter.init({apiBase:API_BASE,getToken:()=>safeGetItem('token'),getRole:()=>safeGetItem('role'),onToast:showToast,
-      onBoostPayment:openBoostPayment,onTicketRefresh:updateTicketDisplay,onOpenOrders:()=>showSection('profile'),
+      onDeletionRefresh:()=>{if(document.body.dataset.currentSection==='thirdparty')loadThirdPartyOrders();},onBoostPayment:openBoostPayment,onTicketRefresh:updateTicketDisplay,onOpenOrders:()=>showSection('profile'),
       onBalanceRefresh:()=>{loadUserCreditsForBoost();if(document.body.dataset.currentSection==='profile')loadProfile();},
       onManage:(order,scope)=>{
         focusedRentalOrder=order.order_type==='rental'?order.order_ref:null;
@@ -268,6 +270,10 @@ function init() {
     updateDetailCards();
     refreshPrice();
     generatePlayers();
+    BoostCheckout.init({toast:showToast,refresh:()=>{updateDetailCards();refreshPrice();},refreshBalance:loadUserCreditsForBoost,
+      payment:orderNo=>{currentOrderNo=orderNo;getEl('guideOrderNo').textContent=orderNo;getEl('paymentGuideModal').style.display='flex';},
+      selection:()=>{const p=projectDetails[getSelectedProject()],d=p?.[getSelectedDetail()],player=playerData.find(p=>p.key===document.querySelector('input[name="player"]:checked')?.value);return {valid:!!(p&&d&&player),project:p?.name,detail:d?.desc,player:player?.name,quantity:getQty(),urgent:isUrgent(),credits:getUseCredits(),total:calcTotal()};}});
+    RentalDiscovery.init({render:renderRentalHallAccounts});
     checkLoginStatus();
     bindUpdateRole();
     initChestSimulator();
@@ -523,7 +529,7 @@ function calcTotal() {
     const base = detail.price;
     const subTotal = base * getQty() * getPlayerRate() * (isUrgent() ? 1.1 : 1);
     const creditsDiscount = getUseCredits() / 100;
-    return Math.max(0, subTotal - creditsDiscount);
+    return Math.max(0, Math.round(subTotal * 100) / 100 - creditsDiscount);
 }
 
 function refreshPrice() {
@@ -559,33 +565,6 @@ if (useCreditsInput) {
         refreshPrice();
     });
 }
-
-// 复制订单
-if (copyBtn) copyBtn.addEventListener('click', async () => {
-    const p = projectDetails[getSelectedProject()];
-    if (!p) return;
-    const detailKey = getSelectedDetail();
-    const detailInfo = p[detailKey];
-    if (!detailInfo) return;
-    const playerChecked = document.querySelector('input[name="player"]:checked');
-    const playerInfo = playerData.find(pd => pd.key === playerChecked?.value) || { name:'未知', rate:getPlayerRate() };
-    const remark = getEl('remarkInput')?.value.trim() || '';
-    const remarkLine = remark ? `\n📝 备注：${remark}` : '';
-    const token = safeGetItem('token');
-    const currentUsername = safeGetItem('username');
-    const userLine = (token && currentUsername) ? `\n👤 下单用户：${currentUsername}` : '';
-    const order = `【WOTB情谊代练订单】\n🎯 项目：${p.name}\n📋 详情：方案${detailKey.toUpperCase()} - ${detailInfo.desc}\n🔢 数量：${getQty()}\n👤 打手：${playerInfo.name} (${playerInfo.rate}x)\n⚡ 加急：${isUrgent()?'是':'否'}\n💰 总价：¥${calcTotal().toFixed(2)}\n📅 下单时间：${new Date().toLocaleString()}${remarkLine}${userLine}\n---\n如需帮助请联系客服`;
-    if (navigator.clipboard && window.isSecureContext) {
-        try { await navigator.clipboard.writeText(order); copyFeedback.classList.add('show'); setTimeout(() => copyFeedback.classList.remove('show'), 1800); showToast('✅ 订单已复制'); return; } catch (err) {}
-    }
-    const textarea = document.createElement('textarea'); textarea.value = order; textarea.style.position='fixed'; textarea.style.opacity='0'; document.body.appendChild(textarea);
-    textarea.focus(); textarea.select();
-    try {
-        if (document.execCommand('copy')) { copyFeedback.classList.add('show'); setTimeout(() => copyFeedback.classList.remove('show'), 1800); showToast('✅ 订单已复制'); }
-        else showToast('❌ 复制失败，请手动复制');
-    } catch (err) { showToast('❌ 复制失败，请手动复制'); }
-    finally { document.body.removeChild(textarea); }
-});
 
 // 联系客服复制
 document.querySelectorAll('.contact-copy-btn').forEach(btn => {
@@ -694,6 +673,7 @@ if (logoutBtn) logoutBtn.addEventListener('click', async () => {
     }
     safeSetItem('token', ''); safeSetItem('username', ''); safeSetItem('role', '');
     safeSetItem('userId', '');
+    BoostCheckout.resetForLogout();
     checkLoginStatus();
     if (userDropdown) userDropdown.style.display = 'none';
     showToast(revoked ? '👋 已退出所有设备' : '本机已退出；服务器撤销未确认，请检查网络后重新登录');
@@ -746,6 +726,7 @@ if (loginForm) loginForm.addEventListener('submit', async (e) => {
             safeSetItem('boosterIdentity', data.user.booster_identity || 'standard');
             safeSetItem('userId', data.user.id);
             checkLoginStatus();
+            loadUserCreditsForBoost();
             if (loginModal) loginModal.style.display = 'none';
             if (loginError) loginError.textContent = '';
             if (getEl('loginTwoFactorCode')) getEl('loginTwoFactorCode').value = '';
@@ -817,9 +798,9 @@ async function loadOrders() {
 // ==================== 提交订单 (防重复点击 + 积分抵扣) ====================
 if (submitOrderBtn) {
     submitOrderBtn.addEventListener('click', async function() {
-        if (this.disabled) return;
+        if (this.disabled || !BoostCheckout.canSubmit()) return;
         const token = safeGetItem('token');
-        if (!token) { showToast('❌ 请先登录后再提交订单'); return; }
+        if (!token) { showToast('请先登录，服务选项和数量已保存'); getEl('loginModal').style.display='flex'; return; }
         const project = getSelectedProject(); const detail = getSelectedDetail(); const qty = getQty();
         const playerChecked = document.querySelector('input[name="player"]:checked');
         const playerInfo = playerData.find(p => p.key === (playerChecked?.value || 'standard')) || { name:'标准打手', rate:1.0, identity:'standard' };
@@ -848,7 +829,7 @@ if (submitOrderBtn) {
                 player_name: playerInfo.name,
                 price: base,
                 urgent,
-                total_price: total,
+                total_price: Number((base * qty * playerInfo.rate * (urgent ? 1.1 : 1)).toFixed(2)),
                 remark,
                 game_uid: gameUid || null,
                 game_account: gameAccount || null,
@@ -865,11 +846,12 @@ if (submitOrderBtn) {
                currentOrderNo = data.order_no;
                // 显示支付引导弹窗
                getEl('guideOrderNo').textContent = currentOrderNo;
-               getEl('paymentGuideModal').style.display = 'flex';
+               if(Number(data.total_price ?? total)>0)getEl('paymentGuideModal').style.display = 'flex';
+               BoostCheckout.success(data, body);
             } else {
                showToast('❌ ' + (data.error || '提交失败'));
             }
-        } catch (err) { showToast('❌ 网络错误'); }
+        } catch (err) { showToast('提交结果未确认，请先到订单中心查看是否已生成订单，避免重复下单'); }
         finally {
             this.disabled = false;
             this.textContent = '🚀 提交订单';
@@ -1040,7 +1022,9 @@ document.addEventListener('click', async (e) => {
         if (approved && !reference) return;
         if (!window.confirm(approved ? '已逐笔核实实际收款，确定通过？' : '确定驳回付款凭证？')) return;
         endpoint = 'review-payment';
-        body = { approved, payment_reference: reference };
+        const reason = approved ? null : window.prompt('请说明驳回原因，用户将据此补充凭证：');
+        if (!approved && !reason?.trim()) return;
+        body = { approved, payment_reference: reference, reason };
     } else if (button.classList.contains('admin-rental-refund-btn')) {
         const amount = Number(button.dataset.amount);
         const reference = window.prompt(amount === 0 ?
@@ -2287,7 +2271,14 @@ async function loadRentalHall(force = false) {
     renderRentalState(container, 'loading', '正在加载可租账号…');
     try {
         const accounts = await rentalClient.getHall({ force });
-        if (!accounts.length) { renderRentalState(container, 'empty', '暂无可租账号，请稍后再来'); return; }
+        RentalDiscovery.setAccounts(accounts);
+    } catch (err) {
+        renderRentalState(container, 'error', err.message || '可租账号加载失败', () => loadRentalHall(true));
+    }
+}
+function renderRentalHallAccounts(accounts, total) {
+    const container=getEl('rentalHallList');
+        if (!accounts.length) { renderRentalState(container, 'empty', total ? '没有符合筛选的账号，请调整条件' : '暂无可租账号，请稍后再来'); return; }
         let html = '';
         accounts.forEach(acc => {
             const id = Number(acc.id);
@@ -2297,11 +2288,12 @@ async function loadRentalHall(force = false) {
             html += `
             <div class="rental-account-card" data-id="${id}">
                 ${imgHtml}
-                <h4>${rentalSafeText(acc.game_uid || '未知UID')}</h4>
+                <h4>账号 ${rentalSafeText(acc.game_uid || id)}</h4><span class="rental-rentable">${acc.availability_status==='rented'?'租用中 · 暂不可租':acc.availability_status==='reserved'?'已有订单待交接 · 暂不可租':'可申请租用 · 出租方确认后起算'}</span><p class="rental-tanks">代表坦克：${rentalSafeText((acc.tank_list || '未填写').split(/[\n,，/、]+/).map(s=>s.trim()).filter(Boolean).slice(0,3).join(' / '))}</p>
                 <p>客户端：${rentalSafeText(acc.client_type)} | 出租方：${rentalSafeText(acc.owner_name)}</p>
                 <p>信誉：${rentalSafeText(acc.owner_reputation)} | 身份：${rentalSafeText(acc.owner_identity || 'standard')}</p>
-                <p>时租：¥${rentalSafeText(acc.hourly_price)} / 天租：¥${rentalSafeText(acc.daily_price)}</p>
+                <p>¥${Number(acc.hourly_price).toFixed(2)} / 小时 · ¥${Number(acc.daily_price).toFixed(2)} / 天</p>
                 <p style="font-size:0.75rem; color:var(--text-muted);">可用时段：${rentalSafeText(acc.available_time_desc || '无限制')}</p>
+                <p>主要限制：${rentalSafeText(acc.rules || '出租方未填写，请租用前确认')}</p>
                 <button class="rental-detail-btn" data-id="${id}">查看详情</button>
             </div>`;
         });
@@ -2313,9 +2305,6 @@ async function loadRentalHall(force = false) {
                 showRentalAccountDetail(btn.dataset.id);
             });
         });
-    } catch (err) {
-        renderRentalState(container, 'error', err.message || '可租账号加载失败', () => loadRentalHall(true));
-    }
 }
 getEl('refreshRentalHallBtn')?.addEventListener('click', () => loadRentalHall(true));
 
@@ -2346,9 +2335,9 @@ async function showRentalAccountDetail(accountId) {
                 <input type="number" id="rentalQuantity" value="1" min="1" step="1" style="width:80px;" onchange="updateRentalPrice()">
                 <span>单价：<span id="rentalUnitPrice">0</span>元</span>
             </div>
-            <p>总价：<strong id="rentalTotalPrice">0.00</strong> 元</p>
+            <p>总价：<strong id="rentalTotalPrice">0.00</strong> 元</p><p id="rentalPeriod" role="status"></p><p class="quantity-hint">预估从现在起租，实际以出租方确认租用的时间起算；此处不构成预约。</p>
             <p>可用积分抵扣：<input type="number" id="rentalUseCredits" value="0" min="0" step="100" style="width:100px;" onchange="updateRentalPrice()"> <span id="rentalDiscountAmt">¥0.00</span></p>
-            <button id="submitRentBtn" class="submit-btn">确认租用</button>
+            <button id="submitRentBtn" class="submit-btn" ${account.availability_status && account.availability_status!=='available'?'disabled':''}>${account.availability_status && account.availability_status!=='available'?'已有租单，暂不可租':'确认租用'}</button>
             <p id="rentDetailMsg" style="margin-top:4px; font-size:0.8rem;"></p>
         `;
 
@@ -2398,7 +2387,10 @@ function updateRentalPrice() {
     const account = window._currentRentalAccount;
     if (!account) return;
     const type = getEl('rentalType')?.value || 'hour';
-    const qty = parseInt(getEl('rentalQuantity')?.value) || 1;
+    const qty = Math.max(1, Math.min(999, parseInt(getEl('rentalQuantity')?.value) || 1));
+    if(getEl('rentalQuantity')) getEl('rentalQuantity').value=qty;
+    const start=new Date(),end=new Date(start.getTime()+qty*(type==='day'?24:1)*3600000);
+    if(getEl('rentalPeriod'))getEl('rentalPeriod').textContent='预计租期：'+start.toLocaleString('zh-CN')+' 至 '+end.toLocaleString('zh-CN')+'（'+qty+(type==='day'?'天':'小时')+'）';
     const unitPrice = Number(type === 'hour' ? account.hourly_price : account.daily_price);
     if (!Number.isFinite(unitPrice) || unitPrice < 0) return;
     const total = unitPrice * qty;
@@ -2745,9 +2737,12 @@ document.addEventListener('click', async (e) => {
         const orderNo = e.target.dataset.order;
         const dispute = e.target.classList.contains('rental-dispute-btn');
         if (dispute && !window.confirm('发起争议后需由管理员处理，确定继续吗？')) return;
+        const reason = dispute ? window.prompt('请填写争议原因与需要核对的交接问题：') : null;
+        if (dispute && !reason?.trim()) return;
         try {
             const res = await fetch(`${API_BASE}/rental/orders/${encodeURIComponent(orderNo)}/${dispute ? 'dispute' : 'confirm-completion'}`, {
-                method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }
+                method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type':'application/json' },
+                body: JSON.stringify(dispute ? { reason } : {})
             });
             const data = await res.json();
             showToast(res.ok ? (dispute ? '争议已登记' : '已确认完成，出租收益已计入') : '❌ ' + (data.error || '操作失败'));
@@ -3135,7 +3130,7 @@ function tpCardActions(order) {
     }
     secondary = `<button class="tp-secondary-btn" data-tp-action="return">退回修改</button>`;
   }
-  return `${primary}${secondary}<button class="tp-text-btn" data-tp-action="detail">查看详情</button>`;
+  return `${primary}${secondary}<button class="tp-text-btn" data-tp-action="deletion">${role==='admin'?'删除 / 审核删除':'申请删除'}</button><button class="tp-text-btn" data-tp-action="detail">查看详情</button>`;
 }
 
 function renderThirdPartyOrders() {
@@ -3321,6 +3316,7 @@ getEl('tpOrderList')?.addEventListener('click', (event) => {
   const card = event.target.closest('[data-order]');
   if (!actionButton || !card) return;
   const order = tpOrders.find((item) => item.order_no === card.dataset.order);
+  if (order && actionButton.dataset.tpAction==='deletion'){OrderCenter.showDetail({order_type:'third_party',order_ref:order.order_no},safeGetItem('role')==='admin'?'admin':'user');return;}
   if (order) tpOpenAction(actionButton.dataset.tpAction, order);
 });
 getEl('tpActionCloseBtn')?.addEventListener('click', tpCloseAction);

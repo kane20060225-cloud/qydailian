@@ -28,7 +28,9 @@ function createRentalAccountRouter({ pool, authMiddleware, adminMiddleware,
   router.get('/rental/accounts', async (req, res) => {
     try {
       const [rows] = await pool.execute(
-        `SELECT ra.*, u.username AS owner_name, u.reputation AS owner_reputation,
+        `SELECT ra.*, CASE WHEN EXISTS (SELECT 1 FROM rental_orders busy WHERE busy.account_id=ra.id AND busy.status='active') THEN 'rented'
+          WHEN EXISTS (SELECT 1 FROM rental_orders busy WHERE busy.account_id=ra.id AND busy.status='pending') THEN 'reserved' ELSE 'available' END AS availability_status,
+                u.username AS owner_name, u.reputation AS owner_reputation,
                 u.booster_identity AS owner_identity
          FROM rental_accounts ra JOIN users u ON ra.owner_id = u.id
          WHERE ra.status = 'active' AND ra.deleted_at IS NULL
@@ -43,7 +45,9 @@ function createRentalAccountRouter({ pool, authMiddleware, adminMiddleware,
   router.get('/rental/accounts/:id', async (req, res) => {
     try {
       const [rows] = await pool.execute(
-        `SELECT ra.*, u.username AS owner_name, u.reputation AS owner_reputation
+        `SELECT ra.*, CASE WHEN EXISTS (SELECT 1 FROM rental_orders busy WHERE busy.account_id=ra.id AND busy.status='active') THEN 'rented'
+          WHEN EXISTS (SELECT 1 FROM rental_orders busy WHERE busy.account_id=ra.id AND busy.status='pending') THEN 'reserved' ELSE 'available' END AS availability_status,
+                u.username AS owner_name, u.reputation AS owner_reputation
          FROM rental_accounts ra JOIN users u ON ra.owner_id = u.id
          WHERE ra.id = ? AND ra.status = 'active' AND ra.deleted_at IS NULL`,
         [req.params.id]

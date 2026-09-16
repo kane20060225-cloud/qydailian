@@ -1079,7 +1079,7 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
     });
 
     await conn.commit();
-    res.status(201).json({ success: true, order_no, order_id: result.insertId });
+    res.status(201).json({ success: true, order_no, order_id: result.insertId, total_price: Number(Number(finalTotal).toFixed(2)), credits_used: creditsUsed, state: Number(finalTotal)===0?'payment_review':'pending_payment' });
   } catch(err) {
     if (conn) await conn.rollback();
     console.error('创建订单失败:', err);
@@ -1899,6 +1899,8 @@ app.put('/api/admin/rental/orders/:orderNo/review-payment', adminMiddleware, asy
   const { orderNo } = req.params;
   const { approved, payment_reference: paymentReference } = req.body;
   if (typeof approved !== 'boolean') return res.status(400).json({ error: '审核结果无效' });
+  const reason = typeof req.body.reason==='string' ? req.body.reason.trim() : '';
+  if (!approved && (!reason || reason.length>500)) return res.status(400).json({error:'请填写付款凭证驳回原因（最多500字）'});
   if (approved && !validRentalReference(paymentReference)) {
     return res.status(400).json({ error: '请填写实际收款的核对编号' });
   }
@@ -1958,6 +1960,8 @@ app.put('/api/admin/rental/orders/:orderNo/review-payment', adminMiddleware, asy
       action: approved ? 'rental_payment_confirmed' : 'rental_payment_rejected',
       targetType: 'rental_order', targetRef: orderNo
     });
+    if(!approved) await conn.execute('INSERT INTO order_management_events (order_type,order_ref,actor_user_id,action,note) VALUES (?,?,?,?,?)',
+      ['rental',orderNo,req.userId,'rental_payment_rejected',reason]);
     await conn.commit();
     res.json({ success: true, payment_status: approved ? 'paid' : 'rejected' });
   } catch (err) {
@@ -2152,6 +2156,8 @@ app.put('/api/rental/orders/:orderNo/cancel', authMiddleware, async (req, res) =
 
 app.put('/api/rental/orders/:orderNo/dispute', authMiddleware, async (req, res) => {
   const { orderNo } = req.params;
+  const reason = typeof req.body?.reason==='string' ? req.body.reason.trim() : '';
+  if(!reason || reason.length>500) return res.status(400).json({error:'请填写争议原因（最多500字）'});
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -2177,6 +2183,8 @@ app.put('/api/rental/orders/:orderNo/dispute', authMiddleware, async (req, res) 
       eventKey: `rental:${orderNo}:disputed`, actorUserId: req.userId,
       action: 'rental_disputed', targetType: 'rental_order', targetRef: orderNo
     });
+    await conn.execute('INSERT INTO order_management_events (order_type,order_ref,actor_user_id,action,note) VALUES (?,?,?,?,?)',
+      ['rental',orderNo,req.userId,'rental_disputed',reason]);
     await conn.commit();
     res.json({ success: true, message: '争议已登记，等待管理员处理' });
   } catch {
@@ -2566,7 +2574,7 @@ app.put('/api/third-party-orders/:orderNo/resubmit', authMiddleware, async (req,
 });
 
 app.delete('/api/third-party-orders/:orderNo', authMiddleware, async (req, res) => {
-  res.status(409).json({error:'请由管理员在订单中心删除，订单将进入可恢复的回收站'});
+  res.status(409).json({error:'请从订单详情申请删除；管理员可审核或核对后移入回收站，资金与原始记录保留'});
 });
 
 app.put('/api/third-party-orders/:orderNo/request-complete', authMiddleware, async (req, res) => {

@@ -2,7 +2,10 @@
 
 const express = require('express');
 const crypto = require('node:crypto');
-const { TYPES, READ_MODEL_SQL, parseFilters, filterClause, decorateOrder, csvCell } = require('../lib/order-center');
+const { TYPES, READ_MODEL_SQL, parseFilters, filterClause, decorateOrder, csvCell, sortClause } = require('../lib/order-center');
+const {guidance}=require('../lib/order-guidance');
+const {METRICS_SQL,decorateMetrics}=require('../lib/order-metrics');
+const {requestDeletion,reviewDeletion}=require('../lib/order-deletion');
 const {changeRemoval,getSettings,settingsInput,candidates,createCleanupService,TRASH_RETENTION_DAYS}=require('../lib/order-cleanup');
 const {cancelUnpaid,timeoutSettings,timeoutCandidates,resolveRecharge}=require('../lib/order-lifecycle');
 
@@ -32,6 +35,15 @@ function createOrderCenterRouter({ pool, authMiddleware, recordOperation, reveal
   });
 
   const cleanup=cleanupService || createCleanupService({pool,recordOperation});
+  router.post('/:type/:ref/deletion-request',async(req,res)=>{
+    try{res.json(await requestDeletion({pool,recordOperation,type:req.params.type,ref:req.params.ref,actor:req.userId,role:req.orderRole,reason:req.body?.reason}));}
+    catch(err){res.status(err.status||500).json({error:err.status?err.message:'申请提交失败，请刷新检查'});}
+  });
+  router.post('/:type/:ref/deletion-review',async(req,res)=>{
+    if(req.orderRole!=='admin')return res.status(403).json({error:'无管理员权限'});
+    try{res.json(await reviewDeletion({pool,recordOperation,type:req.params.type,ref:req.params.ref,actor:req.userId,decision:req.body?.decision,reason:req.body?.reason,reference:req.body?.reference,confirmation:req.body?.confirmation,expectedState:req.body?.expected_state,expectedPayment:req.body?.expected_payment_status}));}
+    catch(err){res.status(err.status||500).json({error:err.status?err.message:'核对删除失败，未改变余额，请刷新检查'});}
+  });
   router.get('/timeout',async(req,res)=>{
     if(req.orderRole!=='admin')return res.status(403).json({error:'无管理员权限'});
     try{res.json({settings:await timeoutSettings(pool),candidates:await timeoutCandidates(pool),limit:200});}
@@ -115,13 +127,18 @@ function createOrderCenterRouter({ pool, authMiddleware, recordOperation, reveal
     return rows[0] ? decorateOrder(rows[0], req.userId, req.orderRole === 'admin') : null;
   }
 
+  router.get('/metrics', async(req,res)=>{
+    if(req.orderRole!=='admin' || !req.orderAdmin)return res.status(403).json({error:'无管理员权限'});
+    try{const [rows]=await pool.execute(METRICS_SQL);res.json(decorateMetrics(rows[0] || {}));}
+    catch(err){console.error('经营指标加载失败:',err.code || 'INTERNAL_ERROR');res.status(500).json({error:'经营指标暂时无法加载'});}
+  });
   router.get('/export', async (req, res) => {
     if (req.orderRole !== 'admin' || !req.orderAdmin) return res.status(403).json({ error: '无管理员权限' });
     let filters;
     try { filters = parseFilters(req.query); } catch (err) { return res.status(400).json({ error: err.message }); }
     try {
       const where = filterClause(filters, { admin: true, userId: req.userId, role: req.orderRole });
-      const [rows] = await pool.execute(READ_MODEL_SQL + where.sql + ' ORDER BY c.created_at DESC,c.order_type,c.order_ref LIMIT 5001', where.params);
+      const [rows] = await pool.execute(READ_MODEL_SQL + where.sql + sortClause(filters,true) + ' LIMIT 5001', where.params);
       if (rows.length > 5000) return res.status(400).json({ error: '结果超过 5000 条，请缩小日期或类型范围后导出' });
       const lines = [['类型','订单号','用户','摘要','金额','单位','状态','支付渠道','交易号','创建时间'],
         ...rows.map((row) => [row.order_type,row.order_ref,row.customer_name,row.title,row.amount,
@@ -140,10 +157,10 @@ function createOrderCenterRouter({ pool, authMiddleware, recordOperation, reveal
       const where = filterClause(filters, options);
       const summaryWhere = filterClause(filters, { ...options, includeState: false });
       const [rows] = await pool.execute(READ_MODEL_SQL + where.sql +
-        ` ORDER BY c.created_at DESC,c.order_type,c.order_ref LIMIT 25 OFFSET ${(filters.page - 1) * 25}`, where.params);
+        sortClause(filters,req.orderAdmin) + ` LIMIT 25 OFFSET ${(filters.page - 1) * 25}`, where.params);
       const [total] = await pool.execute(`SELECT COUNT(*) AS total FROM (${READ_MODEL_SQL + where.sql}) result`, where.params);
-      const [summary] = await pool.execute(`SELECT state, admin_task, COUNT(*) AS total FROM
-        (${READ_MODEL_SQL + summaryWhere.sql}) result GROUP BY state,admin_task`, summaryWhere.params);
+      const [summary] = await pool.execute(`SELECT state,IF(deletion_status='pending','deletion',admin_task) AS admin_task, COUNT(*) AS total FROM
+        (${READ_MODEL_SQL + summaryWhere.sql}) result GROUP BY state,IF(deletion_status='pending','deletion',admin_task)`, summaryWhere.params);
       res.json({ orders: rows.map((row) => decorateOrder(row,req.userId,req.orderAdmin)),
         total: Number(total[0].total), page: filters.page, page_size: 25, summary });
     } catch (err) {
@@ -222,8 +239,16 @@ function createOrderCenterRouter({ pool, authMiddleware, recordOperation, reveal
           FROM third_party_order_events e LEFT JOIN users u ON u.id=e.actor_user_id WHERE e.order_no=?`,[ref]);
         events.push(...tpEvents); events.sort((a,b) => new Date(a.created_at)-new Date(b.created_at));
       }
+      if(type==='rental') {
+        const latestNote=action=>[...events].reverse().find(e=>e.action===action && e.note)?.note;
+        add('付款驳回原因',latestNote('rental_payment_rejected'));
+        add('争议原因',latestNote('rental_disputed'));
+        const started=[...events].find(e=>e.action==='rental_activated')?.created_at;
+        if(started){add('实际起租时间',new Date(started).toLocaleString('zh-CN'));add('约定到期时间',new Date(new Date(started).getTime()+Number(raw.quantity)*(raw.rental_type==='day'?24:1)*3600000).toLocaleString('zh-CN'));}
+        else add('租期起止',order.state==='pending_payment'||order.state==='awaiting_activation'?'出租方确认租用后起算':'历史记录缺少起算时间，请向出租方核对');
+      }
       if (screenshot && !/^[\w.-]+\.(png|jpe?g)$/i.test(screenshot)) screenshot = null;
-      res.json({ order, details, ledger, events, screenshot, warning });
+      res.json({ order, details, ledger, events, screenshot, warning, guidance:guidance(order,{details,events,warning,userId:req.userId,admin:req.orderAdmin}) });
     } catch (err) {
       console.error('订单中心详情失败:', err.code || 'INTERNAL_ERROR');
       res.status(500).json({ error: '订单详情暂时无法加载' });

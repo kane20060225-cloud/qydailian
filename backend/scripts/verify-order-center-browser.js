@@ -29,7 +29,8 @@ const {decorateOrder}=require('../lib/order-center');
       await page.route('**/*',async route=>{
         const req=route.request(),url=new URL(req.url());if(url.origin!==origin){await route.abort();return;}if(!url.pathname.startsWith('/api/')){await route.continue();return;}
         let data=[];let status=200;const pathname=url.pathname;
-        if(pathname==='/api/order-center'){
+        if(pathname==='/api/order-center/metrics'){data={assignment_hours:null,completion_hours:null,dispute_rate:null,repeat_rate:null};
+        }else if(pathname==='/api/order-center'){
           const admin=url.searchParams.get('scope')==='admin';let orders=rows().filter(o=>admin||o.customer_id===3||o.related_user_id===3);
           orders=orders.filter(o=>removed.has(o.order_ref)===(admin&&url.searchParams.get('trash')==='1')).map(o=>({...o,removed_at:removed.has(o.order_ref)?now:null}));
           const summary=orders.map(o=>({state:o.state,admin_task:o.admin_task,total:1}));
