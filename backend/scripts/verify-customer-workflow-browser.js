@@ -14,6 +14,7 @@ const {guidance}=require('../lib/order-guidance');
   browser=await chromium.launch({headless:true,...(process.env.BROWSER_CHANNEL?{channel:process.env.BROWSER_CHANNEL}:{})});
   for(const viewport of [{width:1440,height:1000},{width:390,height:844}]) {
    const context=await browser.newContext({viewport});const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+   if(process.env.UI_THEME==='light')await context.addInitScript(()=>localStorage.setItem('theme','light'));
    await context.addInitScript(()=>Object.defineProperty(navigator,'clipboard',{value:{writeText:async value=>window.__copied=value},configurable:true}));
    let submits=0,body,credits=100,sort='';
    const accounts=[{id:1,client_type:'Android',tank_list:'IS-7\nT-54',hourly_price:2,daily_price:25,available_time_desc:'晚上 18:00–24:00',rules:'禁止排位',owner_name:'测试出租方',availability_status:'available'},{id:2,client_type:'iOS',tank_list:'IS-7\nM60',hourly_price:3,daily_price:30,available_time_desc:'周末',rules:'不得改密',owner_name:'另一位出租方',availability_status:'available'},{id:3,client_type:'Android',tank_list:'E 100',hourly_price:1,daily_price:10,available_time_desc:'全天',rules:'不得改密',availability_status:'rented'}];

@@ -47,7 +47,7 @@
       <label>订单状态<select name="state"></select></label><label class="oc-search">搜索<input name="search" type="search" maxlength="100" placeholder="订单号、交易号、用户或内容"></label>
       ${admin?'<label>处理顺序<select name="sort"><option value="priority">紧急程度优先</option><option value="waiting">等待最久优先</option><option value="newest">最新创建优先</option></select></label>':''}<button type="button" data-refresh>刷新</button><details class="oc-more"><summary>更多筛选</summary><div class="oc-filter-extra"><label>起始日期<input name="from" type="date"></label><label>结束日期<input name="to" type="date"></label><label>支付渠道<select name="channel"><option value="">全部渠道</option><option>支付宝</option><option>人工核实</option><option>情谊积分</option></select></label>${admin?'<label>归档记录<select name="archived"><option value="0">未归档</option><option value="1">已归档</option></select></label><button type="button" data-export>导出当前结果</button>':''}<button type="button" data-reset>重置筛选</button></div></details></form>`);
     root.insertAdjacentHTML('beforeend','<div class="oc-paging"><button type="button" data-page="-1">上一页</button><span aria-live="polite"></span><button type="button" data-page="1">下一页</button></div>');
-    if(admin)root.querySelector('form').insertAdjacentHTML('afterend','<div class="oc-bulk"><label><input type="checkbox" data-select-all> 选择本页可操作订单</label><button type="button" data-bulk disabled>删除选中（0）</button><button type="button" data-trash>回收站</button><button type="button" data-cleanup>自动清理设置</button><button type="button" data-timeout>24小时超时关闭</button><span class="oc-muted">回收站保留14天；无资金订单到期永久删除，付款及凭证记录保留。</span></div>');
+    if(admin)root.querySelector('form').insertAdjacentHTML('afterend','<div class="oc-bulk"><label><input type="checkbox" data-select-all> 选择本页可操作订单</label><button type="button" data-bulk disabled>删除选中（0）</button><button type="button" data-trash>回收站</button><button type="button" data-cleanup>自动清理设置</button><button type="button" data-timeout>24小时超时关闭</button><span class="oc-muted">普通无资金订单在回收站保留14天；付款、凭证及核对删除记录长期保留。</span></div>');
     if(admin)root.querySelector('.oc-summary').insertAdjacentHTML('afterend','<section class="oc-operating-metrics" aria-label="经营指标"><h4>近90天经营指标</h4><div data-metrics>正在加载指标…</div></section>');
     statusOptions(scope);
     let timer;
@@ -84,19 +84,19 @@
       $('ocCleanupEnabled').focus();
     }catch(err){if(generation===detailGeneration)$('ocDetailBody').innerHTML=`<p role="alert">${esc(err.message)}</p>`;}
   }
-  async function cleanupAction(run){if(busy)return;const enabled=$('ocCleanupEnabled').checked,days=Number($('ocCleanupDays').value);if(run&&!$('ocCleanupConfirm').checked){$('ocActionMessage').textContent='请先勾选确认清理预览';return;}busy=true;try{
+  async function cleanupAction(run){if(busy)return;const enabled=$('ocCleanupEnabled').checked,days=Number($('ocCleanupDays').value);if(run&&!$('ocCleanupConfirm').checked){$('ocActionMessage').textContent='请先勾选确认清理预览';return;}setBusy(true);try{
     if(run){const current=await request('/order-center/cleanup?scope=admin');if(current.settings.enabled!==enabled||current.settings.retention_days!==days)throw new Error('规则已修改，请先保存并刷新预览');const result=await request('/order-center/cleanup/run?scope=admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmation:'MOVE_INVALID_ORDERS_TO_TRASH'})});config.onToast(`已清理 ${result.removed} 条，跳过 ${result.skipped} 条`);load('admin');load('user');}
     else{await request('/order-center/cleanup?scope=admin',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled,retention_days:days})});config.onToast('清理规则已保存');}
     await showCleanup();
-  }catch(err){$('ocActionMessage').textContent=err.message;}finally{busy=false;}}
+  }catch(err){$('ocActionMessage').textContent=err.message;}finally{setBusy(false);}}
   async function showTimeout(){modal.style.display='flex';const generation=++detailGeneration;detailScope='admin';timeoutPreview=[];$('ocDetailTitle').textContent='24小时未付款订单关闭';$('ocDetailActions').innerHTML='';$('ocDetailBody').innerHTML='<p>正在核对候选订单及积分流水…</p>';
     try{const data=await request('/order-center/timeout?scope=admin');if(generation!==detailGeneration)return;timeoutPreview=data.candidates;
       $('ocDetailBody').innerHTML=`<p>关闭超过24小时未提交付款凭证、未接单的代练及租号订单。按匹配的原始扣减流水退回积分；付款审核、凭证、其他资金流水及历史积分不一致的订单保留。关闭后可归档或删除到回收站，资金流水始终保留。</p><label><input id="ocTimeoutEnabled" type="checkbox" ${data.settings.enabled?'checked':''}> 开启每小时自动检查（默认关闭；开启后也会处理历史候选订单）</label><button type="button" data-save-timeout>保存超时关闭开关</button><h4>本次可关闭 ${timeoutPreview.length} 条${timeoutPreview.length===data.limit?'（本次上限200条）':''}</h4><ul class="oc-cleanup-preview">${timeoutPreview.map(o=>`<li>${esc(types[o.type])} · ${esc(o.ref)} · ${time(o.created_at)}</li>`).join('')||'<li>没有符合条件的订单</li>'}</ul><label><input id="ocTimeoutConfirm" type="checkbox"> 已核对上方订单，立即关闭本次预览订单并退回匹配积分</label><button type="button" data-run-timeout ${timeoutPreview.length?'':'disabled'}>关闭本次预览订单</button><p id="ocActionMessage" role="status"></p>`;
     }catch(err){if(generation===detailGeneration)$('ocDetailBody').innerHTML=`<p role="alert">${esc(err.message)}</p>`;}}
-  async function timeoutAction(run){if(busy)return;if(run&&!$('ocTimeoutConfirm').checked){$('ocActionMessage').textContent='请先确认已核对预览订单';return;}busy=true;try{
+  async function timeoutAction(run){if(busy)return;if(run&&!$('ocTimeoutConfirm').checked){$('ocActionMessage').textContent='请先确认已核对预览订单';return;}setBusy(true);try{
     const result=await request(`/order-center/timeout${run?'/run':''}?scope=admin`,{method:run?'POST':'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(run?{confirmation:'CLOSE_PREVIEWED_UNPAID_ORDERS',orders:timeoutPreview.map(o=>({type:o.type,ref:o.ref}))}:{enabled:$('ocTimeoutEnabled').checked})});
     config.onToast(run?`已关闭 ${result.closed} 条，跳过 ${result.skipped} 条`:'超时关闭设置已保存');if(run){load('admin');load('user');config.onBalanceRefresh?.();}await showTimeout();
-  }catch(err){$('ocActionMessage').textContent=err.message;}finally{busy=false;}}
+  }catch(err){$('ocActionMessage').textContent=err.message;}finally{setBusy(false);}}
   async function load(scope='user') {
     const p=panels[scope];if(!p)return;
     if(!config.getToken()){p.list.innerHTML='<p>登录后查看订单记录</p>';return;}
@@ -111,7 +111,7 @@
       if(!data.orders.length&&p.filters.page>1){p.filters.page=Math.max(1,Math.ceil(data.total/25));return load(scope);}
       p.rows=data.orders;
       p.selected.clear();
-      p.list.innerHTML=data.orders.length ? data.orders.map(o=>`<article class="oc-card"><div class="oc-card-top"><span class="oc-type">${types[o.order_type]}</span><span class="oc-state ${['exception','credit_pending','dispute'].includes(o.state)?'oc-warning-state':''}">${esc(o.state_label)}</span></div><h4>${esc(o.title)}</h4><div class="oc-reference">${esc(o.order_ref)}</div><div class="oc-meta"><span>${scope==='admin'?'用户：'+esc(o.customer_name):'创建：'+time(o.created_at)}</span><strong>${amount(o)}</strong></div>${scope==='admin'?`<div class="oc-meta"><span>${time(o.created_at)}</span><span>处理方：${esc(o.responsible||o.assignee_name||'待确认')}</span></div><p class="oc-wait ${o.overdue?'oc-overdue':''}">${o.waiting_basis==='stage'?'本阶段等待':'创建至今'} ${waitTime(o.waiting_hours)}${o.overdue?' · 超过提醒阈值 '+o.reminder_hours+' 小时':''}${o.priority===3?' · 优先核对':''}</p>`:''}<div class="oc-card-footer"><small>${esc(o.payment_channel)}${o.payment_reference?' · '+esc(o.payment_reference):''}</small><button type="button" data-type="${o.order_type}" data-ref="${esc(o.order_ref)}">${o.actions.length?esc(actionNames[o.actions[0]]):'查看详情'} · 详情</button></div></article>`).join('') : '<div class="oc-empty">当前筛选下没有订单，可调整类型或状态查看历史记录。</div>';
+      p.list.innerHTML=data.orders.length ? data.orders.map(o=>`<article class="oc-card"><div class="oc-card-top"><span class="oc-type">${types[o.order_type]}</span><span data-tone="${['exception','dispute'].includes(o.state)?'danger':['completed','credited'].includes(o.state)?'success':['payment_review','credit_pending','review','completion_review'].includes(o.state)?'warning':['in_progress','awaiting_assignment','accepted','active'].includes(o.state)?'info':'neutral'}" class="oc-state ${['exception','credit_pending','dispute'].includes(o.state)?'oc-warning-state':''}">${esc(o.state_label)}</span></div><h4>${esc(o.title)}</h4><div class="oc-reference">${esc(o.order_ref)}</div><div class="oc-meta"><span>${scope==='admin'?'用户：'+esc(o.customer_name):'创建：'+time(o.created_at)}</span><strong>${amount(o)}</strong></div>${scope==='admin'?`<div class="oc-meta"><span>${time(o.created_at)}</span><span>处理方：${esc(o.responsible||o.assignee_name||'待确认')}</span></div><p class="oc-wait ${o.overdue?'oc-overdue':''}">${o.waiting_basis==='stage'?'本阶段等待':'创建至今'} ${waitTime(o.waiting_hours)}${o.overdue?' · 超过提醒阈值 '+o.reminder_hours+' 小时':''}${o.priority===3?' · 优先核对':''}</p>`:''}<div class="oc-card-footer"><small>${esc(o.payment_channel)}${o.payment_reference?' · '+esc(o.payment_reference):''}</small><button type="button" data-type="${o.order_type}" data-ref="${esc(o.order_ref)}">${o.actions.length?esc(actionNames[o.actions[0]]):'查看详情'} · 详情</button></div></article>`).join('') : '<div class="oc-empty">当前筛选下没有订单，可调整类型或状态查看历史记录。</div>';
       if(p.filters.trash==='1')p.list.querySelectorAll('.oc-card').forEach((card,i)=>{const o=p.rows[i];card.insertAdjacentHTML('beforeend',`<p class="oc-trash-expiry">${o.retention_protected?"核对删除：原始记录长期保留，不自动永久删除":"14天清理期限："+esc(time(o.purge_after||new Date(new Date(o.removed_at).getTime()+14*86400000)))}</p>`);});
       const totalPages=Math.max(1,Math.ceil(data.total/25));const paging=p.root.querySelector('.oc-paging');paging.querySelector('span').textContent=`共 ${data.total} 条 · 第 ${p.filters.page} / ${totalPages} 页`;paging.querySelector('[data-page="-1"]').disabled=p.filters.page<=1;paging.querySelector('[data-page="1"]').disabled=p.filters.page>=totalPages;
       if(scope==='admin'){p.list.querySelectorAll('.oc-card').forEach((card,i)=>{const o=p.rows[i];if(o.actions.includes(p.filters.trash==='1'?'restore':'remove'))card.insertAdjacentHTML('afterbegin',`<label class="oc-select"><input type="checkbox" data-select="${esc(o.order_type+':'+o.order_ref)}" aria-label="选择订单 ${esc(o.order_ref)}">选择</label>`);});updateSelection(p);}
@@ -136,6 +136,10 @@
     config.onToast('已复制订单摘要（不含游戏账号和密码）');
   }catch{config.onToast('复制失败，请手动选取订单号和服务内容');}}
   function close(){modal.style.display='none';++detailGeneration;}
+  function setBusy(value){
+    busy=value;modal.setAttribute('aria-busy',String(value));$('ocClose').disabled=value;
+    if(!value&&modal.style.display!=='none'&&!modal.contains(document.activeElement))$('ocClose').focus();
+  }
   async function showDetail(order,scope='user') {
     detailScope=scope;detail=order;modal.style.display='flex';const generation=++detailGeneration;
     $('ocDetailTitle').textContent=`${types[order.order_type]} · ${order.order_ref}`;$('ocDetailBody').innerHTML='<p>正在读取订单…</p>';$('ocDetailActions').innerHTML='';
@@ -167,7 +171,7 @@
     if(busy)return;
     const order=detail,scope=detailScope,ref=encodeURIComponent(order.order_ref);
     if(['request_deletion','review_deletion','reviewed_remove'].includes(action)){
-      busy=true;try{const reason=$('ocReason')?.value.trim();if(!reason)throw Error('请填写原因');
+      setBusy(true);try{const reason=$('ocReason')?.value.trim();if(!reason)throw Error('请填写原因');
         let body={reason},path=`/order-center/${order.order_type}/${ref}/deletion-request`;
         if(action!=='request_deletion'){const decision=action==='reviewed_remove'?'remove':$('ocDeletionDecision').value;
           if(decision!=='reject'&&!$('ocDeletionConfirm').checked)throw Error('请确认已核对并保留原始记录');
@@ -177,14 +181,14 @@
         const result=await request(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
         config.onToast(action==='request_deletion'?'删除申请已提交，等待管理员审核':result.removed?'订单已移入回收站，原始记录保留':'删除申请已驳回');
         await showDetail(order,scope);load(scope);config.onDeletionRefresh?.();
-      }catch(err){$('ocActionMessage').textContent=err.message;}finally{busy=false;}return;
+      }catch(err){$('ocActionMessage').textContent=err.message;}finally{setBusy(false);}return;
     }
     if(action==='boost_payment'){close();config.onBoostPayment(order.order_ref);return;}
     if(action==='rental_manage'||action==='third_party_manage'){close();config.onManage(order,scope);return;}
     // Reserve the payment window during the user's click, before awaiting the network.
     const paymentWindow=action==='pay'?window.open('','ocPayment'):null;
     if(paymentWindow)paymentWindow.document.body.textContent='正在打开原充值订单的支付页面…';
-    busy=true;$('ocDetailActions').querySelectorAll('button').forEach(b=>b.disabled=true);
+    setBusy(true);$('ocDetailActions').querySelectorAll('button').forEach(b=>b.disabled=true);
     try {
       if(action==='pay'){
         const res=await fetch(`${config.apiBase}/chest/payments/${ref}/pay`,{method:'POST',headers:{Authorization:`Bearer ${config.getToken()}`}});
@@ -210,7 +214,7 @@
         await showDetail(order,scope);load(scope);config.onTicketRefresh();if(action==='cancel_unpaid')config.onBalanceRefresh?.();
       }
     }catch(err){if(paymentWindow)paymentWindow.close();const msg=$('ocActionMessage');if(msg)msg.textContent=err.message;else config.onToast(err.message);}
-    finally{busy=false;$('ocDetailActions').querySelectorAll('button').forEach(b=>b.disabled=false);}
+    finally{setBusy(false);$('ocDetailActions').querySelectorAll('button').forEach(b=>b.disabled=false);}
   }
   async function createRecharge() {
     if(!config.getToken()){config.onToast('请先登录');return;}if(createBusy)return;createBusy=true;const btn=$('rechargeBtn');if(btn)btn.disabled=true;

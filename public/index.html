@@ -4,13 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blitz情谊工具站</title>
-    <link rel="stylesheet" href="style.css?v=20260916-nav2">
+    <script>
+        try { document.documentElement.dataset.theme = localStorage.getItem('theme') === 'light' ? 'light' : 'dark'; }
+        catch { document.documentElement.dataset.theme = 'dark'; }
+    </script>
+    <link rel="stylesheet" href="style.css?v=20260916-b17">
     <link rel="stylesheet" href="order-center.css?v=20260916-b16">
     <link rel="stylesheet" href="order-notifications.css?v=20260916-notify1">
-    <link rel="stylesheet" href="booster-availability.css?v=20260916-b13">
+    <link rel="stylesheet" href="booster-availability.css?v=20260916-b17">
     <link rel="stylesheet" href="customer-workflow.css?v=20260916-b16">
+    <link rel="stylesheet" href="ui-foundation.css?v=20260916-b17">
+    <link rel="stylesheet" href="light-theme.css?v=20260916-b17">
 </head>
 <body>
+    <script>document.body.classList.toggle('theme-light', document.documentElement.dataset.theme === 'light');</script>
     <!-- 顶部栏 -->
     <header class="top-bar">
         <a class="logo-area" href="#mainMenu" data-nav-target="mainMenu" aria-label="Blitz情谊工具站，返回首页">
@@ -25,16 +32,17 @@
             <a class="site-nav-link" href="#news" data-nav-target="news">游戏新闻</a>
         </nav>
         <div class="user-actions" id="userActions">
-            <button class="register-btn" id="openRegisterBtn">📝 注册</button>
-            <button class="login-btn" id="openLoginBtn">🔑 登录</button>
+            <button class="theme-toggle-btn" id="themeToggleBtn" type="button" aria-label="切换到浅色主题" title="切换到浅色主题">☀</button>
+            <button class="register-btn" id="openRegisterBtn">注册</button>
+            <button class="login-btn" id="openLoginBtn">登录</button>
             <div class="user-menu" id="userMenu" style="display: none;">
                 <button class="user-menu-btn" id="userMenuBtn">
                     <span id="displayUsername"></span> ▼
                 </button>
                 <div class="user-dropdown" id="userDropdown" style="display: none;">
                    <button id="profileBtn">👤 个人中心</button>
-                   <button id="adminPanelBtn" style="display:none;">🛠️ 管理面板</button>
-                   <button id="boosterPanelBtn" style="display:none;">⚔️ 打手面板</button>
+                   <button id="adminPanelBtn" style="display:none;">🛠️ 管理员后台</button>
+                   <button id="boosterPanelBtn" style="display:none;">⚔️ 打手工作台</button>
                    <button id="thirdPartyOrdersBtn">📦 三方订单</button>
                    <button id="settingsBtn">⚙️ 设置</button>
                    <button id="logoutBtn">🚪 退出登录</button>
@@ -57,7 +65,7 @@
             <div class="hero-copy">
                 <span class="hero-eyebrow">WOTB 玩家服务与实用工具</span>
                 <h1 id="homeTitle">更快完成下单，<br>更清楚掌握进度</h1>
-                <p>代练、账号租借与常用计算工具集中在一个地方。价格即时计算，订单登录后可持续跟踪。</p>
+                <p>选择代练服务、查找可租账号，或使用常用计算工具。下单前查看费用，登录后随时跟踪订单。</p>
                 <div class="hero-actions">
                     <button class="menu-card hero-primary" data-target="boost">立即代练下单 <span aria-hidden="true">→</span></button>
                     <button class="menu-card hero-secondary" data-target="rental">浏览可租账号</button>
@@ -71,7 +79,7 @@
                 <ol>
                     <li><span>01</span><div><strong>选择服务</strong><small>项目与方案清楚对比</small></div></li>
                     <li><span>02</span><div><strong>填写信息</strong><small>实时查看价格变化</small></div></li>
-                    <li><span>03</span><div><strong>提交跟踪</strong><small>在个人中心查看进度</small></div></li>
+                    <li><span>03</span><div><strong>提交订单</strong><small>在个人中心查看进度</small></div></li>
                 </ol>
             </div>
         </section>
@@ -79,14 +87,14 @@
         <section class="home-section" aria-labelledby="coreServicesTitle">
             <div class="home-section-heading">
                 <div><span>核心服务</span><h2 id="coreServicesTitle">今天想完成什么？</h2></div>
-                <p>优先展示最常用的两项服务</p>
+                <p>选择服务，查看价格与使用说明</p>
             </div>
             <div class="service-grid">
                 <button class="menu-card service-card service-card-primary" data-target="boost">
                     <span class="menu-icon">⚡</span><span class="service-copy"><strong>代练下单</strong><small>银币、经验、胜率、场均、M章、三环与评级</small></span><span class="service-arrow">开始下单 →</span>
                 </button>
                 <button class="menu-card service-card" data-target="rental">
-                    <span class="menu-icon">🎮</span><span class="service-copy"><strong>账号租借</strong><small>查找可租账号，也可以发布自己的账号</small></span><span class="service-arrow">进入租号大厅 →</span>
+                    <span class="menu-icon">🎮</span><span class="service-copy"><strong>账号租赁</strong><small>查找可租账号，也可以发布自己的账号</small></span><span class="service-arrow">进入租号大厅 →</span>
                 </button>
             </div>
         </section>
@@ -96,7 +104,7 @@
                 <div><span>快捷入口</span><h2 id="quickAccessTitle">工具与资讯</h2></div>
             </div>
             <div class="quick-grid">
-                <button class="menu-card quick-card" data-target="tools"><span class="menu-icon">🧮</span><span><strong>独立工具</strong><small>计算器、开箱模拟器、随机坦克</small></span></button>
+                <button class="menu-card quick-card" data-target="tools"><span class="menu-icon">🧮</span><span><strong>实用工具</strong><small>计算器、开箱模拟器、随机坦克</small></span></button>
                 <button class="menu-card quick-card" data-target="announcement"><span class="menu-icon">📢</span><span><strong>站内公告</strong><small>下单须知与服务说明</small></span></button>
                 <button class="menu-card quick-card" data-target="news"><span class="menu-icon">📰</span><span><strong>游戏新闻</strong><small>最新公告与活动资讯</small></span></button>
             </div>
@@ -106,7 +114,7 @@
     <!-- ==================== 板块一：代练下单 ==================== -->
     <div id="sectionBoost" class="content-section" style="display: none;">
         <div class="section-top">
-            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+            <button class="back-btn" data-back="mainMenu">← 返回首页</button>
             <h2 class="section-heading">⚡ 代练下单</h2>
         </div>
         <div class="container boost-container">
@@ -219,9 +227,9 @@
                 </label>
                 <p class="urgent-hint">加急服务将在总价基础上额外增加10%费用，优先安排打手</p>
 
-                <!-- QY积分抵扣区域 -->
+                <!-- 情谊积分抵扣区域 -->
                 <div class="credits-section" style="margin-bottom:15px;">
-                    <div class="card-header"><span class="card-num">🎫</span><h3>QY积分抵扣</h3></div>
+                    <div class="card-header"><span class="card-num">🎫</span><h3>情谊积分抵扣</h3></div>
                     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                         <span>可用积分：<strong id="availableCredits">0</strong></span>
                         <input type="number" id="useCreditsInput" placeholder="使用积分" min="0" step="100" style="width:120px;" class="remark-input">
@@ -257,12 +265,12 @@
         </div>
     </div>
 
-    <!-- 板块二：独立工具（内部子菜单） -->
+    <!-- 板块二：实用工具（内部子菜单） -->
     <div id="sectionTools" class="content-section" style="display: none;">
         <div class="section-top panel-top">
             <button class="back-btn" data-back="mainMenu">← 返回首页</button>
-            <h2 class="section-heading">🧮 独立工具</h2>
-            <nav class="tools-submenu panel-nav" aria-label="独立工具功能">
+            <h2 class="section-heading">🧮 实用工具</h2>
+            <nav class="tools-submenu panel-nav" aria-label="实用工具功能">
                 <button class="tool-tab active" data-tool="calculator">📊 胜率/场均计算器</button>
                 <button class="tool-tab" data-tool="chestsim">🎁 开箱模拟器</button>
                 <button class="tool-tab" data-tool="randomtank">🎲 这把玩什么</button>
@@ -296,7 +304,7 @@
             <h3>开箱模拟器</h3>
             <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
                 <span style="font-size:0.9rem; color: var(--text-secondary);">军需券：</span>
-                <span id="ticketBalance" style="font-weight:700; color: #f0c060; font-family: var(--font-mono);">0</span>
+                <span id="ticketBalance" style="font-weight:700; color: var(--price); font-family: var(--font-mono);">0</span>
             </div>
         </div>
         <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
@@ -325,13 +333,13 @@
 
     <!-- 板块三：游戏新闻 -->
     <div id="sectionNews" class="content-section" style="display: none;">
-        <div class="section-top"><button class="back-btn" data-back="mainMenu">← 返回主菜单</button><h2 class="section-heading">📰 游戏新闻</h2></div>
+        <div class="section-top"><button class="back-btn" data-back="mainMenu">← 返回首页</button><h2 class="section-heading">📰 游戏新闻</h2></div>
         <div class="container"><section class="card"><div id="newsContainer" class="news-list"></div></section></div>
     </div>
 
     <!-- 板块四：站内公告 -->
     <div id="sectionAnnouncement" class="content-section" style="display: none;">
-        <div class="section-top"><button class="back-btn" data-back="mainMenu">← 返回主菜单</button><h2 class="section-heading">📢 站内公告</h2></div>
+        <div class="section-top"><button class="back-btn" data-back="mainMenu">← 返回首页</button><h2 class="section-heading">📢 站内公告</h2></div>
         <div class="container">
             <section class="card">
                 <div class="announcement-content">
@@ -342,12 +350,12 @@
     </div>
 
 
-    <!-- ==================== 板块六：账号租借 ==================== -->
+    <!-- ==================== 板块六：账号租赁 ==================== -->
     <div id="sectionRental" class="content-section" style="display: none;">
         <div class="section-top panel-top">
             <button class="back-btn" data-back="mainMenu">← 返回首页</button>
-            <h2 class="section-heading">🎮 账号租借</h2>
-            <nav class="rental-tabs panel-nav" aria-label="账号租借功能">
+            <h2 class="section-heading">🎮 账号租赁</h2>
+            <nav class="rental-tabs panel-nav" aria-label="账号租赁功能">
                 <button class="rental-tab active" data-rentaltab="hall">🔍 租号大厅</button>
                 <button class="rental-tab" data-rentaltab="publish">📤 发布出租</button>
                 <button class="rental-tab" data-rentaltab="rented">📋 我的租用</button>
@@ -370,7 +378,7 @@
                 </form>
                 <p id="rentalFilterResult" role="status"></p>
                 <button id="refreshRentalHallBtn" type="button" style="margin-bottom:12px;">刷新可租账号</button>
-                <div id="rentalHallList" class="rental-grid">加载中...</div>
+                <div id="rentalHallList" class="rental-grid">正在加载…</div>
             </div>
 
             <!-- 发布出租 -->
@@ -424,7 +432,7 @@
 
             <!-- 我的租用 -->
             <div id="rentalRentedView" class="rental-view" style="display:none;">
-                <div id="rentalRentedList">加载中...</div>
+                <div id="rentalRentedList">正在加载…</div>
             </div>
 
             <!-- 我的出租 -->
@@ -443,7 +451,7 @@
                 <section class="card">
                     <h4 style="color:var(--accent);">📋 出租订单</h4>
                     <div id="myRentalOrdersList"></div>
-                    <div style="margin-top:12px; padding:10px; background:#0f172a; border-radius:8px;">
+                    <div style="margin-top:12px; padding:10px; background:var(--surface-inset); border-radius:8px;">
                         💰 累计出租收益：<strong id="rentalEarningsDisplay">0.00</strong> 元
                     </div>
                 </section>
@@ -454,26 +462,26 @@
     <!-- ==================== 全屏页面：个人中心 ==================== -->
     <div id="sectionProfile" class="content-section" style="display: none;">
         <div class="section-top">
-            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+            <button class="back-btn" data-back="mainMenu">← 返回首页</button>
             <h2 class="section-heading">👤 个人中心</h2>
         </div>
         <div class="container">
             <section class="card">
                 <h4 style="color:var(--accent); margin-bottom:10px;">基本信息</h4>
-                <div class="profile-info" id="profileInfo">加载中...</div>
+                <div class="profile-info" id="profileInfo">正在加载…</div>
             </section>
             <section class="card">
                 <h4 style="color:var(--accent); margin-bottom:10px;">所有订单</h4>
-                <div id="userOrderCenter" class="order-center"><div class="oc-list" id="orderList">加载中...</div></div>
+                <div id="userOrderCenter" class="order-center"><div class="oc-list" id="orderList">正在加载…</div></div>
             </section>
         </div>
     </div>
 
-    <!-- ==================== 全屏页面：管理面板 ==================== -->
+    <!-- ==================== 全屏页面：管理员后台 ==================== -->
     <div id="sectionAdmin" class="content-section" style="display: none;">
         <div class="section-top panel-top">
             <button class="back-btn" data-back="mainMenu">← 返回首页</button>
-            <h2 class="section-heading">🛠️ 管理面板</h2>
+            <h2 class="section-heading">🛠️ 管理员后台</h2>
             <nav class="admin-tabs panel-nav" aria-label="管理功能">
                 <button class="admin-tab active" data-admintab="orders">📋 订单管理</button>
                 <button class="admin-tab" data-admintab="rental">🎮 租号审核</button>
@@ -492,7 +500,7 @@
         <div class="container">
             <div id="adminOrdersSection">
                 <p>优先处理待办，按订单类型核对收款、验收和异常；已结束订单可归档。</p>
-                <div id="adminOrderCenter" class="order-center"><div id="adminOrderList" class="oc-list">加载中...</div></div>
+                <div id="adminOrderCenter" class="order-center"><div id="adminOrderList" class="oc-list">正在加载…</div></div>
             </div>
             <div id="adminRentalSection" style="display:none;">
                 <h3>出租账号申请审核</h3>
@@ -508,7 +516,7 @@
                     </select>
                     <button id="refreshAdminRentalAccountsBtn" type="button">刷新申请</button>
                 </div>
-                <div id="adminRentalAccountList" class="admin-order-list">加载中...</div>
+                <div id="adminRentalAccountList" class="admin-order-list">正在加载…</div>
                 <div id="adminRentalAccountPaging" class="rental-admin-paging">
                     <button id="adminRentalPrevPage" type="button">上一页</button>
                     <span id="adminRentalPageInfo">第 1 页</span>
@@ -517,13 +525,13 @@
                 <h3 style="margin-top:24px;">租号人工付款与结算</h3>
                 <p>确认实际收款或外部退款后再操作；这里不会自动发起支付宝退款。</p>
                 <button id="refreshAdminRentalBtn" type="button">刷新租号订单</button>
-                <div id="adminRentalOrderList" class="admin-order-list">加载中...</div>
+                <div id="adminRentalOrderList" class="admin-order-list">正在加载…</div>
             </div>
             <div id="adminCustomSection" style="display:none;">
-                <div id="adminCustomList">加载中...</div>
+                <div id="adminCustomList">正在加载…</div>
             </div>
             <div id="adminBoostersSection" style="display:none;">
-                <div id="adminBoostersList">加载中...</div>
+                <div id="adminBoostersList">正在加载…</div>
             </div>
             <div id="adminRolesSection" style="display:none;">
                 <div class="admin-role-section">
@@ -551,27 +559,27 @@
                 <div id="contentManagerView" style="margin-top:12px;"></div>
             </div>
 
-            <!-- 积分商城管理面板 -->
+            <!-- 积分商城管理员后台 -->
             <div id="adminShopSection" style="display:none;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
                     <h4 style="color:var(--accent);">🛒 积分商城商品管理</h4>
                     <button class="submit-btn" id="adminShopAddBtn" style="width:auto; padding:8px 20px;">+ 新增商品</button>
                 </div>
-                <div id="adminShopList">加载中...</div>
+                <div id="adminShopList">正在加载…</div>
             </div>
-            <!-- 开箱管理面板 -->
+            <!-- 开箱管理员后台 -->
             <div id="adminChestSection" style="display:none;">
                 <h4 style="color:var(--accent); margin-bottom:16px;">🎁 开箱配置管理</h4>
-                <div id="adminChestList">加载中...</div>
+                <div id="adminChestList">正在加载…</div>
             </div>
         </div>
     </div>
 
-    <!-- ==================== 全屏页面：打手面板 ==================== -->
+    <!-- ==================== 全屏页面：打手工作台 ==================== -->
     <div id="sectionBooster" class="content-section" style="display: none;">
         <div class="section-top panel-top">
             <button class="back-btn" data-back="mainMenu">← 返回首页</button>
-            <h2 class="section-heading">⚔️ 打手面板</h2>
+            <h2 class="section-heading">⚔️ 打手工作台</h2>
             <nav class="booster-tabs panel-nav" aria-label="打手功能">
                 <button class="booster-tab active" data-tab="booster-hall">接单大厅</button>
                 <button class="booster-tab" data-tab="booster-my">我的接单</button>
@@ -582,13 +590,13 @@
         <div class="container">
             <section class="card availability-card" id="boosterAvailabilityCard" aria-live="polite">正在读取工作状态…</section>
             <div class="booster-tab-content active" id="booster-hall">
-                <div id="hallOrderList" class="order-list">加载中...</div>
+                <div id="hallOrderList" class="order-list">正在加载…</div>
             </div>
             <div class="booster-tab-content" id="booster-my" style="display:none;">
-                <div id="myBoosterOrderList" class="order-list">加载中...</div>
+                <div id="myBoosterOrderList" class="order-list">正在加载…</div>
             </div>
             <div class="booster-tab-content" id="booster-earnings" style="display:none;">
-                <div id="earningsDisplay">加载中...</div>
+                <div id="earningsDisplay">正在加载…</div>
             </div>
             <div class="booster-tab-content" id="booster-availability" style="display:none;"></div>
         </div>
@@ -598,7 +606,7 @@
     <!-- ==================== 积分商城页面 ==================== -->
     <div id="sectionQYShop" class="content-section" style="display: none;">
         <div class="section-top">
-            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+            <button class="back-btn" data-back="mainMenu">← 返回首页</button>
             <h2 class="section-heading">🎁 积分商城</h2>
         </div>
         <div class="container">
@@ -613,7 +621,7 @@
             <h2 class="section-heading">⚙️ 设置</h2>
             <nav class="settings-nav panel-nav" id="settingsNav" aria-label="设置功能">
                 <button class="settings-nav-btn active" data-setting="account-security">🔐 账号与安全</button>
-                <button class="settings-nav-btn" data-setting="appearance">🎨 站内风格</button>
+                <button class="settings-nav-btn" data-setting="appearance">🎨 界面主题</button>
                 <button class="settings-nav-btn" data-setting="notifications">🔔 通知与提醒</button>
                 <button class="settings-nav-btn" data-setting="privacy">👁️ 隐私与显示</button>
                 <button class="settings-nav-btn" data-setting="order-defaults">📦 订单默认设置</button>
@@ -674,7 +682,7 @@
             <div class="form-group"><label>选择截图文件</label><input type="file" id="paymentFile" accept="image/*"></div>
             <div class="form-group">
                 <label>或直接粘贴截图 (Ctrl+V)</label>
-                <div id="pasteArea" class="paste-area" contenteditable="true" style="height:100px;border:1px dashed var(--border);padding:10px;border-radius:6px;background:#111927;color:var(--text);font-size:0.9rem;">在此区域按 Ctrl+V 粘贴截图</div>
+                <div id="pasteArea" class="paste-area" contenteditable="true" style="height:100px;border:1px dashed var(--border);padding:10px;border-radius:6px;background:var(--surface-muted);color:var(--text);font-size:0.9rem;">在此区域按 Ctrl+V 粘贴截图</div>
                 <img id="previewImage" style="max-width:100%;margin-top:10px;display:none;">
             </div>
             <div class="form-error" id="paymentError"></div>
@@ -851,13 +859,13 @@
     <!-- ==================== 板块：三方订单 ==================== -->
     <div id="sectionThirdParty" class="content-section" style="display: none;">
         <div class="section-top">
-            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+            <button class="back-btn" data-back="mainMenu">← 返回首页</button>
             <h2 class="section-heading">三方订单工作台</h2>
         </div>
         <div class="container tp-workbench">
             <div class="tp-workbench-head">
                 <div>
-                    <p class="tp-eyebrow">ORDER WORKBENCH</p>
+                    <p class="tp-eyebrow">外部订单管理</p>
                     <h3>先处理当前待办，再查看全部订单</h3>
                     <p>审核、履约、验收和收款状态分开记录，每一步都有操作历史。</p>
                 </div>
@@ -924,7 +932,7 @@
                     </label>
                 </div>
                 <div id="tpOrderSummary" class="tp-order-summary"></div>
-                <div id="tpOrderList" class="tp-order-grid" aria-live="polite">加载中...</div>
+                <div id="tpOrderList" class="tp-order-grid" aria-live="polite">正在加载…</div>
             </section>
         </div>
     </div>
@@ -996,10 +1004,10 @@
     <script src="ui-runtime.js"></script>
     <script src="booster-availability.js?v=20260916-b13"></script>
     <script src="rental-client.js"></script>
-    <script src="order-center.js?v=20260916-b16"></script>
+    <script src="order-center.js?v=20260916-b17"></script>
     <script src="order-notifications.js?v=20260916-notify1"></script>
     <script src="boost-checkout.js?v=20260916-b16"></script>
     <script src="rental-discovery.js?v=20260916-b16"></script>
-    <script src="script.js?v=20260916-b16"></script>
+    <script src="script.js?v=20260916-b17"></script>
 </body>
 </html>

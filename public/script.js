@@ -772,15 +772,15 @@ async function loadProfile() {
             <p><span>用户名：</span><span>${user.username}</span></p>
             <p><span>邮箱：</span><span>${user.email || '未填写'}</span></p>
             <p><span>手机：</span><span>${user.phone || '未填写'}</span></p>
-            <p><span>QY积分：</span><span><img src="qy-coin.png" style="width:18px;height:18px;vertical-align:middle;margin-right:4px;">${credits.qy_credits} (可用) / ${totalEarned} (累积)</span></p>
+            <p><span>情谊积分：</span><span><img src="qy-coin.png" alt="" style="width:18px;height:18px;vertical-align:middle;margin-right:4px;">${credits.qy_credits}（可用）/ ${totalEarned}（累计）</span></p>
             <p><span>VIP等级：</span><span>${vipNames[currentVip]}</span></p>
-            <div style="background:#1e2a3a; border-radius:10px; height:10px; margin:8px 0; width:100%;">
+            <div style="background:var(--surface-track); border-radius:10px; height:10px; margin:8px 0; width:100%;">
                 <div style="width:${vipProgress}%; height:100%; background:var(--accent); border-radius:10px;"></div>
             </div>
             <p style="font-size:0.75rem; color:var(--text-muted);">升级还需 ${nextThreshold - totalEarned} 积分</p>
             <p><span>信誉分：</span><span>${user.reputation}</span></p>
             <p><span>推荐码：</span><span>${user.referral_code}</span></p>
-            <p><span>打手身份：</span><span>${user.booster_identity || 'standard'}</span></p>
+            <p><span>打手身份：</span><span>${({gold:'金牌打手',silver:'银牌打手',standard:'标准打手',budget:'特惠打手'})[user.booster_identity] || '标准打手'}</span></p>
             <p><span>打手积分：</span><span>${user.booster_points || 0}</span></p>
             <p><span>注册时间：</span><span>${new Date(user.created_at).toLocaleString()}</span></p>
             <div style="margin-top:10px;">
@@ -859,7 +859,7 @@ if (submitOrderBtn) {
     });
 }
 
-// ==================== 管理面板 ====================
+// ==================== 管理员后台 ====================
 const adminOrderList = getEl('adminOrderList');
 
 function rentalSafeText(value) {
@@ -1132,7 +1132,7 @@ if (e.target.classList.contains('delete-custom-btn')) {
 
 });
 
-// ========== 管理面板选项卡切换（修改后） ==========
+// ========== 管理员后台选项卡切换（修改后） ==========
 document.querySelectorAll('.admin-tab').forEach(tab => {
     tab.addEventListener('click', () => {
         document.querySelectorAll('.admin-tab').forEach(t => {
@@ -1369,7 +1369,7 @@ getEl('submitPaymentBtn')?.addEventListener('click', async () => {
     } catch (err) { if (paymentError) paymentError.textContent = '网络错误'; }
 });
 
-// ==================== 打手面板 ====================
+// ==================== 打手工作台 ====================
 document.querySelectorAll('.booster-tab').forEach(tab => {
     tab.addEventListener('click', () => {
         document.querySelectorAll('.booster-tab').forEach(t => {
@@ -1656,7 +1656,7 @@ function initChestSimulator() {
   renderChests();
 }
 
-// ==================== 独立工具面板控制 ====================
+// ==================== 实用工具面板控制 ====================
 const toolTabs = document.querySelectorAll('.tool-tab');
 const toolPanels = {
     calculator: getEl('toolCalculator'),
@@ -1779,7 +1779,7 @@ if (customRequestForm) customRequestForm.addEventListener('submit', async (e) =>
 async function loadShopItems() {
   const container = getEl('shopItemsContainer');
   if (!container) return;
-  container.innerHTML = '加载中...';
+  container.innerHTML = '正在加载…';
   try {
     const res = await fetch(`${API_BASE}/shop/items`);
     const items = await res.json();
@@ -1794,7 +1794,7 @@ async function loadShopItems() {
           <img src="${item.image || 'qy-coin.png'}" style="width:100px; height:100px; object-fit:contain; margin-bottom:10px;" onerror="this.src='qy-coin.png'">
           <h4>${item.name}</h4>
           <p style="color:var(--text-secondary); font-size:0.9rem;">${item.description || ''}</p>
-          <p style="color:#f0c060; font-weight:700;">🪙 ${item.price_credits} 积分</p>
+          <p style="color:var(--price); font-weight:700;">🪙 ${item.price_credits} 积分</p>
           <button class="submit-btn buy-item-btn" data-itemid="${item.id}" data-name="${item.name}">购买</button>
         </div>
       `;
@@ -1835,7 +1835,7 @@ async function loadSettingsPanel() {
     const version = ++settingsLoadVersion;
     const content = getEl('settingsContent');
     if (!content) return;
-    content.innerHTML = '<p>加载中...</p>';
+    content.innerHTML = '<p>正在加载…</p>';
     const token = safeGetItem('token');
     if (!token) { content.innerHTML = '<p style="color:var(--red)">请先登录</p>'; return; }
     try {
@@ -2043,43 +2043,65 @@ function bindAccountSecurityEvents() {
     });
 }
 
-// ---------- 外观（深空黑 / 极昼白） ----------
+// ---------- 界面主题（深色 / 浅色） ----------
 function renderAppearance() {
-    const settings = window._userSettings || {};
-    const currentTheme = settings.theme || 'dark';
+    const currentTheme = document.body.classList.contains('theme-light') ? 'light' : 'dark';
     const content = getEl('settingsContent');
     content.innerHTML = `
-        <div class="card"><h4>站内风格</h4>
-            <div style="display:flex; gap:20px; margin-top:12px;">
-                <label class="client-option ${currentTheme==='dark'?'active':''}">
-                    <input type="radio" name="theme" value="dark" ${currentTheme==='dark'?'checked':''}> 🌑 深空黑
-                </label>
-                <label class="client-option ${currentTheme==='light'?'active':''}">
-                    <input type="radio" name="theme" value="light" ${currentTheme==='light'?'checked':''}> 🌕 极昼白
-                </label>
+        <div class="card"><div class="appearance-heading"><h4>界面主题</h4>
+            <p>选择适合你的阅读方式。点击预览，保存后同步到账号。</p></div>
+            <div class="theme-options" role="radiogroup" aria-label="界面主题">
+                ${[['dark','深色主题','沉稳背景，突出服务与进度'],['light','浅色主题','明亮界面，清楚查看每项信息']].map(([value,title,description])=>`
+                <label class="theme-option">
+                    <div class="theme-preview theme-preview-${value}" aria-hidden="true"><div class="theme-preview-rail"></div><div class="theme-preview-content"><div class="theme-preview-bar"></div><div class="theme-preview-card"><i></i><i></i><i></i><b></b></div></div></div>
+                    <span class="theme-option-caption"><input type="radio" name="theme" value="${value}" ${currentTheme===value?'checked':''}><strong>${title}</strong><small>${description}</small></span>
+                </label>`).join('')}
             </div>
-            <button id="saveThemeBtn" class="submit-btn" style="margin-top:12px;">保存主题</button>
+            <button id="saveThemeBtn" class="submit-btn">保存主题</button>
+            <p id="themeSaveStatus" class="theme-save-status" role="status" aria-live="polite"></p>
         </div>`;
+    content.querySelectorAll('input[name=theme]').forEach(input=>input.addEventListener('change',()=>{
+        applyTheme(input.value);
+        getEl('themeSaveStatus').textContent='已在此浏览器应用，保存后同步到账号。';
+    }));
     getEl('saveThemeBtn')?.addEventListener('click', async () => {
         const theme = document.querySelector('input[name="theme"]:checked')?.value || 'dark';
-        const token = safeGetItem('token');
-        await fetch(`${API_BASE}/user/settings`, {
-            method: 'PUT', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ theme })
-        });
         applyTheme(theme);
-        showToast('主题已切换');
+        const token = safeGetItem('token'),button=getEl('saveThemeBtn'),status=getEl('themeSaveStatus');
+        if(!token){status.textContent='主题已保存到此浏览器，登录后可同步到账号。';return;}
+        button.disabled=true;button.textContent='正在保存…';
+        try {
+            const res=await fetch(`${API_BASE}/user/settings`, {
+                method: 'PUT', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ theme })
+            });
+            const data=await res.json().catch(()=>({}));
+            if(!res.ok)throw new Error(data.error||'账号主题保存失败，请重试。');
+            window._userSettings={...(window._userSettings||{}),theme};
+            status.textContent='主题已保存，并同步到账号。';showToast('主题已保存');
+        }catch(err){status.textContent=(err.message||'网络连接失败，请重试。')+' 当前浏览器已保留所选主题。';}
+        finally{button.disabled=false;button.textContent='保存主题';}
     });
 }
 
 function applyTheme(theme) {
+    theme = theme === 'light' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = theme;
     if (theme === 'light') {
         document.body.classList.add('theme-light');
     } else {
         document.body.classList.remove('theme-light');
     }
     safeSetItem('theme', theme);
+    const toggle=getEl('themeToggleBtn');
+    if(toggle){const label=theme==='light'?'切换到深色主题':'切换到浅色主题';toggle.textContent=theme==='light'?'☾':'☀';toggle.title=label;toggle.setAttribute('aria-label',label);}
 }
+
+getEl('themeToggleBtn')?.addEventListener('click',()=>{
+    const theme=document.body.classList.contains('theme-light')?'dark':'light';applyTheme(theme);
+    document.querySelectorAll('input[name=theme]').forEach(input=>input.checked=input.value===theme);
+    if(getEl('themeSaveStatus'))getEl('themeSaveStatus').textContent='已在此浏览器应用，保存后同步到账号。';
+});
 
 function applySavedTheme() {
     const theme = safeGetItem('theme') || 'dark';
@@ -2202,7 +2224,7 @@ function renderLanguage() {
 // 站内邮箱
 async function loadMessages() {
     const content = getEl('settingsContent');
-    content.innerHTML = '<p>加载中...</p>';
+    content.innerHTML = '<p>正在加载…</p>';
     const token = safeGetItem('token');
     const res = await fetch(`${API_BASE}/user/messages`, { headers: { 'Authorization': `Bearer ${token}` } });
     const messages = await res.json();
@@ -2233,7 +2255,7 @@ async function loadMessages() {
 // 登录设备
 async function loadDevices() {
     const content = getEl('settingsContent');
-    content.innerHTML = '<p>加载中...</p>';
+    content.innerHTML = '<p>正在加载…</p>';
     const token = safeGetItem('token');
     const res = await fetch(`${API_BASE}/user/devices`, { headers: { 'Authorization': `Bearer ${token}` } });
     const devices = await res.json();
@@ -2249,7 +2271,7 @@ async function loadDevices() {
     content.innerHTML = html;
 }
 
-// ==================== 账号租借模块 ====================
+// ==================== 账号租赁模块 ====================
 
 // 子标签切换
 document.querySelectorAll('.rental-tab').forEach(tab => {
@@ -2321,7 +2343,7 @@ async function showRentalAccountDetail(accountId) {
             <p><strong>客户端：</strong>${rentalSafeText(account.client_type)}</p>
             <p><strong>游戏UID：</strong>${rentalSafeText(account.game_uid || '未填写')}</p>
             <p><strong>坦克清单：</strong></p>
-            <pre style="white-space:pre-wrap; max-height:200px; overflow-y:auto; background:#0f172a; padding:8px; border-radius:6px;">${rentalSafeText(account.tank_list || '未填写')}</pre>
+            <pre style="white-space:pre-wrap; max-height:200px; overflow-y:auto; background:var(--surface-inset); padding:8px; border-radius:6px;">${rentalSafeText(account.tank_list || '未填写')}</pre>
             <p><strong>可用时段：</strong>${rentalSafeText(account.available_time_desc || '无限制')}</p>
             <p><strong>规则：</strong>${rentalSafeText(account.rules || '无')}</p>
             <p><strong>截图：</strong></p><div style="display:flex; gap:6px; flex-wrap:wrap;">${imgHtml}</div>
@@ -2585,7 +2607,7 @@ async function loadMyRentalAccounts(deleted = false) {
         const accounts = await rentalClient.getMyAccounts({ deleted });
         if (!accounts.length) { renderRentalState(container, 'empty', deleted ? '没有已删除账号' : '你还没有发布出租账号'); return; }
         let html = (deleted ? '<p>恢复后进入待审核，不会自动上架。</p>' :
-            '<p>待审核账号不会在租号大厅展示；仅管理员可通过“管理面板 → 租号审核”上架。</p>') +
+            '<p>待审核账号不会在租号大厅展示；仅管理员可通过“管理员后台 → 租号审核”上架。</p>') +
             '<div class="table-scroll"><table class="responsive-table"><caption class="sr-only">我的出租账号</caption><thead><tr><th scope="col">UID</th><th scope="col">客户端</th><th scope="col">时租/天租</th><th scope="col">状态</th><th scope="col">操作</th></tr></thead><tbody>';
         accounts.forEach(a => {
             const id = Number(a.id);

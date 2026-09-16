@@ -36,7 +36,7 @@
 .availability-history { padding:16px; border:1px solid var(--border); border-radius:10px; margin-top:16px; }
 .availability-history p { margin-top:8px; line-height:1.65; }
 #availabilityFormMessage { color:var(--accent); }
-body.theme-light .availability-actions select,body.theme-light .availability-mode select,body.theme-light .availability-filters select,body.theme-light .availability-filters input,body.theme-light .availability-pause-form input,body.theme-light .availability-pause-form select,body.theme-light .availability-slot input { color-scheme:light; }
+
 @media(max-width:900px) { .availability-admin-grid { grid-template-columns:1fr; } }
 @media(max-width:600px) {
  .availability-day { grid-template-columns:40px minmax(0,1fr); gap:8px; }

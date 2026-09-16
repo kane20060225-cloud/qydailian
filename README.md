@@ -31,3 +31,5 @@
 订单取消、24小时未付款关闭及历史充值核销的部署与使用说明见 [B14_ORDER_LIFECYCLE_RUNBOOK.md](backend/migrations/B14_ORDER_LIFECYCLE_RUNBOOK.md)。发布此版本前需先执行 B14 增量迁移；超时关闭默认关闭。
 
 三步下单、订单指引、租号筛选、删除申请与历史异常核对说明见 [B16_ORDER_DELETION_RUNBOOK.md](backend/migrations/B16_ORDER_DELETION_RUNBOOK.md)。发布此版本前需执行 B16 审核元数据增量迁移；核对删除保留原始订单及资金记录。
+
+界面细节、文案统一及浅色主题重构说明见 [B17_UI_REDESIGN.md](docs/B17_UI_REDESIGN.md)。B17 无需数据库迁移，效果图由本地浏览器验证生成。
