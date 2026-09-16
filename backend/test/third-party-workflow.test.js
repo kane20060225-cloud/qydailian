@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const {
   THIRD_PARTY_PLATFORMS,
   validateOrderInput,
+  normalizePlatform,
   getWorkflowStage,
   canReview,
   canResubmit,
@@ -21,6 +22,8 @@ test('third-party platform accepts game servers and rejects marketplace labels',
     assert.equal(result.error, undefined);
   }
   assert.equal(THIRD_PARTY_PLATFORMS.includes('闲鱼'), false);
+  assert.equal(normalizePlatform('闲鱼'), '其他服务器');
+  assert.equal(normalizePlatform('安卓官服'), '安卓官服');
   assert.match(validateOrderInput({
     platform: '闲鱼', content: '冲分任务', account_info: 'account', price: 88
   }).error, /游戏服务器/);

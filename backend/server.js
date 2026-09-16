@@ -17,6 +17,7 @@ const { saveRentalScreenshot, MAX_IMAGE_BYTES } = require('./lib/rental-stream-u
 const {
   THIRD_PARTY_PLATFORMS,
   cleanText: cleanThirdPartyText,
+  normalizePlatform: normalizeThirdPartyPlatform,
   validateOrderInput: validateThirdPartyOrderInput,
   getWorkflowStage,
   canReview,
@@ -2670,7 +2671,11 @@ app.get('/api/third-party-orders', authMiddleware, async (req, res, next) => {
 
   try {
     const [rows] = await pool.execute(sql, params);
-    res.json(rows.map((row) => ({ ...row, workflow_stage: getWorkflowStage(row) })));
+    res.json(rows.map((row) => ({
+      ...row,
+      platform: normalizeThirdPartyPlatform(row.platform),
+      workflow_stage: getWorkflowStage(row)
+    })));
   } catch (err) {
     res.status(500).json({ error: '服务器错误' });
   }

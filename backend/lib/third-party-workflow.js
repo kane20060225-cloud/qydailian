@@ -13,6 +13,10 @@ function cleanText(value, maxLength) {
   return text.length <= maxLength ? text : '';
 }
 
+function normalizePlatform(value) {
+  return THIRD_PARTY_PLATFORMS.includes(value) ? value : '其他服务器';
+}
+
 function validateOrderInput(body = {}) {
   const platform = cleanText(body.platform, 50);
   const content = cleanText(body.content, 2000);
@@ -71,6 +75,7 @@ function canConfirmPayment(order) {
 module.exports = {
   THIRD_PARTY_PLATFORMS,
   cleanText,
+  normalizePlatform,
   validateOrderInput,
   getWorkflowStage,
   canReview,
