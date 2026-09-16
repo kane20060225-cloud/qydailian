@@ -1313,7 +1313,7 @@ app.post('/api/orders/:orderNo/payment', authMiddleware, async (req, res) => {
   }
   const uploadDir = path.join(__dirname, 'uploads');
   if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-  const filename = `payment_${orderNo}_${Date.now()}_${require('node:crypto').randomUUID()}.png`;
+  const filename = `payment_${orderNo}_${Date.now()}_${crypto.randomUUID()}.png`;
   const newFilePath = path.join(uploadDir, filename);
   let newFileWritten = false;
   let committed = false;
@@ -2979,7 +2979,7 @@ app.post('/api/chest/open', authMiddleware, async (req, res) => {
     if (tickets < chest.price) throw new Error('军需券不足');
 
     // 扣券
-    const openEventId = require('node:crypto').randomUUID();
+    const openEventId = crypto.randomUUID();
     if (chest.price > 0) {
       await postAccountDelta(conn, {
         userId: req.userId, accountType: 'chest_tickets', delta: -chest.price,
