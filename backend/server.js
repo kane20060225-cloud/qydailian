@@ -14,6 +14,17 @@ const { createRecoveryCodes, hashRecoveryCode } = require('./lib/recovery-codes'
 const { postAccountDelta, recordOperation } = require('./lib/accounting');
 const { validateRentalPaymentEvidence } = require('./lib/rental-payment-evidence');
 const { saveRentalScreenshot, MAX_IMAGE_BYTES } = require('./lib/rental-stream-upload');
+const {
+  THIRD_PARTY_PLATFORMS,
+  cleanText: cleanThirdPartyText,
+  validateOrderInput: validateThirdPartyOrderInput,
+  getWorkflowStage,
+  canReview,
+  canResubmit,
+  canRequestCompletion,
+  canReturnCompletion,
+  canConfirmPayment
+} = require('./lib/third-party-workflow');
 const { createRentalAccountRouter } = require('./routes/rental-accounts');
 const {
   RECHARGE_AMOUNT,
@@ -2583,27 +2594,47 @@ app.post('/api/upload-image', authMiddleware, async (req, res) => {
 });
 
 // ==================== 三方订单 API ====================
-app.post('/api/third-party-orders', authMiddleware, async (req, res, next) => {
+async function recordThirdPartyEvent(conn, orderNo, eventType, actorUserId, note = null) {
+  await conn.execute(
+    'INSERT INTO third_party_order_events (order_no, event_type, actor_user_id, note) VALUES (?,?,?,?)',
+    [orderNo, eventType, actorUserId, note]
+  );
+}
+
+app.get('/api/third-party-orders/platforms', authMiddleware, (req, res) => {
+  res.json(THIRD_PARTY_PLATFORMS);
+});
+
+app.post('/api/third-party-orders', authMiddleware, async (req, res) => {
   const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
-  if (userRows.length === 0 || (userRows[0].role !== 'admin' && userRows[0].role !== 'booster')) {
+  if (!userRows.length || !['admin', 'booster'].includes(userRows[0].role)) {
     return res.status(403).json({ error: '无权限，仅管理员或打手可创建' });
   }
+  const validated = validateThirdPartyOrderInput(req.body);
+  if (validated.error) return res.status(400).json({ error: validated.error });
 
-  const { platform, content, account_info, price } = req.body;
-  if (!content || !account_info || !price) {
-    return res.status(400).json({ error: '请填写完整信息（内容、账号、价格）' });
-  }
-
-  const orderNo = 'TP' + Date.now() + Math.random().toString(36).substring(2, 6).toUpperCase();
+  const orderNo = 'TP' + Date.now() + crypto.randomBytes(2).toString('hex').toUpperCase();
+  const input = validated.value;
+  const conn = await pool.getConnection();
   try {
-    await pool.execute(
+    await conn.beginTransaction();
+    await conn.execute(
       'INSERT INTO third_party_orders (order_no, creator_id, platform, content, account_info, price) VALUES (?,?,?,?,?,?)',
-      [orderNo, req.userId, platform || '其他', content, account_info, price]
+      [orderNo, req.userId, input.platform, input.content, input.accountInfo, input.price]
     );
+    await conn.execute(
+      `INSERT INTO third_party_order_workflow
+       (order_no, external_order_no, expected_at) VALUES (?,?,?)`,
+      [orderNo, input.externalOrderNo, input.expectedAt]
+    );
+    await recordThirdPartyEvent(conn, orderNo, 'created', req.userId, `来源：${input.platform}`);
+    await conn.commit();
     res.status(201).json({ success: true, order_no: orderNo });
   } catch (err) {
+    await conn.rollback();
+    console.error('创建三方订单失败:', err);
     res.status(500).json({ error: '创建失败' });
-  }
+  } finally { conn.release(); }
 });
 
 app.get('/api/third-party-orders', authMiddleware, async (req, res, next) => {
@@ -2613,15 +2644,23 @@ app.get('/api/third-party-orders', authMiddleware, async (req, res, next) => {
   const role = userRows[0].role;
   let sql, params;
   if (role === 'admin') {
-    sql = `SELECT t.*, f.final_status, f.finalized_at, u.username AS creator_name
+    sql = `SELECT t.*, f.final_status, f.finalized_at, u.username AS creator_name,
+        w.external_order_no, w.expected_at, w.rejection_reason, w.completion_note,
+        w.completion_return_reason, w.payment_channel, w.payment_reference,
+        w.payment_confirmed_at, w.revision_count, w.complete_requested_at
       FROM third_party_orders t
       LEFT JOIN third_party_order_finalization f ON f.order_no = t.order_no
+      LEFT JOIN third_party_order_workflow w ON w.order_no = t.order_no
       JOIN users u ON t.creator_id = u.id ORDER BY t.created_at DESC`;
     params = [];
   } else if (role === 'booster') {
-    sql = `SELECT t.*, f.final_status, f.finalized_at, u.username AS creator_name
+    sql = `SELECT t.*, f.final_status, f.finalized_at, u.username AS creator_name,
+        w.external_order_no, w.expected_at, w.rejection_reason, w.completion_note,
+        w.completion_return_reason, w.payment_channel, w.payment_reference,
+        w.payment_confirmed_at, w.revision_count, w.complete_requested_at
       FROM third_party_orders t
       LEFT JOIN third_party_order_finalization f ON f.order_no = t.order_no
+      LEFT JOIN third_party_order_workflow w ON w.order_no = t.order_no
       JOIN users u ON t.creator_id = u.id
       WHERE t.creator_id = ? ORDER BY t.created_at DESC`;
     params = [req.userId];
@@ -2631,7 +2670,7 @@ app.get('/api/third-party-orders', authMiddleware, async (req, res, next) => {
 
   try {
     const [rows] = await pool.execute(sql, params);
-    res.json(rows);
+    res.json(rows.map((row) => ({ ...row, workflow_stage: getWorkflowStage(row) })));
   } catch (err) {
     res.status(500).json({ error: '服务器错误' });
   }
@@ -2640,16 +2679,76 @@ app.get('/api/third-party-orders', authMiddleware, async (req, res, next) => {
 app.put('/api/third-party-orders/:orderNo/review', adminMiddleware, async (req, res) => {
   const { status } = req.body;
   if (!['approved','rejected'].includes(status)) return res.status(400).json({ error: '无效状态' });
+  const reason = cleanThirdPartyText(req.body.reason, 500);
+  if (status === 'rejected' && !reason) return res.status(400).json({ error: '请填写驳回原因（最多 500 字）' });
+  const conn = await pool.getConnection();
   try {
-    const [result] = await pool.execute(
-      'UPDATE third_party_orders SET status = ?, reviewer_id = ? WHERE order_no = ?',
-      [status, req.userId, req.params.orderNo]
+    await conn.beginTransaction();
+    const [orders] = await conn.execute(
+      'SELECT status FROM third_party_orders WHERE order_no = ? FOR UPDATE', [req.params.orderNo]
     );
-    if (result.affectedRows === 0) return res.status(404).json({ error: '订单不存在' });
+    if (!orders.length) { await conn.rollback(); return res.status(404).json({ error: '订单不存在' }); }
+    if (!canReview(orders[0])) {
+      await conn.rollback();
+      return res.status(409).json({ error: '只有待审核订单可以审核' });
+    }
+    await conn.execute('UPDATE third_party_orders SET status = ?, reviewer_id = ? WHERE order_no = ?',
+      [status, req.userId, req.params.orderNo]);
+    await conn.execute(
+      `INSERT INTO third_party_order_workflow (order_no, rejection_reason)
+       VALUES (?,?) ON DUPLICATE KEY UPDATE rejection_reason = VALUES(rejection_reason)`,
+      [req.params.orderNo, status === 'rejected' ? reason : null]
+    );
+    await recordThirdPartyEvent(conn, req.params.orderNo,
+      status === 'approved' ? 'approved' : 'rejected', req.userId, reason || null);
+    await conn.commit();
     res.json({ success: true });
   } catch (err) {
+    await conn.rollback();
     res.status(500).json({ error: '服务器错误' });
-  }
+  } finally { conn.release(); }
+});
+
+app.put('/api/third-party-orders/:orderNo/resubmit', authMiddleware, async (req, res) => {
+  const validated = validateThirdPartyOrderInput(req.body);
+  if (validated.error) return res.status(400).json({ error: validated.error });
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [orders] = await conn.execute(
+      `SELECT t.creator_id, t.status, t.payment_status, f.final_status
+       FROM third_party_orders t LEFT JOIN third_party_order_finalization f ON f.order_no=t.order_no
+       WHERE t.order_no=? FOR UPDATE`, [req.params.orderNo]
+    );
+    if (!orders.length) { await conn.rollback(); return res.status(404).json({ error: '订单不存在' }); }
+    const [users] = await conn.execute('SELECT role FROM users WHERE id=?', [req.userId]);
+    const order = orders[0];
+    if (order.creator_id !== req.userId && users[0]?.role !== 'admin') {
+      await conn.rollback(); return res.status(403).json({ error: '无权修改此订单' });
+    }
+    if (!canResubmit(order)) {
+      await conn.rollback(); return res.status(409).json({ error: '只有被驳回且未收款的订单可以修改重提' });
+    }
+    const input = validated.value;
+    await conn.execute(
+      `UPDATE third_party_orders SET platform=?, content=?, account_info=?, price=?,
+       status='pending', reviewer_id=NULL, complete_requested=0 WHERE order_no=?`,
+      [input.platform, input.content, input.accountInfo, input.price, req.params.orderNo]
+    );
+    await conn.execute(
+      `INSERT INTO third_party_order_workflow (order_no, external_order_no, expected_at, revision_count, last_resubmitted_at)
+       VALUES (?,?,?,1,NOW()) ON DUPLICATE KEY UPDATE external_order_no=VALUES(external_order_no),
+       expected_at=VALUES(expected_at), rejection_reason=NULL, revision_count=revision_count+1,
+       last_resubmitted_at=NOW()`,
+      [req.params.orderNo, input.externalOrderNo, input.expectedAt]
+    );
+    await recordThirdPartyEvent(conn, req.params.orderNo, 'resubmitted', req.userId, null);
+    await conn.commit();
+    res.json({ success: true });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ error: '服务器错误' });
+  } finally { conn.release(); }
 });
 
 app.delete('/api/third-party-orders/:orderNo', authMiddleware, async (req, res) => {
@@ -2677,29 +2776,125 @@ app.delete('/api/third-party-orders/:orderNo', authMiddleware, async (req, res) 
 });
 
 app.put('/api/third-party-orders/:orderNo/request-complete', authMiddleware, async (req, res) => {
+  const completionNote = cleanThirdPartyText(req.body.completion_note, 1000);
+  if (!completionNote) return res.status(400).json({ error: '请填写完单说明（最多 1000 字）' });
+  const conn = await pool.getConnection();
   try {
-    const [orders] = await pool.execute('SELECT * FROM third_party_orders WHERE order_no = ?', [req.params.orderNo]);
-    if (orders.length === 0) return res.status(404).json({ error: '订单不存在' });
+    await conn.beginTransaction();
+    const [orders] = await conn.execute(
+      `SELECT t.*, f.final_status FROM third_party_orders t
+       LEFT JOIN third_party_order_finalization f ON f.order_no=t.order_no WHERE t.order_no = ? FOR UPDATE`,
+      [req.params.orderNo]
+    );
+    if (orders.length === 0) { await conn.rollback(); return res.status(404).json({ error: '订单不存在' }); }
     const order = orders[0];
     
-    const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
-    if (!userRows.length) return res.status(401).json({ error: '用户不存在' });
+    const [userRows] = await conn.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
+    if (!userRows.length) { await conn.rollback(); return res.status(401).json({ error: '用户不存在' }); }
     
     if (order.creator_id !== req.userId && userRows[0].role !== 'admin') {
-      return res.status(403).json({ error: '无权操作' });
+      await conn.rollback(); return res.status(403).json({ error: '无权操作' });
     }
-    
-    await pool.execute('UPDATE third_party_orders SET complete_requested = 1 WHERE order_no = ?', [req.params.orderNo]);
+    if (!canRequestCompletion(order)) {
+      await conn.rollback(); return res.status(409).json({ error: '当前订单不能申请验收' });
+    }
+    await conn.execute('UPDATE third_party_orders SET complete_requested = 1 WHERE order_no = ?', [req.params.orderNo]);
+    await conn.execute(
+      `INSERT INTO third_party_order_workflow (order_no, completion_note, completion_return_reason, complete_requested_at)
+       VALUES (?,?,NULL,NOW()) ON DUPLICATE KEY UPDATE completion_note=VALUES(completion_note),
+       completion_return_reason=NULL, complete_requested_at=NOW()`,
+      [req.params.orderNo, completionNote]
+    );
+    await recordThirdPartyEvent(conn, req.params.orderNo, 'completion_requested', req.userId, completionNote);
+    await conn.commit();
     res.json({ success: true, message: '已申请完单' });
   } catch (err) {
+    await conn.rollback();
     console.error('申请完单失败:', err);
-    res.status(500).json({ error: '服务器内部错误', detail: err.message });
-  }
+    res.status(500).json({ error: '服务器内部错误' });
+  } finally { conn.release(); }
+});
+
+app.put('/api/third-party-orders/:orderNo/return-completion', adminMiddleware, async (req, res) => {
+  const reason = cleanThirdPartyText(req.body.reason, 500);
+  if (!reason) return res.status(400).json({ error: '请填写退回原因（最多 500 字）' });
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [orders] = await conn.execute(
+      `SELECT t.status, t.complete_requested, f.final_status FROM third_party_orders t
+       LEFT JOIN third_party_order_finalization f ON f.order_no=t.order_no
+       WHERE t.order_no=? FOR UPDATE`, [req.params.orderNo]
+    );
+    if (!orders.length) { await conn.rollback(); return res.status(404).json({ error: '订单不存在' }); }
+    if (!canReturnCompletion(orders[0])) {
+      await conn.rollback(); return res.status(409).json({ error: '当前订单不能退回验收' });
+    }
+    await conn.execute('UPDATE third_party_orders SET complete_requested=0 WHERE order_no=?', [req.params.orderNo]);
+    await conn.execute(
+      `INSERT INTO third_party_order_workflow (order_no, completion_return_reason)
+       VALUES (?,?) ON DUPLICATE KEY UPDATE completion_return_reason=VALUES(completion_return_reason)`,
+      [req.params.orderNo, reason]
+    );
+    await recordThirdPartyEvent(conn, req.params.orderNo, 'completion_returned', req.userId, reason);
+    await conn.commit();
+    res.json({ success: true });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ error: '服务器错误' });
+  } finally { conn.release(); }
 });
 
 app.put('/api/third-party-orders/:orderNo/mark-paid', adminMiddleware, async (req, res) => {
-  await pool.execute('UPDATE third_party_orders SET payment_status = ? WHERE order_no = ?', ['paid', req.params.orderNo]);
-  res.json({ success: true, message: '已标记为已支付' });
+  const channel = cleanThirdPartyText(req.body.payment_channel, 30);
+  const reference = cleanThirdPartyText(req.body.payment_reference, 80);
+  if (!channel || !reference) return res.status(400).json({ error: '请填写收款渠道和交易单号' });
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [orders] = await conn.execute(
+      `SELECT t.status, t.payment_status, f.final_status FROM third_party_orders t
+       LEFT JOIN third_party_order_finalization f ON f.order_no=t.order_no
+       WHERE t.order_no=? FOR UPDATE`, [req.params.orderNo]
+    );
+    if (!orders.length) { await conn.rollback(); return res.status(404).json({ error: '订单不存在' }); }
+    if (!canConfirmPayment(orders[0])) {
+      await conn.rollback(); return res.status(409).json({ error: '当前订单不能确认收款' });
+    }
+    await conn.execute('UPDATE third_party_orders SET payment_status=? WHERE order_no=?', ['paid', req.params.orderNo]);
+    await conn.execute(
+      `INSERT INTO third_party_order_workflow
+       (order_no, payment_channel, payment_reference, payment_confirmed_by, payment_confirmed_at)
+       VALUES (?,?,?,?,NOW()) ON DUPLICATE KEY UPDATE payment_channel=VALUES(payment_channel),
+       payment_reference=VALUES(payment_reference), payment_confirmed_by=VALUES(payment_confirmed_by),
+       payment_confirmed_at=NOW()`,
+      [req.params.orderNo, channel, reference, req.userId]
+    );
+    await recordThirdPartyEvent(conn, req.params.orderNo, 'payment_confirmed', req.userId, channel);
+    await conn.commit();
+    res.json({ success: true, message: '收款已核实' });
+  } catch (err) {
+    await conn.rollback();
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: '该交易单号已用于其他订单' });
+    res.status(500).json({ error: '服务器错误' });
+  } finally { conn.release(); }
+});
+
+app.get('/api/third-party-orders/:orderNo/events', authMiddleware, async (req, res) => {
+  try {
+    const [orders] = await pool.execute('SELECT creator_id FROM third_party_orders WHERE order_no=?', [req.params.orderNo]);
+    if (!orders.length) return res.status(404).json({ error: '订单不存在' });
+    const [users] = await pool.execute('SELECT role FROM users WHERE id=?', [req.userId]);
+    if (orders[0].creator_id !== req.userId && users[0]?.role !== 'admin') {
+      return res.status(403).json({ error: '无权查看' });
+    }
+    const [events] = await pool.execute(
+      `SELECT e.event_type, e.note, e.created_at, u.username AS actor_name
+       FROM third_party_order_events e LEFT JOIN users u ON u.id=e.actor_user_id
+       WHERE e.order_no=? ORDER BY e.created_at DESC, e.id DESC`, [req.params.orderNo]
+    );
+    res.json(events);
+  } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
 app.put('/api/third-party-orders/:orderNo/finalize', adminMiddleware, async (req, res) => {
@@ -2735,6 +2930,7 @@ app.put('/api/third-party-orders/:orderNo/finalize', adminMiddleware, async (req
       eventKey: `third_party:${orderNo}:finalized`, actorUserId: req.userId,
       action: 'third_party_finalized', targetType: 'third_party_order', targetRef: orderNo
     });
+    await recordThirdPartyEvent(conn, orderNo, 'completed', req.userId, null);
     await conn.commit();
     res.json({ success: true, final_status: 'completed' });
   } catch (err) {

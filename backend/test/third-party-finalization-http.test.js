@@ -42,6 +42,7 @@ const conn = {
       state.audit = true;
       return [{ affectedRows: 1 }];
     }
+    if (q.startsWith('INSERT INTO third_party_order_events')) return [{ affectedRows: 1 }];
     throw new Error(`Unexpected SQL: ${q}`);
   }
 };

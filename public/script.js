@@ -346,13 +346,20 @@ function showSection(target) {
             loadAnnouncement();
             break;
         case 'thirdparty':
+            tpCurrentFilter = 'todo';
+            getEl('tpFilterTabs')?.querySelectorAll('button').forEach((button) =>
+                button.classList.toggle('active', button.dataset.filter === 'todo'));
             loadThirdPartyOrders();
-            // 直接使用本地缓存的角色显示/隐藏添加表单
+            // 仅管理员和打手可创建订单
             (() => {
                 const addCard = getEl('tpAddCard');
-                if (!addCard) return;
+                const toggle = getEl('tpToggleCreateBtn');
+                if (!addCard || !toggle) return;
                 const role = safeGetItem('role');
-                addCard.style.display = (role === 'admin' || role === 'booster') ? 'block' : 'none';
+                const allowed = role === 'admin' || role === 'booster';
+                toggle.style.display = allowed ? '' : 'none';
+                addCard.hidden = true;
+                toggle.setAttribute('aria-expanded', 'false');
             })();
             break;
     }
@@ -1124,50 +1131,6 @@ if (e.target.classList.contains('delete-custom-btn')) {
     else showToast('❌ ' + (data.error || '删除失败'));
   } catch (err) { showToast('❌ 网络错误'); }
 }
-
-
-    // 申请完单（三方订单）
-    if (e.target.classList.contains('tp-request-complete-btn')) {
-        const orderNo = e.target.dataset.order;
-        const token = safeGetItem('token');
-        try {
-            const res = await fetch(`${API_BASE}/third-party-orders/${orderNo}/request-complete`, {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) { showToast('已申请完单'); loadThirdPartyOrders(); }
-            else { const data = await res.json(); showToast('❌ ' + (data.error || '失败')); }
-        } catch (err) { showToast('网络错误'); }
-    }
-
-    // 标记已支付（三方订单）
-    if (e.target.classList.contains('tp-mark-paid-btn')) {
-        const orderNo = e.target.dataset.order;
-        const token = safeGetItem('token');
-        try {
-            const res = await fetch(`${API_BASE}/third-party-orders/${orderNo}/mark-paid`, {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) { showToast('已标记为已支付'); loadThirdPartyOrders(); }
-            else { const data = await res.json(); showToast('❌ ' + (data.error || '失败')); }
-        } catch (err) { showToast('网络错误'); }
-    }
-
-    if (e.target.classList.contains('tp-finalize-btn')) {
-        const orderNo = e.target.dataset.order;
-        if (!confirm('请先核实该订单已收款、已申请完单且履约完成。确认最终完成后将保留审计记录，是否继续？')) return;
-        const token = safeGetItem('token');
-        try {
-            const res = await fetch(`${API_BASE}/third-party-orders/${orderNo}/finalize`, {
-                method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) { showToast('已最终完成'); loadThirdPartyOrders(); }
-            else { const data = await res.json(); showToast('❌ ' + (data.error || '确认失败')); }
-        } catch (err) { showToast('网络错误'); }
-    }
-
-
 
 });
 if (statusFilter) statusFilter.addEventListener('change', loadAdminOrders);
@@ -3469,156 +3432,291 @@ function switchContentManagerTab(type) {
 }
 
 // ==================== 三方订单模块 ====================
+let tpOrders = [];
+let tpCurrentFilter = 'todo';
+let tpPendingAction = null;
 
-// 菜单按钮点击
-document.getElementById('thirdPartyOrdersBtn')?.addEventListener('click', () => showSection('thirdparty'));
+const tpStageLabels = {
+  pending: '待审核', in_progress: '进行中', awaiting_acceptance: '待验收',
+  completed: '已完成', rejected: '已驳回', unknown: '状态异常'
+};
+const tpEventLabels = {
+  created: '创建订单', approved: '审核通过', rejected: '审核驳回', resubmitted: '修改重提',
+  completion_requested: '申请验收', completion_returned: '验收退回',
+  payment_confirmed: '收款已核实', completed: '验收通过'
+};
 
-// 提交新订单
-document.getElementById('tpSubmitBtn')?.addEventListener('click', async () => {
-    const token = safeGetItem('token');
-    if (!token) { showToast('请先登录'); return; }
-    const platform = getEl('tpPlatform').value.trim();
-    const content = getEl('tpContent').value.trim();
-    const account_info = getEl('tpAccount').value.trim();
-    const price = parseFloat(getEl('tpPrice').value);
-    const msgEl = getEl('tpMsg');
-    if (!content || !account_info || isNaN(price)) {
-        msgEl.textContent = '请填写内容、账号和价格';
-        return;
-    }
-    try {
-        const res = await fetch(`${API_BASE}/third-party-orders`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ platform, content, account_info, price })
-        });
-        const data = await res.json();
-        if (res.ok) {
-            msgEl.textContent = '✅ 订单已提交，等待审核';
-            getEl('tpContent').value = '';
-            getEl('tpAccount').value = '';
-            getEl('tpPrice').value = '';
-            loadThirdPartyOrders();
-        } else {
-            msgEl.textContent = '❌ ' + (data.error || '提交失败');
-        }
-    } catch (err) {
-        msgEl.textContent = '❌ 网络错误';
-    }
-});
-
-// 加载订单列表
-async function loadThirdPartyOrders() {
-    const container = getEl('tpOrderList');
-    const token = safeGetItem('token');
-    if (!token) { container.innerHTML = '<p>请先登录</p>'; return; }
-    try {
-        const res = await fetch(`${API_BASE}/third-party-orders`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const orders = await res.json();
-        const role = safeGetItem('role');
-        const userId = safeGetItem('userId');
-        if (!orders.length) {
-            container.innerHTML = '<p>暂无三方订单</p>';
-            return;
-        }
-        let html = '<table><tr><th>订单号</th><th>平台</th><th>内容</th><th>账号</th><th>价格</th><th>创建者</th><th>状态</th><th>完单</th><th>支付</th><th>操作</th></tr>';
-        orders.forEach(o => {
-            const statusMap = { pending: '待审核', approved: '已通过', rejected: '已拒绝' };
-            let completeCell = '';
-            if (o.status === 'approved') {
-                if (o.complete_requested) completeCell = '✅ 已申请';
-                else if (role === 'admin' || o.creator_id == userId) {
-                    completeCell = `<button class="tp-request-complete-btn" data-order="${o.order_no}">申请完单</button>`;
-                }
-            } else {
-                completeCell = '—';
-            }
-
-            let payCell = '';
-            if (o.payment_status === 'paid') payCell = '✅ 已支付';
-            else if (role === 'admin') payCell = `<button class="tp-mark-paid-btn" data-order="${o.order_no}">标记已支付</button>`;
-            else payCell = '未支付';
-
-            html += `<tr>
-                <td>${o.order_no}</td><td>${o.platform || '其他'}</td><td>${o.content}</td><td>${o.account_info}</td>
-                <td>¥${o.price}</td><td>${o.creator_name || '—'}</td>
-                <td>${o.final_status === 'completed' ? '✅ 最终完成' : (statusMap[o.status] || o.status)}</td>
-                <td>${completeCell}</td>
-                <td>${payCell}</td>
-                <td>`;
-            if (role === 'admin' && o.status === 'pending') {
-                html += `<button class="tp-approve-btn" data-order="${o.order_no}">通过</button>
-                         <button class="tp-reject-btn" data-order="${o.order_no}">拒绝</button>`;
-            }
-            if (role === 'admin' && o.status === 'approved' && o.payment_status === 'paid' &&
-                o.complete_requested && o.final_status !== 'completed') {
-                html += `<button class="tp-finalize-btn" data-order="${o.order_no}">最终完成</button>`;
-            }
-            if ((role === 'admin' || o.creator_id == userId) &&
-                o.payment_status !== 'paid' && !o.complete_requested) {
-                html += `<button class="tp-delete-btn" data-order="${o.order_no}">删除</button>`;
-            }
-            html += `</td></tr>`;
-        });
-        html += '</table>';
-        container.innerHTML = html;
-    } catch (err) {
-        container.innerHTML = '<p style="color:var(--red)">加载失败</p>';
-    }
+function tpFormatDate(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('zh-CN', { hour12: false });
 }
 
-// 事件委托：审核与删除（如果已有全局 click 事件，可将以下逻辑合并进去，以免重复）
-document.addEventListener('click', async (e) => {
-    const token = safeGetItem('token');
-    if (!token) return;
+function tpMaskAccount(value) {
+  const text = String(value || '');
+  if (text.length <= 4) return '****';
+  return `${text.slice(0, 2)}${'*'.repeat(Math.min(6, text.length - 4))}${text.slice(-2)}`;
+}
 
-    if (e.target.classList.contains('tp-approve-btn') || e.target.classList.contains('tp-reject-btn')) {
-        const orderNo = e.target.dataset.order;
-        const status = e.target.classList.contains('tp-approve-btn') ? 'approved' : 'rejected';
-        try {
-            const res = await fetch(`${API_BASE}/third-party-orders/${orderNo}/review`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ status })
-            });
-            if (res.ok) {
-                showToast('已' + (status === 'approved' ? '通过' : '拒绝'));
-                loadThirdPartyOrders();
-            } else {
-                const data = await res.json();
-                showToast('❌ ' + (data.error || '操作失败'));
-            }
-        } catch (err) { showToast('网络错误'); }
-    }
-
-    if (e.target.classList.contains('tp-delete-btn')) {
-        const orderNo = e.target.dataset.order;
-        if (!confirm('确定删除该订单？')) return;
-        try {
-            const res = await fetch(`${API_BASE}/third-party-orders/${orderNo}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                showToast('已删除');
-                loadThirdPartyOrders();
-            } else {
-                const data = await res.json();
-                showToast('❌ ' + (data.error || '删除失败'));
-            }
-        } catch (err) { showToast('网络错误'); }
-    }
-});
-
-
-
-// 三方订单菜单按钮点击（事件委托，永久有效）
-document.addEventListener('click', function(e) {
-  if (e.target && e.target.id === 'thirdPartyOrdersBtn') {
-    showSection('thirdparty');
+function tpIsTodo(order, role) {
+  if (role === 'admin') {
+    return order.workflow_stage === 'pending' || order.workflow_stage === 'awaiting_acceptance' ||
+      (order.workflow_stage === 'in_progress' && order.payment_status !== 'paid');
   }
+  return order.workflow_stage === 'rejected' || order.workflow_stage === 'in_progress';
+}
+
+function tpOrderMatches(order) {
+  const role = safeGetItem('role');
+  const filterMatch = tpCurrentFilter === 'all' ||
+    (tpCurrentFilter === 'todo' ? tpIsTodo(order, role) : order.workflow_stage === tpCurrentFilter);
+  const keyword = (getEl('tpSearchInput')?.value || '').trim().toLowerCase();
+  if (!filterMatch || !keyword) return filterMatch;
+  return [order.order_no, order.external_order_no, order.platform, order.creator_name, order.content]
+    .some((value) => String(value || '').toLowerCase().includes(keyword));
+}
+
+function tpCardActions(order) {
+  const role = safeGetItem('role');
+  const userId = safeGetItem('userId');
+  const own = String(order.creator_id) === String(userId);
+  let primary = '';
+  let secondary = '';
+  if (role === 'admin' && order.workflow_stage === 'pending') {
+    primary = `<button class="submit-btn tp-card-primary" data-tp-action="approve">通过审核</button>`;
+    secondary = `<button class="tp-secondary-btn" data-tp-action="reject">驳回</button>`;
+  } else if (order.workflow_stage === 'rejected' && (own || role === 'admin')) {
+    primary = `<button class="submit-btn tp-card-primary" data-tp-action="resubmit">修改并重提</button>`;
+  } else if (order.workflow_stage === 'in_progress' && role === 'admin') {
+    primary = order.payment_status !== 'paid'
+      ? `<button class="submit-btn tp-card-primary" data-tp-action="pay">核实收款</button>`
+      : `<button class="submit-btn tp-card-primary" data-tp-action="complete">申请验收</button>`;
+    if (own && order.payment_status !== 'paid') secondary = `<button class="tp-secondary-btn" data-tp-action="complete">申请验收</button>`;
+  } else if (order.workflow_stage === 'in_progress' && own) {
+    primary = `<button class="submit-btn tp-card-primary" data-tp-action="complete">申请验收</button>`;
+  } else if (role === 'admin' && order.workflow_stage === 'awaiting_acceptance') {
+    if (order.payment_status === 'paid') {
+      primary = `<button class="submit-btn tp-card-primary" data-tp-action="finalize">验收通过</button>`;
+    } else {
+      primary = `<button class="submit-btn tp-card-primary" data-tp-action="pay">核实收款</button>`;
+    }
+    secondary = `<button class="tp-secondary-btn" data-tp-action="return">退回修改</button>`;
+  }
+  return `${primary}${secondary}<button class="tp-text-btn" data-tp-action="detail">查看详情</button>`;
+}
+
+function renderThirdPartyOrders() {
+  const container = getEl('tpOrderList');
+  if (!container) return;
+  const role = safeGetItem('role');
+  const visible = tpOrders.filter(tpOrderMatches);
+  const todoCount = tpOrders.filter((order) => tpIsTodo(order, role)).length;
+  if (getEl('tpTodoCount')) getEl('tpTodoCount').textContent = todoCount;
+  if (getEl('tpOrderSummary')) {
+    getEl('tpOrderSummary').innerHTML = `<strong>${visible.length}</strong> 个结果 · 共 ${tpOrders.length} 个订单`;
+  }
+  if (!visible.length) {
+    container.innerHTML = `<div class="tp-empty"><span>✓</span><h4>当前没有需要处理的订单</h4><p>切换筛选或搜索其他订单。</p></div>`;
+    return;
+  }
+  container.innerHTML = visible.map((order) => {
+    const stage = order.workflow_stage || 'unknown';
+    const deadline = order.expected_at ? `<span>预计 ${rentalSafeText(tpFormatDate(order.expected_at))}</span>` : '';
+    const alert = stage === 'rejected' && order.rejection_reason
+      ? `<div class="tp-order-alert"><strong>驳回原因</strong>${rentalSafeText(order.rejection_reason)}</div>`
+      : (order.completion_return_reason && stage === 'in_progress'
+        ? `<div class="tp-order-alert"><strong>退回原因</strong>${rentalSafeText(order.completion_return_reason)}</div>` : '');
+    return `<article class="tp-order-card" data-order="${rentalSafeText(order.order_no)}">
+      <div class="tp-order-card-top">
+        <div><span class="tp-server">${rentalSafeText(order.platform || '其他服务器')}</span>
+          <button class="tp-order-no" data-tp-action="detail">${rentalSafeText(order.order_no)}</button></div>
+        <span class="tp-stage tp-stage-${stage}">${tpStageLabels[stage] || '未知'}</span>
+      </div>
+      <h4>${rentalSafeText(order.content)}</h4>
+      <div class="tp-order-meta">
+        <span>¥${Number(order.price).toFixed(2)}</span><span>${rentalSafeText(order.creator_name || '—')}</span>
+        <span>账号 ${rentalSafeText(tpMaskAccount(order.account_info))}</span>${deadline}
+      </div>
+      ${alert}
+      <div class="tp-order-progress" aria-label="订单进度">
+        <span class="done">已录入</span><span class="${stage !== 'pending' && stage !== 'rejected' ? 'done' : ''}">已审核</span>
+        <span class="${['awaiting_acceptance','completed'].includes(stage) ? 'done' : ''}">已交付</span>
+        <span class="${stage === 'completed' ? 'done' : ''}">已完成</span>
+      </div>
+      <div class="tp-payment-row"><span>收款</span><strong class="${order.payment_status === 'paid' ? 'paid' : ''}">${order.payment_status === 'paid' ? '已核实' : '待核实'}</strong></div>
+      <div class="tp-order-actions">${tpCardActions(order)}</div>
+    </article>`;
+  }).join('');
+}
+
+async function loadThirdPartyOrders() {
+  const container = getEl('tpOrderList');
+  const token = safeGetItem('token');
+  if (!container || !token) { if (container) container.innerHTML = '<p>请先登录</p>'; return; }
+  container.innerHTML = '<div class="tp-loading">正在读取订单…</div>';
+  try {
+    const res = await fetch(`${API_BASE}/third-party-orders`, { headers: { Authorization: `Bearer ${token}` } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '加载失败');
+    tpOrders = data;
+    renderThirdPartyOrders();
+  } catch (err) {
+    container.innerHTML = `<div class="tp-empty"><h4>加载失败</h4><p>${rentalSafeText(err.message)}</p><button class="tp-secondary-btn" id="tpRetryBtn">重新加载</button></div>`;
+  }
+}
+
+function tpOrderForm(order = {}) {
+  const platforms = ['安卓官服', 'iOS官服', '亚服', '安卓渠道服', '其他服务器'];
+  const localDate = order.expected_at ? new Date(order.expected_at).toISOString().slice(0, 16) : '';
+  return `<div class="tp-form-grid">
+    <div class="form-group"><label>游戏服务器</label><select id="tpModalPlatform">${platforms.map((item) => `<option ${item === order.platform ? 'selected' : ''}>${item}</option>`).join('')}</select></div>
+    <div class="form-group"><label>外部订单号</label><input id="tpModalExternal" maxlength="80" value="${rentalSafeText(order.external_order_no || '')}"></div>
+    <div class="form-group tp-form-wide"><label>代练内容</label><textarea id="tpModalContent" rows="3" maxlength="2000">${rentalSafeText(order.content || '')}</textarea></div>
+    <div class="form-group"><label>账号信息</label><input id="tpModalAccount" maxlength="200" value="${rentalSafeText(order.account_info || '')}"></div>
+    <div class="form-group"><label>订单金额（元）</label><input id="tpModalPrice" type="number" min="0.01" max="999999.99" step="0.01" value="${rentalSafeText(order.price || '')}"></div>
+    <div class="form-group"><label>预计完成时间</label><input id="tpModalExpected" type="datetime-local" value="${localDate}"></div>
+  </div>`;
+}
+
+async function tpShowDetail(order) {
+  const modal = getEl('tpActionModal');
+  getEl('tpActionEyebrow').textContent = order.order_no;
+  getEl('tpActionTitle').textContent = '订单详情';
+  getEl('tpActionConfirmBtn').style.display = 'none';
+  getEl('tpActionCancelBtn').textContent = '关闭';
+  getEl('tpActionBody').innerHTML = `<div class="tp-detail-grid">
+    <div><span>游戏服务器</span><strong>${rentalSafeText(order.platform)}</strong></div>
+    <div><span>当前阶段</span><strong>${tpStageLabels[order.workflow_stage] || '未知'}</strong></div>
+    <div><span>订单金额</span><strong>¥${Number(order.price).toFixed(2)}</strong></div>
+    <div><span>创建者</span><strong>${rentalSafeText(order.creator_name || '—')}</strong></div>
+    <div><span>外部订单号</span><strong>${rentalSafeText(order.external_order_no || '—')}</strong></div>
+    <div><span>预计完成</span><strong>${rentalSafeText(tpFormatDate(order.expected_at))}</strong></div>
+    <div class="wide"><span>代练内容</span><strong>${rentalSafeText(order.content)}</strong></div>
+    <div class="wide"><span>账号信息</span><strong>${rentalSafeText(order.account_info)}</strong></div>
+    <div><span>收款状态</span><strong>${order.payment_status === 'paid' ? '已核实' : '待核实'}</strong></div>
+    <div><span>收款凭证</span><strong>${rentalSafeText(order.payment_reference || '—')}</strong></div>
+    ${order.completion_note ? `<div class="wide"><span>完单说明</span><strong>${rentalSafeText(order.completion_note)}</strong></div>` : ''}
+  </div><div class="tp-timeline"><h4>操作记录</h4><div id="tpEventList">正在加载…</div></div>`;
+  modal.style.display = 'flex';
+  try {
+    const res = await fetch(`${API_BASE}/third-party-orders/${encodeURIComponent(order.order_no)}/events`, { headers: { Authorization: `Bearer ${safeGetItem('token')}` } });
+    const events = await res.json();
+    getEl('tpEventList').innerHTML = res.ok && events.length ? events.map((event) => `<div class="tp-event"><i></i><div><strong>${tpEventLabels[event.event_type] || rentalSafeText(event.event_type)}</strong><p>${rentalSafeText(event.actor_name || '系统')} · ${rentalSafeText(tpFormatDate(event.created_at))}</p>${event.note ? `<small>${rentalSafeText(event.note)}</small>` : ''}</div></div>`).join('') : '<p>暂无操作记录</p>';
+  } catch { getEl('tpEventList').innerHTML = '<p>操作记录加载失败</p>'; }
+}
+
+function tpOpenAction(action, order) {
+  if (action === 'detail') { tpShowDetail(order); return; }
+  const config = {
+    approve: ['审核订单', '确认通过后，订单将进入履约阶段。', '通过审核'],
+    reject: ['驳回订单', '<div class="form-group"><label>驳回原因</label><textarea id="tpActionReason" rows="3" maxlength="500" placeholder="说明需要修改的内容"></textarea></div>', '确认驳回'],
+    resubmit: ['修改并重新提交', tpOrderForm(order), '重新提交'],
+    complete: ['申请验收', '<div class="form-group"><label>完单说明</label><textarea id="tpCompletionNote" rows="4" maxlength="1000" placeholder="说明完成内容、结果和需要管理员核对的信息"></textarea></div>', '提交验收'],
+    pay: ['核实收款', '<div class="tp-form-grid"><div class="form-group"><label>收款渠道</label><select id="tpPaymentChannel"><option>支付宝</option><option>微信支付</option><option>银行卡</option><option>其他</option></select></div><div class="form-group"><label>交易单号</label><input id="tpPaymentReference" maxlength="80" placeholder="填写支付平台交易号"></div></div>', '确认已收款'],
+    return: ['退回验收', '<div class="form-group"><label>退回原因</label><textarea id="tpActionReason" rows="3" maxlength="500" placeholder="说明需要补充或修改的内容"></textarea></div>', '确认退回'],
+    finalize: ['验收通过', '确认履约内容无误。完成后订单将锁定，并保留操作记录。', '确认完成']
+  }[action];
+  if (!config) return;
+  tpPendingAction = { action, order };
+  getEl('tpActionEyebrow').textContent = order.order_no;
+  getEl('tpActionTitle').textContent = config[0];
+  getEl('tpActionBody').innerHTML = typeof config[1] === 'string' && config[1].startsWith('<') ? config[1] : `<p class="tp-confirm-copy">${config[1]}</p>`;
+  getEl('tpActionError').textContent = '';
+  getEl('tpActionConfirmBtn').textContent = config[2];
+  getEl('tpActionConfirmBtn').style.display = '';
+  getEl('tpActionCancelBtn').textContent = '取消';
+  getEl('tpActionModal').style.display = 'flex';
+}
+
+function tpCloseAction() {
+  getEl('tpActionModal').style.display = 'none';
+  tpPendingAction = null;
+}
+
+async function tpSubmitAction() {
+  if (!tpPendingAction) return;
+  const { action, order } = tpPendingAction;
+  const routes = {
+    approve: ['review', { status: 'approved' }],
+    reject: ['review', { status: 'rejected', reason: getEl('tpActionReason')?.value.trim() }],
+    resubmit: ['resubmit', {
+      platform: getEl('tpModalPlatform')?.value, external_order_no: getEl('tpModalExternal')?.value.trim(),
+      content: getEl('tpModalContent')?.value.trim(), account_info: getEl('tpModalAccount')?.value.trim(),
+      price: getEl('tpModalPrice')?.value, expected_at: getEl('tpModalExpected')?.value
+    }],
+    complete: ['request-complete', { completion_note: getEl('tpCompletionNote')?.value.trim() }],
+    pay: ['mark-paid', { payment_channel: getEl('tpPaymentChannel')?.value, payment_reference: getEl('tpPaymentReference')?.value.trim() }],
+    return: ['return-completion', { reason: getEl('tpActionReason')?.value.trim() }],
+    finalize: ['finalize', {}]
+  };
+  const [route, body] = routes[action];
+  const button = getEl('tpActionConfirmBtn');
+  button.disabled = true;
+  getEl('tpActionError').textContent = '';
+  try {
+    const res = await fetch(`${API_BASE}/third-party-orders/${encodeURIComponent(order.order_no)}/${route}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${safeGetItem('token')}` },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '操作失败');
+    tpCloseAction();
+    showToast('操作已完成');
+    await loadThirdPartyOrders();
+  } catch (err) { getEl('tpActionError').textContent = err.message; }
+  finally { button.disabled = false; }
+}
+
+getEl('tpToggleCreateBtn')?.addEventListener('click', () => {
+  const card = getEl('tpAddCard');
+  card.hidden = !card.hidden;
+  getEl('tpToggleCreateBtn').setAttribute('aria-expanded', String(!card.hidden));
+  if (!card.hidden) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+getEl('tpCloseCreateBtn')?.addEventListener('click', () => { getEl('tpAddCard').hidden = true; });
+getEl('tpFilterTabs')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-filter]');
+  if (!button) return;
+  tpCurrentFilter = button.dataset.filter;
+  getEl('tpFilterTabs').querySelectorAll('button').forEach((item) => item.classList.toggle('active', item === button));
+  renderThirdPartyOrders();
+});
+getEl('tpSearchInput')?.addEventListener('input', renderThirdPartyOrders);
+getEl('tpOrderList')?.addEventListener('click', (event) => {
+  if (event.target.id === 'tpRetryBtn') { loadThirdPartyOrders(); return; }
+  const actionButton = event.target.closest('[data-tp-action]');
+  const card = event.target.closest('[data-order]');
+  if (!actionButton || !card) return;
+  const order = tpOrders.find((item) => item.order_no === card.dataset.order);
+  if (order) tpOpenAction(actionButton.dataset.tpAction, order);
+});
+getEl('tpActionCloseBtn')?.addEventListener('click', tpCloseAction);
+getEl('tpActionCancelBtn')?.addEventListener('click', tpCloseAction);
+getEl('tpActionConfirmBtn')?.addEventListener('click', tpSubmitAction);
+getEl('tpActionModal')?.addEventListener('click', (event) => { if (event.target.id === 'tpActionModal') tpCloseAction(); });
+
+getEl('tpSubmitBtn')?.addEventListener('click', async () => {
+  const msgEl = getEl('tpMsg');
+  const button = getEl('tpSubmitBtn');
+  const body = {
+    platform: getEl('tpPlatform').value, external_order_no: getEl('tpExternalOrderNo').value.trim(),
+    content: getEl('tpContent').value.trim(), account_info: getEl('tpAccount').value.trim(),
+    price: getEl('tpPrice').value, expected_at: getEl('tpExpectedAt').value
+  };
+  button.disabled = true;
+  msgEl.textContent = '';
+  try {
+    const res = await fetch(`${API_BASE}/third-party-orders`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${safeGetItem('token')}` },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '提交失败');
+    ['tpExternalOrderNo','tpContent','tpAccount','tpPrice','tpExpectedAt'].forEach((id) => { getEl(id).value = ''; });
+    msgEl.textContent = `订单 ${data.order_no} 已提交审核`;
+    await loadThirdPartyOrders();
+  } catch (err) { msgEl.textContent = err.message; }
+  finally { button.disabled = false; }
 });
 
 

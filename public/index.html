@@ -877,37 +877,95 @@
     <div id="sectionThirdParty" class="content-section" style="display: none;">
         <div class="section-top">
             <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
-            <h2 class="section-heading">📦 三方订单管理</h2>
+            <h2 class="section-heading">三方订单工作台</h2>
         </div>
-        <div class="container">
-            <!-- 添加订单表单（仅管理员和打手可见） -->
-            <section class="card" id="tpAddCard">
-                <h4 style="color:var(--accent); margin-bottom:12px;">➕ 添加三方订单</h4>
-                <div class="form-group">
-                    <label>来源平台</label>
-                    <input type="text" id="tpPlatform" placeholder="如：闲鱼、贴吧、微信...">
+        <div class="container tp-workbench">
+            <div class="tp-workbench-head">
+                <div>
+                    <p class="tp-eyebrow">ORDER WORKBENCH</p>
+                    <h3>先处理当前待办，再查看全部订单</h3>
+                    <p>审核、履约、验收和收款状态分开记录，每一步都有操作历史。</p>
                 </div>
-                <div class="form-group">
-                    <label>代练内容 <span style="color:var(--red)">*</span></label>
-                    <textarea id="tpContent" rows="2" placeholder="详细描述代练需求"></textarea>
+                <button id="tpToggleCreateBtn" class="submit-btn tp-create-toggle" aria-expanded="false">+ 新增订单</button>
+            </div>
+
+            <section class="card tp-create-card" id="tpAddCard" hidden>
+                <div class="tp-card-heading">
+                    <div><span class="tp-step">01</span><h4>录入订单</h4></div>
+                    <button type="button" id="tpCloseCreateBtn" class="tp-icon-btn" aria-label="关闭新增订单">×</button>
                 </div>
-                <div class="form-group">
-                    <label>账号信息（手机/邮箱） <span style="color:var(--red)">*</span></label>
-                    <input type="text" id="tpAccount" placeholder="用于登录的账号">
+                <div class="tp-form-grid">
+                    <div class="form-group">
+                        <label for="tpPlatform">游戏服务器 <span class="required">*</span></label>
+                        <select id="tpPlatform">
+                            <option value="安卓官服">安卓官服</option>
+                            <option value="iOS官服">iOS官服</option>
+                            <option value="亚服">亚服</option>
+                            <option value="安卓渠道服">安卓渠道服</option>
+                            <option value="其他服务器">其他服务器</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="tpExternalOrderNo">外部订单号</label>
+                        <input type="text" id="tpExternalOrderNo" maxlength="80" placeholder="选填，用于和外部记录核对">
+                    </div>
+                    <div class="form-group tp-form-wide">
+                        <label for="tpContent">代练内容 <span class="required">*</span></label>
+                        <textarea id="tpContent" rows="3" maxlength="2000" placeholder="例如：国服 10 级升至 12 级，包含指定任务"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="tpAccount">账号信息 <span class="required">*</span></label>
+                        <input type="text" id="tpAccount" maxlength="200" autocomplete="off" placeholder="登录账号或必要交接信息">
+                    </div>
+                    <div class="form-group">
+                        <label for="tpPrice">订单金额（元） <span class="required">*</span></label>
+                        <input type="number" id="tpPrice" step="0.01" min="0.01" max="999999.99" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label for="tpExpectedAt">预计完成时间</label>
+                        <input type="datetime-local" id="tpExpectedAt">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>价格 (元) <span style="color:var(--red)">*</span></label>
-                    <input type="number" id="tpPrice" step="0.01" min="0">
+                <div class="tp-form-actions">
+                    <p id="tpMsg" class="tp-form-message" role="status"></p>
+                    <button id="tpSubmitBtn" class="submit-btn">提交审核</button>
                 </div>
-                <button id="tpSubmitBtn" class="submit-btn">🚀 提交</button>
-                <p id="tpMsg" style="margin-top:8px; font-size:0.85rem;"></p>
             </section>
 
-            <!-- 订单列表 -->
-            <section class="card">
-                <h4 style="color:var(--accent); margin-bottom:12px;">📋 三方订单列表</h4>
-                <div id="tpOrderList">加载中...</div>
+            <section class="card tp-list-card">
+                <div class="tp-toolbar">
+                    <div class="tp-filter-tabs" id="tpFilterTabs" role="tablist" aria-label="订单状态筛选">
+                        <button class="active" data-filter="todo">待我处理 <span id="tpTodoCount">0</span></button>
+                        <button data-filter="all">全部</button>
+                        <button data-filter="pending">待审核</button>
+                        <button data-filter="in_progress">进行中</button>
+                        <button data-filter="awaiting_acceptance">待验收</button>
+                        <button data-filter="completed">已完成</button>
+                        <button data-filter="rejected">已驳回</button>
+                    </div>
+                    <label class="tp-search">
+                        <span>搜索</span>
+                        <input type="search" id="tpSearchInput" placeholder="订单号、服务器、创建者">
+                    </label>
+                </div>
+                <div id="tpOrderSummary" class="tp-order-summary"></div>
+                <div id="tpOrderList" class="tp-order-grid" aria-live="polite">加载中...</div>
             </section>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="tpActionModal" style="display:none;">
+        <div class="modal-card tp-action-modal" role="dialog" aria-modal="true" aria-labelledby="tpActionTitle">
+            <div class="modal-header">
+                <div><p class="tp-eyebrow" id="tpActionEyebrow">订单操作</p><h3 id="tpActionTitle">订单详情</h3></div>
+                <button class="modal-close" id="tpActionCloseBtn" aria-label="关闭">&times;</button>
+            </div>
+            <div id="tpActionBody"></div>
+            <div id="tpActionError" class="form-error" role="alert"></div>
+            <div class="tp-modal-actions">
+                <button type="button" class="tp-secondary-btn" id="tpActionCancelBtn">取消</button>
+                <button type="button" class="submit-btn" id="tpActionConfirmBtn">确认</button>
+            </div>
         </div>
     </div>
 

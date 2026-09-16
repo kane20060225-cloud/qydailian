@@ -1374,82 +1374,120 @@ body.theme-light #contentEditorTextarea {
 .delete-shop-item-btn:hover { background: var(--red); color: #fff; border-color: var(--red); }
 
 
-.tp-request-complete-btn {
-  background: rgba(72,187,120,0.1); color: var(--green); border-color: var(--green);
+/* ========== 三方订单工作台 ========== */
+.tp-workbench { display: grid; gap: 18px; }
+.tp-workbench-head {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;
+  padding: 24px 26px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(240,160,80,.13), rgba(31,41,55,.35));
 }
-.tp-request-complete-btn:hover { background: var(--green); color: #fff; }
-.tp-mark-paid-btn {
-  background: rgba(240,160,80,0.1); color: var(--accent); border-color: var(--accent);
+.tp-workbench-head h3 { margin: 3px 0 6px; font-size: clamp(1.25rem, 2vw, 1.7rem); }
+.tp-workbench-head p:last-child { color: var(--muted); margin: 0; }
+.tp-eyebrow { margin: 0; color: var(--accent); font-size: .72rem; font-weight: 800; letter-spacing: .14em; }
+.tp-create-toggle { width: auto; min-width: 132px; margin: 0; }
+.tp-create-card { border-color: rgba(240,160,80,.45); }
+.tp-card-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.tp-card-heading > div { display: flex; align-items: center; gap: 10px; }
+.tp-card-heading h4 { margin: 0; }
+.tp-step {
+  display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 10px;
+  background: rgba(240,160,80,.14); color: var(--accent); font-size: .76rem; font-weight: 800;
 }
-.tp-mark-paid-btn:hover { background: var(--accent); color: #fff; }
-
-
-
-/* ========== 三方订单表格（最终版） ========== */
-#tpOrderList {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  border-radius: var(--radius-sm);
+.tp-icon-btn { border: 0; background: transparent; color: var(--muted); font-size: 1.6rem; cursor: pointer; }
+.tp-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 16px; }
+.tp-form-wide { grid-column: 1 / -1; }
+.required { color: var(--red); }
+.tp-form-actions { display: flex; justify-content: flex-end; align-items: center; gap: 18px; }
+.tp-form-actions .submit-btn { width: auto; min-width: 126px; }
+.tp-form-message { flex: 1; margin: 0; color: var(--accent); font-size: .85rem; }
+.tp-list-card { padding: 0; overflow: hidden; }
+.tp-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--border); }
+.tp-filter-tabs { display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none; }
+.tp-filter-tabs::-webkit-scrollbar { display: none; }
+.tp-filter-tabs button {
+  flex: 0 0 auto; border: 0; border-radius: 999px; padding: 8px 12px; background: transparent;
+  color: var(--muted); font-size: .8rem; cursor: pointer;
 }
-
-#tpOrderList table {
-  width: 100%;
-  min-width: 1000px;         /* 保证内容不挤压，出现横向滚动条 */
-  table-layout: auto;        /* 自动列宽，避免 fixed 导致的宽度分配问题 */
-  border-collapse: collapse;
+.tp-filter-tabs button:hover, .tp-filter-tabs button.active { background: rgba(240,160,80,.13); color: var(--accent); }
+.tp-filter-tabs button span { margin-left: 4px; padding: 1px 6px; border-radius: 99px; background: rgba(255,255,255,.09); }
+.tp-search { display: flex; align-items: center; gap: 8px; min-width: 250px; color: var(--muted); font-size: .76rem; }
+.tp-search input { margin: 0; }
+.tp-order-summary { padding: 13px 20px 0; color: var(--muted); font-size: .8rem; }
+.tp-order-summary strong { color: var(--text); }
+.tp-order-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 16px 20px 22px; }
+.tp-order-card {
+  min-width: 0; padding: 18px; border: 1px solid var(--border); border-radius: 14px;
+  background: rgba(255,255,255,.025); transition: border-color .2s, transform .2s;
 }
-
-#tpOrderList th,
-#tpOrderList td {
-  padding: 8px 6px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 0.82rem;
-  border-bottom: 1px solid var(--border);
-  max-width: 180px;          /* 限制最大宽度，超出显示省略号 */
+.tp-order-card:hover { border-color: rgba(240,160,80,.45); transform: translateY(-1px); }
+.tp-order-card-top, .tp-order-card-top > div, .tp-order-meta, .tp-payment-row, .tp-order-actions { display: flex; align-items: center; }
+.tp-order-card-top { justify-content: space-between; gap: 12px; }
+.tp-order-card-top > div { min-width: 0; gap: 8px; }
+.tp-server { padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,.07); font-size: .73rem; white-space: nowrap; }
+.tp-order-no { border: 0; background: none; padding: 0; color: var(--muted); font: inherit; font-size: .74rem; cursor: pointer; overflow: hidden; text-overflow: ellipsis; }
+.tp-stage { flex: 0 0 auto; padding: 5px 9px; border-radius: 999px; font-size: .72rem; font-weight: 700; }
+.tp-stage-pending { color: #f7c873; background: rgba(247,200,115,.12); }
+.tp-stage-in_progress { color: #70b9ff; background: rgba(112,185,255,.12); }
+.tp-stage-awaiting_acceptance { color: #ad91ff; background: rgba(173,145,255,.12); }
+.tp-stage-completed { color: var(--green); background: rgba(72,187,120,.12); }
+.tp-stage-rejected { color: var(--red); background: rgba(245,101,101,.12); }
+.tp-order-card > h4 { min-height: 2.8em; margin: 15px 0 10px; font-size: .97rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tp-order-meta { gap: 6px 14px; flex-wrap: wrap; color: var(--muted); font-size: .75rem; }
+.tp-order-meta span:first-child { color: var(--text); font-size: .95rem; font-weight: 750; }
+.tp-order-alert { margin-top: 12px; padding: 9px 11px; border-left: 2px solid var(--red); background: rgba(245,101,101,.08); font-size: .76rem; color: var(--muted); }
+.tp-order-alert strong { display: block; margin-bottom: 2px; color: var(--red); }
+.tp-order-progress { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 17px 0 13px; }
+.tp-order-progress span { position: relative; padding-top: 11px; color: var(--muted); font-size: .65rem; text-align: center; }
+.tp-order-progress span::before { content: ''; position: absolute; top: 3px; left: 0; width: 100%; height: 3px; background: rgba(255,255,255,.08); }
+.tp-order-progress span:first-child::before { border-radius: 4px 0 0 4px; }
+.tp-order-progress span:last-child::before { border-radius: 0 4px 4px 0; }
+.tp-order-progress span.done { color: var(--accent); }
+.tp-order-progress span.done::before { background: var(--accent); }
+.tp-payment-row { justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--border); color: var(--muted); font-size: .76rem; }
+.tp-payment-row strong { color: #f7c873; }
+.tp-payment-row strong.paid { color: var(--green); }
+.tp-order-actions { gap: 8px; flex-wrap: wrap; margin-top: 7px; }
+.tp-order-actions .submit-btn { width: auto; margin: 0; padding: 8px 12px; font-size: .76rem; }
+.tp-secondary-btn, .tp-text-btn {
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 11px; background: transparent;
+  color: var(--text); font-size: .76rem; cursor: pointer;
 }
+.tp-secondary-btn:hover { border-color: var(--accent); color: var(--accent); }
+.tp-text-btn { margin-left: auto; border-color: transparent; color: var(--muted); }
+.tp-text-btn:hover { color: var(--text); }
+.tp-empty, .tp-loading { grid-column: 1 / -1; padding: 52px 20px; color: var(--muted); text-align: center; }
+.tp-empty > span { display: inline-grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: rgba(72,187,120,.12); color: var(--green); }
+.tp-empty h4 { margin: 12px 0 4px; color: var(--text); }
+.tp-empty p { margin: 0 0 14px; }
+.tp-action-modal { max-width: 680px; }
+.tp-confirm-copy { padding: 16px; border-radius: 10px; background: rgba(255,255,255,.04); color: var(--muted); line-height: 1.7; }
+.tp-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.tp-modal-actions .submit-btn { width: auto; margin: 0; }
+.tp-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.tp-detail-grid > div { padding: 11px 12px; border-radius: 9px; background: rgba(255,255,255,.04); }
+.tp-detail-grid .wide { grid-column: 1 / -1; }
+.tp-detail-grid span { display: block; margin-bottom: 4px; color: var(--muted); font-size: .72rem; }
+.tp-detail-grid strong { font-size: .86rem; overflow-wrap: anywhere; }
+.tp-timeline { margin-top: 20px; }
+.tp-event { display: flex; gap: 11px; padding: 9px 0; }
+.tp-event i { flex: 0 0 8px; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(240,160,80,.1); }
+.tp-event p, .tp-event small { margin: 2px 0 0; color: var(--muted); font-size: .72rem; }
 
-/* 操作列（最后一列）特殊处理：不省略，按钮完全可见 */
-#tpOrderList td:last-child,
-#tpOrderList th:last-child {
-  overflow: visible;
-  white-space: nowrap;
-  max-width: none;
-  width: 170px;              /* 足够容纳三个按钮 */
-  min-width: 170px;
-}
-
-#tpOrderList td:last-child button {
-  display: inline-block;
-  margin: 2px 1px;
-  padding: 4px 8px;
-  font-size: 0.75rem;
-  white-space: nowrap;
-}
-
-/* 鼠标悬停其他单元格显示完整内容 */
-#tpOrderList td:not(:last-child):hover {
-  overflow: visible;
-  white-space: normal;
-  word-break: break-all;
-  background-color: var(--card-bg);
-  position: relative;
-  z-index: 20;
-  box-shadow: 0 0 12px rgba(0,0,0,0.4);
-  border-radius: 4px;
-}
-
-/* 移动端 */
-@media (max-width: 600px) {
-  #tpOrderList table {
-    min-width: 800px;
-  }
-  #tpOrderList td:last-child,
-  #tpOrderList th:last-child {
-    width: 150px;
-    min-width: 150px;
-  }
+@media (max-width: 760px) {
+  .tp-workbench-head { align-items: stretch; flex-direction: column; padding: 19px; }
+  .tp-create-toggle { width: 100%; }
+  .tp-form-grid, .tp-order-grid, .tp-detail-grid { grid-template-columns: 1fr; }
+  .tp-form-wide, .tp-detail-grid .wide { grid-column: auto; }
+  .tp-toolbar { align-items: stretch; flex-direction: column; padding: 14px; }
+  .tp-filter-tabs { margin: 0 -14px; padding: 0 14px; }
+  .tp-search { min-width: 0; }
+  .tp-order-summary { padding: 11px 14px 0; }
+  .tp-order-grid { gap: 11px; padding: 12px 14px 16px; }
+  .tp-order-card { padding: 15px; }
+  .tp-order-card:hover { transform: none; }
+  .tp-form-actions { align-items: stretch; flex-direction: column; }
+  .tp-form-actions .submit-btn { width: 100%; }
+  .tp-modal-actions > * { flex: 1; }
 }
 
 
