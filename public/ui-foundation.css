@@ -1,13 +1,35 @@
-/* Shared interaction and typography. Theme-specific composition lives in light-theme.css. */
+/* Shared interaction, typography and default dark palette. */
 :root {
-  --surface-muted: #111927;
-  --surface-inset: #0f172a;
-  --surface-track: #1e2a3a;
-  --price: #f0c060;
-  --muted: var(--text-muted);
-  --focus-ring: color-mix(in srgb, var(--accent) 24%, transparent);
+  --bg: #0a0f1a; --card-bg: #141b26; --surface-muted: #111927; --surface-inset: #0f172a; --surface-track: #1e2a3a;
+  --border: #1e2a3a; --border-subtle: #1e2a3a; --control-border: #1e2a3a; --border-hover: #f0a050;
+  --accent: #f0a050; --accent-hover: #f0a050; --accent-soft: rgba(240,160,80,.1); --accent-border: rgba(240,160,80,.4); --accent-border-hover: #f0a050;
+  --primary-bg: #f0a050; --primary-hover: #f0a050; --on-primary: #fff; --accent-glow: rgba(240,160,80,.25); --focus-ring: rgba(240,160,80,.24);
+  --text: #e2e8f0; --text-secondary: #a0aec0; --text-muted: #6b7280; --muted: var(--text-muted); --price: #f0c060;
+  --green: #48bb78; --red: #f85149; --warning: #e3a237; --warning-soft: rgba(227,162,55,.12); --warning-border: rgba(227,162,55,.4);
+  --success-soft: rgba(72,187,120,.1); --danger-soft: rgba(248,81,73,.1); --danger-border: rgba(248,81,73,.4); --disabled-bg: #1e2a3a; --selection-bg: rgba(240,160,80,.3);
+  --header-bg: rgba(20,27,38,.95); --header-shadow-color: rgba(0,0,0,.08); --overlay: rgba(0,0,0,.7);
+  --modal-shadow-color: rgba(0,0,0,.35); --menu-shadow-color: rgba(0,0,0,.28); --toast-shadow-color: rgba(0,0,0,.25); --bar-shadow-color: rgba(0,0,0,.2);
+  --toast-bg: rgba(0,0,0,.8); --toast-text: #fff; --toast-border: #1e2a3a;
+  --shadow-sm: 0 2px 6px rgba(0,0,0,.08); --shadow-md: 0 8px 24px rgba(0,0,0,.18);
+  --page-image: url('bg.png'); --home-background: linear-gradient(180deg,rgba(10,15,26,.46),rgba(10,15,26,.94) 72%,var(--bg));
+  --hero-button-bg: linear-gradient(135deg,#f6bd71,#e9973e); --hero-button-text: #141414;
+  --boost-button-bg: linear-gradient(135deg,#f0ad60,#e58a2f); --boost-button-hover: linear-gradient(135deg,#f4ba73,#ec9840); --boost-button-text: #17130f;
+  --login-bg: transparent; --login-border: #58a6ff; --login-text: #58a6ff; --login-hover: rgba(88,166,255,.1);
+  --utility-bg: rgba(240,160,80,.1); --utility-hover: rgba(240,160,80,.2); --utility-text: #f0a050;
+  --payment-pending-text: #f0a050; --payment-pending-bg: rgba(240,160,80,.2);
+  --tp-pending-text: #f7c873; --tp-pending-bg: rgba(247,200,115,.12);
+  --tp-active-text: #70b9ff; --tp-active-bg: rgba(112,185,255,.12);
+  --tp-acceptance-text: #ad91ff; --tp-acceptance-bg: rgba(173,145,255,.12);
+  --logo-background: linear-gradient(135deg,#f0c070,#e8993d); --logo-fill: transparent;
+  --oc-info-text: var(--text); --oc-info-bg: rgba(128,128,128,.12);
+  --oc-success-text: var(--text); --oc-success-bg: rgba(128,128,128,.12);
+  --oc-warning-text: var(--text); --oc-warning-bg: rgba(128,128,128,.12);
+  --oc-danger-text: var(--text); --oc-danger-bg: rgba(128,128,128,.12);
+  --oc-exception-text: #e3a237; --oc-exception-bg: rgba(128,128,128,.12);
+  --radius: 16px; --radius-sm: 10px;
   color-scheme: dark;
 }
+
 html { scroll-padding-top: calc(var(--site-header-height, 80px) + 20px); }
 body { line-height: 1.6; -webkit-font-smoothing: antialiased; }
 button, input, select, textarea { font-family: inherit; }
