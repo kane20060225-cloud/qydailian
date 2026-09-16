@@ -28,6 +28,8 @@ const {
 } = require('./lib/third-party-workflow');
 const { createRentalAccountRouter } = require('./routes/rental-accounts');
 const { createOrderCenterRouter } = require('./routes/order-center');
+const {createCleanupService}=require('./lib/order-cleanup');
+const {visibleOrdersSql}=require('./lib/order-center');
 const { paymentFormParams, createRechargeOrder, processTrackedRecharge,
   refreshRecharge, canResumeRecharge } = require('./lib/recharge-orders');
 const {
@@ -102,6 +104,7 @@ const pool = mysql.createPool({
   queueLimit: 0,
   decimalNumbers: true
 });
+const orderCleanup=createCleanupService({pool,recordOperation});
 
 // ---------- 支付宝 SDK ----------
 const ALIPAY_ENABLED = process.env.ALIPAY_ENABLED === 'true';
@@ -1091,7 +1094,7 @@ app.get('/api/user/orders', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT order_no, project, detail, quantity, player_name, total_price, status, remark, payment_status, payment_screenshot, created_at, client_type, required_identity
-       FROM orders WHERE user_id = ? ORDER BY created_at DESC`,
+       FROM orders WHERE user_id = ? AND ${visibleOrdersSql('boost','orders.order_no')} ORDER BY created_at DESC`,
       [req.userId]
     );
     res.json(rows);
@@ -1328,6 +1331,7 @@ app.get('/api/admin/orders', adminMiddleware, async (req, res) => {
       FROM orders o
       JOIN users u ON o.user_id = u.id
       LEFT JOIN users b ON o.booster_id = b.id
+      WHERE ${visibleOrdersSql('boost','o.order_no')}
       ORDER BY o.created_at DESC
     `);
     res.json(rows.map((order) => revealOrderCredentials(order)));
@@ -1339,7 +1343,7 @@ app.put('/api/admin/orders/:orderNo', adminMiddleware, async (req, res) => {
 });
 
 app.delete('/api/admin/orders/:orderNo', adminMiddleware, async (req, res) => {
-  res.status(409).json({ error: '订单记录需要保留，请在订单中心归档已完成订单' });
+  res.status(409).json({ error: '请在订单中心删除到回收站，或归档已完成订单' });
 });
 
 app.put('/api/admin/orders/:orderNo/confirm-payment', adminMiddleware, async (req, res) => {
@@ -1479,7 +1483,7 @@ app.get('/api/booster/my-orders', boosterMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT order_no, project, detail, quantity, player_name, total_price, status, client_type, required_identity, created_at,
-       (total_price * 0.75) AS earnings FROM orders WHERE booster_id = ? ORDER BY created_at DESC`,
+       (total_price * 0.75) AS earnings FROM orders WHERE booster_id = ? AND ${visibleOrdersSql('boost','orders.order_no')} ORDER BY created_at DESC`,
       [req.userId]
     );
     res.json(rows);
@@ -1763,6 +1767,7 @@ app.get('/api/rental/my-rented', authMiddleware, async (req, res) => {
        JOIN rental_accounts ra ON ro.account_id = ra.id
        JOIN users u ON ro.owner_id = u.id
        WHERE ro.renter_id = ?
+       AND ${visibleOrdersSql('rental','ro.order_no')}
        ORDER BY ro.created_at DESC`,
       [req.userId]
     );
@@ -1781,6 +1786,7 @@ app.get('/api/rental/my-orders', authMiddleware, async (req, res) => {
        JOIN rental_accounts ra ON ro.account_id = ra.id
        JOIN users u ON ro.renter_id = u.id
        WHERE ro.owner_id = ?
+       AND ${visibleOrdersSql('rental','ro.order_no')}
        ORDER BY ro.created_at DESC`,
       [req.userId]
     );
@@ -1811,6 +1817,7 @@ app.get('/api/admin/rental/orders', adminMiddleware, async (req, res) => {
        LEFT JOIN rental_refund_reviews rr ON rr.order_no = ro.order_no
        LEFT JOIN rental_payment_reviews pr ON pr.order_no = ro.order_no
        LEFT JOIN rental_settlement_resolutions sr ON sr.order_no = ro.order_no
+       WHERE ${visibleOrdersSql('rental','ro.order_no')}
        ORDER BY ro.created_at DESC LIMIT 100`
     );
     res.json(rows);
@@ -2380,7 +2387,7 @@ async function recordThirdPartyEvent(conn, orderNo, eventType, actorUserId, note
 }
 
 app.use('/api/order-center', createOrderCenterRouter({
-  pool, authMiddleware, recordOperation, revealOrderCredentials
+  pool, authMiddleware, recordOperation, revealOrderCredentials, cleanupService:orderCleanup
 }));
 
 app.get('/api/third-party-orders/platforms', authMiddleware, (req, res) => {
@@ -2433,7 +2440,7 @@ app.get('/api/third-party-orders', authMiddleware, async (req, res, next) => {
       FROM third_party_orders t
       LEFT JOIN third_party_order_finalization f ON f.order_no = t.order_no
       LEFT JOIN third_party_order_workflow w ON w.order_no = t.order_no
-      JOIN users u ON t.creator_id = u.id ORDER BY t.created_at DESC`;
+      JOIN users u ON t.creator_id = u.id WHERE ${visibleOrdersSql('third_party','t.order_no')} ORDER BY t.created_at DESC`;
     params = [];
   } else if (role === 'booster') {
     sql = `SELECT t.*, f.final_status, f.finalized_at, u.username AS creator_name,
@@ -2444,7 +2451,7 @@ app.get('/api/third-party-orders', authMiddleware, async (req, res, next) => {
       LEFT JOIN third_party_order_finalization f ON f.order_no = t.order_no
       LEFT JOIN third_party_order_workflow w ON w.order_no = t.order_no
       JOIN users u ON t.creator_id = u.id
-      WHERE t.creator_id = ? ORDER BY t.created_at DESC`;
+      WHERE t.creator_id = ? AND ${visibleOrdersSql('third_party','t.order_no')} ORDER BY t.created_at DESC`;
     params = [req.userId];
   } else {
     return res.status(403).json({ error: '无权限访问' });
@@ -2538,27 +2545,7 @@ app.put('/api/third-party-orders/:orderNo/resubmit', authMiddleware, async (req,
 });
 
 app.delete('/api/third-party-orders/:orderNo', authMiddleware, async (req, res) => {
-  const { orderNo } = req.params;
-  const [orderRows] = await pool.execute('SELECT * FROM third_party_orders WHERE order_no = ?', [orderNo]);
-  if (orderRows.length === 0) return res.status(404).json({ error: '订单不存在' });
-
-  const order = orderRows[0];
-  if (order.payment_status === 'paid' || order.complete_requested) {
-    return res.status(400).json({ error: '已付款或申请完单的订单不能删除' });
-  }
-  const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
-  const role = userRows[0]?.role;
-
-  if (role !== 'admin' && order.creator_id !== req.userId) {
-    return res.status(403).json({ error: '无权删除' });
-  }
-
-  try {
-    await pool.execute('DELETE FROM third_party_orders WHERE order_no = ?', [orderNo]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: '服务器错误' });
-  }
+  res.status(409).json({error:'请由管理员在订单中心删除，订单将进入可恢复的回收站'});
 });
 
 app.put('/api/third-party-orders/:orderNo/request-complete', authMiddleware, async (req, res) => {
@@ -3186,9 +3173,12 @@ app.post('/api/chest/alipay/notify', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 function startServer(port = PORT) {
-  return app.listen(port, () => {
+  const server=app.listen(port, () => {
     console.log(`🚀 后端服务运行在 http://localhost:${port}`);
   });
+  const tick=()=>orderCleanup.run().catch(err=>console.error('订单自动清理失败:',err.code || 'INTERNAL_ERROR'));
+  const timer=setInterval(tick,60*60*1000);timer.unref();
+  server.once('listening',tick);server.once('close',()=>clearInterval(timer));return server;
 }
 
 if (require.main === module) {

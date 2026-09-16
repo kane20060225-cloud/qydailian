@@ -19,6 +19,7 @@ if(!/^qydailian_b9_test_[a-z0-9_]+$/.test(database||'')) {
     const [[identity]]=await pool.execute('SELECT DATABASE() AS name');assert.equal(identity.name,database);
     const [[count]]=await pool.execute('SELECT COUNT(*) AS total FROM users');assert.equal(Number(count.total),0,'Test database must contain no users');
     const conn=await pool.getConnection();try{await runMigration(conn);await runMigration(conn,{apply:true});await runMigration(conn,{apply:true});}finally{conn.release();}
+    const cleanupConn=await pool.getConnection();try{await require('../lib/b11-order-cleanup-migration').runMigration(cleanupConn,{apply:true});}finally{cleanupConn.release();}
     await pool.execute("INSERT INTO users (id,username,password_hash,role) VALUES (1,'test-customer','test','user'),(2,'test-owner','test','user'),(3,'test-admin','test','admin'),(4,'test-other','test','user'),(5,'test-booster','test','booster')");
     await pool.execute("INSERT INTO orders (order_no,user_id,project,detail,total_price,payment_status,game_account,game_password) VALUES ('B9-BOOST',1,'test','boost',10,'pending','test-account','test-password')");
     const [account]=await pool.execute("INSERT INTO rental_accounts (owner_id,client_type,status) VALUES (2,'Android','active')");

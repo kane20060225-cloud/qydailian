@@ -16,6 +16,8 @@ const {decorateOrder}=require('../lib/order-center');
       const context=await browser.newContext({viewport});const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message));
       await page.addInitScript(()=>{localStorage.setItem('token','synthetic-browser-test');localStorage.setItem('role','admin');localStorage.setItem('userId','3');localStorage.setItem('username','test-admin');});
       const now=new Date().toISOString();let credited=false,confirmed=false,dispatches=0,confirmations=0,refreshes=0;
+      const removed=new Set();let deletionRequests=0,restorationRequests=0,cleanupSaves=0;
+      let cleanupSettings={enabled:false,retention_days:7};
       const rechargeRef='RC1700000000000ABCDEF1234';
       const rows=()=>[
         {order_type:'recharge',order_ref:rechargeRef,title:'军需券充值 · 10000券',customer_id:3,customer_name:'test-admin',amount:'6.00',amount_unit:'money',created_at:now,business_status:credited?'paid':'pending',payment_status:credited?'paid':'unpaid',payment_channel:'支付宝',state:credited?'credited':'pending_payment',admin_task:null},
@@ -29,13 +31,21 @@ const {decorateOrder}=require('../lib/order-center');
         let data=[];let status=200;const pathname=url.pathname;
         if(pathname==='/api/order-center'){
           const admin=url.searchParams.get('scope')==='admin';let orders=rows().filter(o=>admin||o.customer_id===3||o.related_user_id===3);
+          orders=orders.filter(o=>removed.has(o.order_ref)===(admin&&url.searchParams.get('trash')==='1')).map(o=>({...o,removed_at:removed.has(o.order_ref)?now:null}));
           const summary=orders.map(o=>({state:o.state,admin_task:o.admin_task,total:1}));
           if(url.searchParams.get('type'))orders=orders.filter(o=>o.order_type===url.searchParams.get('type'));
           if(url.searchParams.get('state')==='todo')orders=orders.filter(o=>admin?o.admin_task:['pending_payment','awaiting_acceptance'].includes(o.state));
           if(url.searchParams.get('task'))orders=orders.filter(o=>o.admin_task===url.searchParams.get('task'));
           data={orders:orders.map(o=>decorateOrder(o,3,admin)),total:orders.length,page:1,page_size:25,summary};
+        }else if(pathname==='/api/order-center/removals'){
+          const body=req.postDataJSON();assert.ok(body.reason);assert.ok(body.orders.length<=25);
+          body.orders.forEach(o=>{if(body.action==='remove'){removed.add(o.ref);deletionRequests++;}else{removed.delete(o.ref);restorationRequests++;}});
+          data={success_count:body.orders.length,results:body.orders.map(o=>({...o,success:true}))};
+        }else if(pathname==='/api/order-center/cleanup'){
+          if(req.method()==='PUT'){cleanupSettings=req.postDataJSON();cleanupSaves++;data={success:true};}
+          else data={settings:cleanupSettings,candidates:[],limit:200};
         }else if(pathname.startsWith('/api/order-center/')){
-          const [, , ,type,ref]=pathname.split('/');const row=rows().find(o=>o.order_type===type&&o.order_ref===ref);data={order:decorateOrder(row,3,url.searchParams.get('scope')==='admin'),details:[{label:'购买数量',value:'10000军需券'}],ledger:credited&&type==='recharge'?[{account_type:'chest_tickets',amount_delta:10000,balance_after:10000,created_at:now}]:[],events:[],warning:null};
+          const [, , ,type,ref]=pathname.split('/');const row=rows().find(o=>o.order_type===type&&o.order_ref===ref);data={order:decorateOrder({...row,removed_at:removed.has(ref)?now:null},3,url.searchParams.get('scope')==='admin'),details:[{label:'购买数量',value:'10000军需券'}],ledger:credited&&type==='recharge'?[{account_type:'chest_tickets',amount_delta:10000,balance_after:10000,created_at:now}]:[],events:[],warning:null};
         }else if(pathname==='/api/chest/recharge'){data={order_no:rechargeRef,amount:'6.00',ticket_quantity:10000};status=201;
         }else if(pathname.endsWith('/refresh')&&pathname.includes('/chest/payments/')){credited=true;refreshes++;data={found:true,outcome:'credited',acknowledge:true};
         }else if(pathname.endsWith('/confirm-payment')){assert.ok(req.postDataJSON().reason);confirmed=true;confirmations++;data={success:true};
@@ -66,9 +76,23 @@ const {decorateOrder}=require('../lib/order-center');
       await page.locator('#ocReason').fill('已核对实际收款凭证');await page.locator('[data-confirm=boost_confirm_payment]').click();await page.locator('[data-action=boost_dispatch]').waitFor();
       await page.locator('[data-action=boost_dispatch]').click();await page.locator('[data-confirm=boost_dispatch]').click();await page.waitForFunction(()=>document.querySelector('#ocDetailBody').textContent.includes('待接单'));assert.equal(dispatches,1);assert.equal(confirmations,1);
       await page.keyboard.press('Escape');
+      await page.locator('#adminOrderCenter [data-task=all]').click();
+      await page.locator('#adminOrderList [data-select="third_party:TEST-TP"]').check();
+      await page.locator('#adminOrderCenter [data-bulk]').click();
+      await page.locator('[data-confirm=remove]').click();assert.equal(deletionRequests,0);
+      await page.locator('#ocReason').fill('清理测试订单');await page.locator('[data-confirm=remove]').click();
+      await page.waitForFunction(()=>document.getElementById('orderCenterModal').style.display==='none');assert.equal(deletionRequests,1);
+      await page.waitForFunction(()=>!document.querySelector('#adminOrderList [data-ref="TEST-TP"]'));
+      await page.locator('#adminOrderCenter [data-trash]').click();await page.locator('#adminOrderList [data-ref="TEST-TP"]').click();
+      await page.locator('[data-action=restore]').click();await page.locator('#ocReason').fill('恢复测试订单');await page.locator('[data-confirm=restore]').click();
+      await page.waitForFunction(()=>document.getElementById('orderCenterModal').style.display==='none');assert.equal(restorationRequests,1);
+      await page.locator('#adminOrderCenter [data-trash]').click();await page.locator('#adminOrderCenter [data-cleanup]').click();
+      await page.locator('#ocCleanupEnabled').waitFor();assert.equal(await page.locator('#ocCleanupEnabled').isChecked(),false);
+      await page.locator('#ocCleanupDays').fill('14');await page.locator('[data-save-cleanup]').click();await page.waitForFunction(()=>document.querySelector('#ocCleanupDays')?.value==='14'&&document.querySelector('#ocActionMessage')?.textContent==='');assert.equal(cleanupSaves,1);
+      assert.equal(await page.locator('[data-run-cleanup]').isDisabled(),true);await page.keyboard.press('Escape');
       await page.evaluate(()=>showSection('profile'));await page.locator('#orderList [data-ref]').waitFor();
       if(viewport.width<680){const layout=await page.evaluate(()=>({columns:getComputedStyle(document.getElementById('orderList')).gridTemplateColumns,overflow:document.documentElement.scrollWidth>innerWidth}));assert.equal(layout.columns.split(' ').length,1);assert.equal(layout.overflow,false);}
-      assert.deepEqual(errors,[]);await context.close();console.log(`Browser verification passed at ${viewport.width}×${viewport.height}: filtering, details, fixed footer, safe confirmation, recharge refresh, Escape and no page errors.`);
+      assert.deepEqual(errors,[]);await context.close();console.log(`Browser verification passed at ${viewport.width}×${viewport.height}: filtering, payment, batch deletion, trash restore, automatic settings, mobile layout and no page errors.`);
     }
   } finally {await browser?.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

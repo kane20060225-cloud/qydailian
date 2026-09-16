@@ -3,6 +3,7 @@
 const express = require('express');
 const crypto = require('node:crypto');
 const { TYPES, READ_MODEL_SQL, parseFilters, filterClause, decorateOrder, csvCell } = require('../lib/order-center');
+const {changeRemoval,getSettings,settingsInput,candidates,createCleanupService}=require('../lib/order-cleanup');
 
 const SOURCES = {
   boost: ['order','orders','order_no'], rental: ['rental_order','rental_orders','order_no'],
@@ -14,7 +15,7 @@ function sourceRef(type, ref) {
   return type === 'shop' ? ref.replace(/^SHOP/, '') : ref;
 }
 
-function createOrderCenterRouter({ pool, authMiddleware, recordOperation, revealOrderCredentials }) {
+function createOrderCenterRouter({ pool, authMiddleware, recordOperation, revealOrderCredentials, cleanupService }) {
   const router = express.Router();
   router.use(authMiddleware);
   router.use(async (req, res, next) => {
@@ -27,6 +28,41 @@ function createOrderCenterRouter({ pool, authMiddleware, recordOperation, reveal
       res.set('Cache-Control', 'no-store');
       next();
     } catch { res.status(503).json({ error: '暂时无法验证订单权限' }); }
+  });
+
+  const cleanup=cleanupService || createCleanupService({pool,recordOperation});
+  router.get('/cleanup',async(req,res)=>{
+    if(req.orderRole!=='admin')return res.status(403).json({error:'无管理员权限'});
+    try {const settings=await getSettings(pool);const rows=await candidates(pool,settings.retention_days);
+      res.json({settings,candidates:rows.map(r=>({type:r.order_type,ref:r.order_ref,title:r.title,created_at:r.created_at})),limit:200});
+    }catch{res.status(500).json({error:'清理规则加载失败'});}
+  });
+  router.put('/cleanup',async(req,res)=>{
+    if(req.orderRole!=='admin')return res.status(403).json({error:'无管理员权限'});
+    try {const value=settingsInput(req.body);const conn=await pool.getConnection();
+      try {await conn.beginTransaction();await conn.execute(`INSERT INTO order_cleanup_settings (id,enabled,retention_days,updated_by) VALUES (1,?,?,?)
+        ON DUPLICATE KEY UPDATE enabled=VALUES(enabled),retention_days=VALUES(retention_days),updated_by=VALUES(updated_by)`,[value.enabled?1:0,value.retention_days,req.userId]);
+        await recordOperation(conn,{eventKey:`order_cleanup_settings:${crypto.randomUUID()}`,actorUserId:req.userId,action:'order_cleanup_settings_changed',targetType:'order_cleanup',targetRef:'1'});
+        await conn.commit();res.json({success:true});
+      }catch(err){await conn.rollback();throw err;}finally{conn.release();}
+    }catch(err){res.status(err.status || 500).json({error:err.status?err.message:'清理规则保存失败'});}
+  });
+  router.post('/cleanup/run',async(req,res)=>{
+    if(req.orderRole!=='admin')return res.status(403).json({error:'无管理员权限'});
+    if(req.body?.confirmation!=='MOVE_INVALID_ORDERS_TO_TRASH')return res.status(400).json({error:'请先预览并确认清理规则'});
+    try {res.json(await cleanup.run(req.userId,true));}catch(err){res.status(err.status || 500).json({error:err.status?err.message:'清理失败，请刷新检查已处理结果'});}
+  });
+  router.post('/removals',async(req,res)=>{
+    if(req.orderRole!=='admin')return res.status(403).json({error:'无管理员权限'});
+    const {orders,reason,action}=req.body || {};
+    if(!Array.isArray(orders)||orders.length<1||orders.length>25||!['remove','restore'].includes(action)||typeof reason!=='string'||!reason.trim()||reason.trim().length>500)
+      return res.status(400).json({error:'请选择1–25个订单并填写操作原因'});
+    if(orders.some(o=>!o||!TYPES.includes(o.type)||typeof o.ref!=='string'||!o.ref||o.ref.length>64)||new Set(orders.map(o=>o.type+':'+o.ref)).size!==orders.length)
+      return res.status(400).json({error:'订单列表无效或重复'});
+    const results=[];
+    for(const order of orders) {try {results.push(await changeRemoval({pool,recordOperation,...order,actor:req.userId,reason,restore:action==='restore'}));}
+      catch(err){results.push({...order,success:false,error:err.status?err.message:'处理失败，请刷新重试'});}}
+    res.json({results,success_count:results.filter(r=>r.success).length});
   });
 
   async function findOrder(req, ref = req.params.ref, type = req.params.type, conn = pool) {

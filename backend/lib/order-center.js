@@ -73,8 +73,15 @@ FROM third_party_orders o JOIN users u ON u.id=o.creator_id
  LEFT JOIN third_party_order_workflow w ON w.order_no=o.order_no
 `;
 
-const READ_MODEL_SQL = `SELECT c.*, a.archived_at FROM (${ORDER_UNION_SQL}) c
- LEFT JOIN order_management_state a ON a.order_type=c.order_type AND a.order_ref=c.order_ref`;
+const REMOVED_SQL = `CASE WHEN r.state_snapshot=c.state AND r.payment_snapshot=COALESCE(c.payment_status,'') THEN r.removed_at ELSE NULL END`;
+const READ_MODEL_SQL = `SELECT c.*, a.archived_at, ${REMOVED_SQL} AS removed_at, r.reason AS removal_reason FROM (${ORDER_UNION_SQL}) c
+ LEFT JOIN order_management_state a ON a.order_type=c.order_type AND a.order_ref=c.order_ref
+ LEFT JOIN order_removals r ON r.order_type=c.order_type AND r.order_ref=c.order_ref`;
+
+function visibleOrdersSql(type, refSql) {
+  if (!TYPES.includes(type) || !['orders.order_no','o.order_no','ro.order_no','t.order_no'].includes(refSql)) throw new Error('Invalid order visibility source');
+  return `NOT EXISTS (SELECT 1 FROM (${READ_MODEL_SQL}) hidden_order WHERE hidden_order.order_type='${type}' AND hidden_order.order_ref=${refSql} AND hidden_order.removed_at IS NOT NULL)`;
+}
 
 function parseFilters(query = {}) {
   const type = String(query.type || '');
@@ -94,15 +101,16 @@ function parseFilters(query = {}) {
   const page = Number(query.page || 1);
   if (!Number.isSafeInteger(page) || page < 1 || page > 100000) throw new Error('无效页码');
   return { type, state, task, search, from, to, page, channel: String(query.channel || '').slice(0, 30),
-    archived: query.archived === '1' };
+    archived: query.archived === '1', trash: query.trash === '1' };
 }
 
 function filterClause(filters, { admin, userId, role, includeState = true }) {
   const conditions = []; const params = [];
+  conditions.push(`${REMOVED_SQL} IS ${admin && filters.trash ? 'NOT ' : ''}NULL`);
   if (!admin) {
     conditions.push('(c.customer_id=? OR c.related_user_id=?)'); params.push(userId, userId);
     if (!['booster','admin'].includes(role)) conditions.push("c.order_type!='third_party'");
-  } else conditions.push(filters.archived ? 'a.archived_at IS NOT NULL' : 'a.archived_at IS NULL');
+  } else if (!filters.trash) conditions.push(filters.archived ? 'a.archived_at IS NOT NULL' : 'a.archived_at IS NULL');
   if (filters.type) { conditions.push('c.order_type=?'); params.push(filters.type); }
   if (filters.search) {
     conditions.push('(c.order_ref LIKE ? OR c.payment_reference LIKE ? OR c.customer_name LIKE ? OR c.title LIKE ?)');
@@ -124,6 +132,7 @@ function decorateOrder(row, userId, admin) {
   const own = Number(row.customer_id) === Number(userId);
   const related = Number(row.related_user_id) === Number(userId);
   const actions = [];
+  if (row.removed_at) return { ...row, state_label: '已删除 · 可恢复', actions: admin ? ['restore'] : [] };
   if (row.order_type === 'recharge') {
     if (own && row.state === 'pending_payment') actions.push('pay');
     if (own && ['pending_payment','credit_pending','exception'].includes(row.state)) actions.push('refresh');
@@ -139,6 +148,7 @@ function decorateOrder(row, userId, admin) {
     if (admin || own || related) actions.push('rental_manage');
   } else if (row.order_type === 'third_party') actions.push('third_party_manage');
   if (admin && ['completed','credited','closed'].includes(row.state)) actions.push(row.archived_at ? 'unarchive' : 'archive');
+  if (admin && require('./order-cleanup').removable(row)) actions.push('remove');
   return { ...row, state_label: STATES[row.order_type]?.[row.state] || '状态待核对', actions };
 }
 
@@ -148,4 +158,4 @@ function csvCell(value) {
   return '"' + text.replace(/"/g, '""') + '"';
 }
 
-module.exports = { TYPES, STATES, READ_MODEL_SQL, parseFilters, filterClause, decorateOrder, csvCell };
+module.exports = { TYPES, STATES, READ_MODEL_SQL, parseFilters, filterClause, decorateOrder, csvCell, visibleOrdersSql };

@@ -7,3 +7,9 @@
 .oc-focused-order{outline:2px solid var(--accent);outline-offset:3px}
 #orderCenterModal{z-index:1500}
 .oc-card h4{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.oc-bulk{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:12px}
+.oc-bulk label,.oc-select,.oc-cleanup-confirm{display:flex;align-items:center;gap:7px;cursor:pointer}
+.oc-bulk input,.oc-select input,.oc-cleanup-confirm input,#ocCleanupEnabled{width:18px;height:18px;flex-shrink:0}
+.oc-select{font-size:12px;margin-bottom:10px}.oc-cleanup-preview{max-height:280px;overflow:auto;padding-left:20px;overflow-wrap:anywhere}.oc-cleanup-preview li{margin:10px 0}.oc-cleanup-confirm{margin:14px 0}
+.oc-reason input[type=number]{min-height:44px;padding:10px;background:var(--card-bg);color:var(--text);border:1px solid var(--border);border-radius:8px}.oc-reason label:has(input[type=checkbox]){flex-direction:row;align-items:center}.oc-bulk button,[data-run-cleanup]{min-height:44px;padding:9px 14px;border-radius:8px}
+@media(max-width:600px){.oc-bulk>label,.oc-bulk>.oc-muted{width:100%}.oc-bulk button{flex:1;min-height:44px}.oc-cleanup-confirm{align-items:flex-start}}
