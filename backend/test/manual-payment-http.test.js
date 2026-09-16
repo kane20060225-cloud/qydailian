@@ -44,8 +44,8 @@ const conn = {
         filename: params[3], amount: params[4], status: 'submitted' });
       return [{ insertId: state.evidence.length }];
     }
-    if (q.startsWith('SELECT id, user_id, payment_status FROM orders')) {
-      return [state.exists ? [{ id: 1, user_id: 3, payment_status: state.paymentStatus }] : []];
+    if (q.startsWith('SELECT id, user_id, payment_status, status, booster_id FROM orders')) {
+      return [state.exists ? [{ id: 1, user_id: 3, payment_status: state.paymentStatus, status:'pending', booster_id:null }] : []];
     }
     if (q.startsWith('UPDATE orders SET payment_status')) {
       state.paymentStatus = params[0];
@@ -63,6 +63,7 @@ const conn = {
       state.audit.push(params);
       return [{ affectedRows: 1 }];
     }
+    if (q.startsWith('INSERT INTO order_management_events')) return [{ affectedRows: 1 }];
     throw new Error(`Unexpected SQL: ${q}`);
   }
 };
@@ -117,7 +118,8 @@ test('manual screenshot is linked to its existing order and only admin confirms 
   assert.equal(state.evidence[0].businessRef, 'WOT-TEST');
   assert.equal(state.evidence[0].amount, 4.5);
   const approve = () => fetch(`${base}/api/admin/orders/WOT-TEST/confirm-payment`, {
-    method: 'PUT', headers: { Authorization: `Bearer ${adminToken}` }
+    method: 'PUT', headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type':'application/json' },
+    body: JSON.stringify({reason:'已核对实际到账金额和付款凭证'})
   });
   assert.equal((await approve()).status, 200);
   assert.equal((await approve()).status, 409);

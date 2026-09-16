@@ -13,6 +13,7 @@
     "migration:b5": "node scripts/migrate-b5.js",
     "migration:b6:rental": "node scripts/migrate-b6-rental.js",
     "migration:b8:third-party": "node scripts/migrate-b8-third-party.js",
+    "migration:b9:order-center": "node scripts/migrate-b9-order-center.js",
     "report:b5": "node scripts/report-b5-anomalies.js --report"
   },
   "engines": {

@@ -235,6 +235,22 @@ const settingsBtn = getEl('settingsBtn');
 
 // ==================== 初始化 ====================
 function init() {
+    OrderCenter.init({apiBase:API_BASE,getToken:()=>safeGetItem('token'),getRole:()=>safeGetItem('role'),onToast:showToast,
+      onBoostPayment:openBoostPayment,onTicketRefresh:updateTicketDisplay,onOpenOrders:()=>showSection('profile'),
+      onManage:(order,scope)=>{
+        focusedRentalOrder=order.order_type==='rental'?order.order_ref:null;
+        if(order.order_type==='third_party') {
+          showSection('thirdparty');tpCurrentFilter='all';
+          getEl('tpFilterTabs').querySelectorAll('[data-filter]').forEach(b=>b.classList.toggle('active',b.dataset.filter==='all'));
+          getEl('tpSearchInput').value=order.order_ref;loadThirdPartyOrders();
+        } else if(scope==='admin') {
+          showSection('admin');document.querySelector('.admin-tab[data-admintab="rental"]')?.click();
+        } else {
+          showSection('rental');
+          const tab=Number(order.related_user_id)===Number(safeGetItem('userId'))?'my':'rented';
+          document.querySelector(`.rental-tab[data-rentaltab="${tab}"]`)?.click();
+        }
+      }});
     updateDetailCards();
     refreshPrice();
     generatePlayers();
@@ -704,28 +720,7 @@ async function loadProfile() {
     } catch (err) { info.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
 async function loadOrders() {
-    const list = getEl('orderList');
-    if (!list) return;
-    const token = safeGetItem('token');
-    if (!token) { list.innerHTML = '<p style="color:var(--red)">请先登录</p>'; return; }
-    try {
-        const res = await fetch(`${API_BASE}/user/orders`, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (!res.ok) throw new Error('获取失败');
-        const orders = await res.json();
-        if (!Array.isArray(orders) || orders.length === 0) { list.innerHTML = '<p style="color:var(--text-muted)">暂无订单</p>'; return; }
-        const statusMap = { pending: '待接单', playing: '代练中', done: '已完成' };
-        const paymentStatusMap = { unpaid: '未支付', pending: '待确认', paid: '已支付' };
-        let html = '<table class="order-table"><thead><tr><th>订单号</th><th>项目</th><th>金额</th><th>状态</th><th>支付</th><th>操作</th><th>时间</th></tr></thead><tbody>';
-        orders.forEach(o => {
-            let actionHtml = '';
-            if (o.payment_status === 'unpaid') actionHtml = `<button class="upload-payment-btn" data-order="${o.order_no}">上传凭证</button>`;
-            else if (o.payment_status === 'paid') actionHtml = '已确认';
-            else actionHtml = '审核中';
-            html += `<tr><td data-label="订单号">${o.order_no}</td><td data-label="项目">${o.project} - ${o.detail}</td><td data-label="金额" class="order-price">¥${o.total_price}</td><td data-label="状态"><span class="order-status status-${o.status}">${statusMap[o.status]||o.status}</span></td><td data-label="支付"><span class="payment-status payment-${o.payment_status}">${paymentStatusMap[o.payment_status]||'未知'}</span></td><td data-label="下一步" class="table-actions">${actionHtml}</td><td data-label="下单时间">${new Date(o.created_at).toLocaleString()}</td></tr>`;
-        });
-        html += '</tbody></table>';
-        list.innerHTML = html;
-    } catch (err) { list.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+    return OrderCenter.load('user');
 }
 
 // ==================== 提交订单 (防重复点击 + 积分抵扣) ====================
@@ -792,8 +787,6 @@ if (submitOrderBtn) {
 }
 
 // ==================== 管理面板 ====================
-const statusFilter = getEl('statusFilter');
-const refreshOrdersBtn = getEl('refreshOrdersBtn');
 const adminOrderList = getEl('adminOrderList');
 
 function rentalSafeText(value) {
@@ -935,6 +928,7 @@ async function loadAdminRentalOrders() {
                 </td></tr>`;
         });
         container.innerHTML = html + '</tbody></table>';
+        focusRentalOrder(container);
     } catch (err) {
         renderRentalState(container, 'error', err.message || '租号订单加载失败', loadAdminRentalOrders);
     }
@@ -982,83 +976,10 @@ document.addEventListener('click', async (e) => {
 });
 
 async function loadAdminOrders() {
-    const token = safeGetItem('token'); if (!token || !adminOrderList) return;
-    const status = statusFilter ? statusFilter.value : '';
-    try {
-        const res = await fetch(`${API_BASE}/admin/orders`, { headers: { 'Authorization': `Bearer ${token}` } });
-        const orders = await res.json();
-        if (!Array.isArray(orders)) throw new Error('数据错误');
-        const filtered = status ? orders.filter(o => o.status === status) : orders;
-        renderAdminOrders(filtered);
-    } catch (err) { adminOrderList.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+    return OrderCenter.load('admin');
 }
-function renderAdminOrders(orders) {
-    if (!adminOrderList) return;
-    const statusOptions = ['pending', 'playing', 'done'];
-    const statusText = { pending: '待接单', playing: '代练中', done: '已完成' };
-    const paymentStatusMap = { unpaid: '未支付', pending: '待确认', paid: '已支付' };
-    if (!orders.length) { adminOrderList.innerHTML = '<p>暂无订单</p>'; return; }
-    let html = '<table><tr><th>订单号</th><th>用户</th><th>项目</th><th>数量</th><th>客户端</th><th>要求打手</th><th>金额</th><th>状态</th><th>支付</th><th>接单人</th><th>操作</th><th>时间</th></tr>';
-    orders.forEach(o => {
-        const identityMap = { gold:'金牌', silver:'银牌', standard:'标准', budget:'特惠' };
-        const screenshotLink = o.payment_screenshot ? ` <a href="/uploads/${o.payment_screenshot}" target="_blank" style="font-size:0.7rem;">截图</a>` : '';
-        html += `<tr>
-            <td>${o.order_no}</td><td>${o.customer_name || o.username}</td><td>${o.project} - ${o.detail}</td><td>${o.quantity}</td><td>${o.client_type||'Android'}</td><td>${identityMap[o.required_identity]||'标准'}</td><td>¥${o.total_price}</td>
-            <td><span class="order-status status-${o.status}">${statusText[o.status]||o.status}</span></td>
-            <td><span class="payment-status payment-${o.payment_status}">${paymentStatusMap[o.payment_status]||'未知'}</span></td>
-            <td>${o.booster_name || '—'}</td>
-            <td>
-                <select class="status-select" data-order="${o.order_no}" onchange="updateOrderStatus(this)">
-                    ${statusOptions.map(s => `<option value="${s}" ${s===o.status?'selected':''}>${statusText[s]}</option>`).join('')}
-                </select>
-                ${o.payment_status === 'pending' ? `<button class="confirm-payment-btn" data-order="${o.order_no}">确认收款</button>` : ''}
-                ${screenshotLink}
-                ${o.hall_status !== 'open' && o.status === 'pending' ? `<button class="hall-btn" data-order="${o.order_no}">放入大厅</button>` : ''}
-                <button class="detail-btn" data-order="${o.order_no}">详情</button>
-                <button class="copy-order-detail-btn" data-order="${o.order_no}">复制信息</button>
-                <button class="delete-order-btn" data-order="${o.order_no}">删除</button>
-            </td>
-            <td>${new Date(o.created_at).toLocaleString()}</td>
-        </tr>`;
-    });
-    html += '</table>';
-    adminOrderList.innerHTML = html;
-}
-window.updateOrderStatus = async function(selectEl) {
-    const orderNo = selectEl.dataset.order; const newStatus = selectEl.value; const token = safeGetItem('token');
-    try {
-        const res = await fetch(`${API_BASE}/admin/orders/${orderNo}`, { method:'PUT', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify({ status: newStatus }) });
-        const data = await res.json();
-        if (res.ok) showToast('✅ 状态更新成功'); else { showToast('❌ ' + (data.error||'更新失败')); loadAdminOrders(); }
-    } catch (err) { showToast('❌ 网络错误'); loadAdminOrders(); }
-};
 document.addEventListener('click', async (e) => {
     const token = safeGetItem('token'); if (!token) return;
-    if (e.target.classList.contains('confirm-payment-btn')) {
-        const orderNo = e.target.dataset.order;
-        try {
-            const res = await fetch(`${API_BASE}/admin/orders/${orderNo}/confirm-payment`, { method:'PUT', headers:{'Authorization':`Bearer ${token}`} });
-            const data = await res.json();
-            if (res.ok) { showToast('✅ 已确认支付'); loadAdminOrders(); } else showToast('❌ ' + (data.error||'操作失败'));
-        } catch (err) { showToast('❌ 网络错误'); }
-    }
-    if (e.target.classList.contains('hall-btn')) {
-        const orderNo = e.target.dataset.order;
-        try {
-            const res = await fetch(`${API_BASE}/admin/orders/${orderNo}/hall`, { method:'PUT', headers:{'Authorization':`Bearer ${token}`} });
-            const data = await res.json();
-            if (res.ok) { showToast('✅ 已放入接单大厅'); loadAdminOrders(); } else showToast('❌ ' + (data.error||'操作失败'));
-        } catch (err) { showToast('❌ 网络错误'); }
-    }
-    if (e.target.classList.contains('delete-order-btn')) {
-        const orderNo = e.target.dataset.order;
-        if (!confirm(`确定要删除订单 ${orderNo} 吗？`)) return;
-        try {
-            const res = await fetch(`${API_BASE}/admin/orders/${orderNo}`, { method:'DELETE', headers:{'Authorization':`Bearer ${token}`} });
-            const data = await res.json();
-            if (res.ok) { showToast('🗑️ 订单已删除'); loadAdminOrders(); } else showToast('❌ ' + (data.error||'删除失败'));
-        } catch (err) { showToast('❌ 网络错误'); }
-    }
     if (e.target.classList.contains('detail-btn')) { showOrderDetail(e.target.dataset.order); }
     if (e.target.classList.contains('copy-order-detail-btn')) { copyOrderDetail(e.target.dataset.order); }
     if (e.target.classList.contains('take-order-btn')) {
@@ -1134,8 +1055,6 @@ if (e.target.classList.contains('delete-custom-btn')) {
 }
 
 });
-if (statusFilter) statusFilter.addEventListener('change', loadAdminOrders);
-if (refreshOrdersBtn) refreshOrdersBtn.addEventListener('click', loadAdminOrders);
 
 // ========== 管理面板选项卡切换（修改后） ==========
 document.querySelectorAll('.admin-tab').forEach(tab => {
@@ -1353,15 +1272,16 @@ const paymentError = getEl('paymentError');
 const previewImage = getEl('previewImage');
 const paymentFile = getEl('paymentFile');
 const pasteArea = getEl('pasteArea');
-document.addEventListener('click', (e) => {
-    if (e.target.classList.contains('upload-payment-btn')) {
-        currentOrderNo = e.target.dataset.order;
-        if (paymentModal) paymentModal.style.display = 'flex';
-        if (paymentError) paymentError.textContent = '';
-        if (previewImage) previewImage.style.display = 'none';
-        if (paymentFile) paymentFile.value = '';
-        if (pasteArea) pasteArea.innerText = '';
-    }
+function openBoostPayment(orderNo) {
+    currentOrderNo = orderNo;
+    if (paymentModal) paymentModal.style.display = 'flex';
+    if (paymentError) paymentError.textContent = '';
+    if (previewImage) previewImage.style.display = 'none';
+    if (paymentFile) paymentFile.value = '';
+    if (pasteArea) pasteArea.innerText = '';
+}
+document.addEventListener('click', e => {
+    if (e.target.classList.contains('upload-payment-btn')) openBoostPayment(e.target.dataset.order);
 });
 getEl('closePaymentBtn')?.addEventListener('click', () => { if (paymentModal) paymentModal.style.display = 'none'; });
 if (paymentModal) paymentModal.addEventListener('click', (e) => { if (e.target === paymentModal) paymentModal.style.display = 'none'; });
@@ -1518,31 +1438,7 @@ async function doCheckin() {
 
 // 充值
 async function doRecharge() {
-  const token = safeGetItem('token');
-  if (!token) { showToast('请先登录'); return; }
-
-  try {
-    const res = await fetch(`${API_BASE}/chest/recharge`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      showToast(data.error || '创建支付订单失败');
-      return;
-    }
-
-    const html = await res.text();
-    const newWindow = window.open('', '_blank');
-    if (newWindow) {
-      newWindow.document.write(html);
-      newWindow.document.close();
-    } else {
-      showToast('请允许弹窗，或使用浏览器直接打开');
-    }
-  } catch (err) {
-    showToast('网络错误');
-  }
+  return OrderCenter.createRecharge();
 }
 
 // 渲染箱子列表（从后端加载）
@@ -2923,6 +2819,7 @@ async function loadRentedOrders() {
         });
         html += '</tbody></table></div>';
         container.innerHTML = html;
+        focusRentalOrder(container);
     } catch (err) { renderRentalState(container, 'error', err.message || '租用记录加载失败', loadRentedOrders); }
 }
 
@@ -2966,6 +2863,12 @@ function loadMyRentalDeletedAccounts() { return loadMyRentalAccounts(true); }
 getEl('refreshDeletedRentalAccountsBtn')?.addEventListener('click', loadMyRentalDeletedAccounts);
 
 // 我的出租：订单列表
+let focusedRentalOrder=null;
+function focusRentalOrder(container) {
+    if(!focusedRentalOrder)return;
+    const row=Array.from(container.querySelectorAll('tr')).find(r=>r.firstElementChild?.textContent.trim()===focusedRentalOrder);
+    if(row){row.classList.add('oc-focused-order');row.scrollIntoView({block:'center',behavior:'smooth'});focusedRentalOrder=null;setTimeout(()=>row.classList.remove('oc-focused-order'),3000);}
+}
 async function loadMyRentalOrders() {
     const container = getEl('myRentalOrdersList');
     if (!container) return;
@@ -2993,6 +2896,7 @@ async function loadMyRentalOrders() {
         });
         html += '</tbody></table></div>';
         container.innerHTML = html;
+        focusRentalOrder(container);
     } catch (err) { renderRentalState(container, 'error', err.message || '出租订单加载失败', loadMyRentalOrders); }
 }
 

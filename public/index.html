@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blitz情谊工具站</title>
     <link rel="stylesheet" href="style.css?v=20260916-ui1">
+    <link rel="stylesheet" href="order-center.css?v=20260916-oc1">
 </head>
 <body>
     <!-- 顶部栏 -->
@@ -288,6 +289,7 @@
         <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
             <button id="checkinBtn" class="checkin-btn">📅 每日签到 (+1000券)</button>
             <button id="rechargeBtn" class="recharge-btn">💰 充值 (6元=10000券)</button>
+            <button id="rechargeOrdersBtn" type="button">充值订单</button>
             <button id="inventoryBtn" class="checkin-btn">📦 我的仓库</button>
         </div>
         <div class="chest-grid" id="chestGrid"></div>
@@ -460,8 +462,8 @@
                 <div class="profile-info" id="profileInfo">加载中...</div>
             </section>
             <section class="card">
-                <h4 style="color:var(--accent); margin-bottom:10px;">我的订单</h4>
-                <div class="order-list" id="orderList">加载中...</div>
+                <h4 style="color:var(--accent); margin-bottom:10px;">所有订单</h4>
+                <div id="userOrderCenter" class="order-center"><div class="oc-list" id="orderList">加载中...</div></div>
             </section>
         </div>
     </div>
@@ -484,17 +486,8 @@
                 <button class="admin-tab" data-admintab="chest">🎁 开箱配置</button>
             </div>
             <div id="adminOrdersSection">
-                <div class="admin-filter">
-                    <label>筛选状态：</label>
-                    <select id="statusFilter">
-                        <option value="">全部</option>
-                        <option value="pending">待接单</option>
-                        <option value="playing">代练中</option>
-                        <option value="done">已完成</option>
-                    </select>
-                    <button id="refreshOrdersBtn">刷新</button>
-                </div>
-                <div id="adminOrderList" class="admin-order-list">加载中...</div>
+                <p>优先处理待办，按订单类型核对收款、验收和异常；已结束订单可归档。</p>
+                <div id="adminOrderCenter" class="order-center"><div id="adminOrderList" class="oc-list">加载中...</div></div>
             </div>
             <div id="adminRentalSection" style="display:none;">
                 <h3>出租账号申请审核</h3>
@@ -1027,6 +1020,7 @@
 
     <script src="ui-runtime.js"></script>
     <script src="rental-client.js"></script>
-    <script src="script.js?v=20260916-tp2"></script>
+    <script src="order-center.js?v=20260916-oc1"></script>
+    <script src="script.js?v=20260916-oc1"></script>
 </body>
 </html>

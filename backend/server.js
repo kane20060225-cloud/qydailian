@@ -27,15 +27,13 @@ const {
   canConfirmPayment
 } = require('./lib/third-party-workflow');
 const { createRentalAccountRouter } = require('./routes/rental-accounts');
+const { createOrderCenterRouter } = require('./routes/order-center');
+const { paymentFormParams, createRechargeOrder, processTrackedRecharge,
+  refreshRecharge, canResumeRecharge } = require('./lib/recharge-orders');
 const {
-  RECHARGE_AMOUNT,
   RECHARGE_TICKETS,
-  createOutTradeNo,
   isValidOutTradeNo,
   maskTradeReference,
-  processAlipayNotification,
-  queryAlipayTrade,
-  reconcileAlipayTrade,
   validateAlipayConfiguration
 } = require('./lib/payment-security');
 
@@ -1389,36 +1387,22 @@ app.get('/api/admin/orders', adminMiddleware, async (req, res) => {
 });
 
 app.put('/api/admin/orders/:orderNo', adminMiddleware, async (req, res) => {
-  const { status } = req.body;
-  const { orderNo } = req.params;
-  if (!['pending','playing','done'].includes(status)) return res.status(400).json({ error: '无效的状态值' });
-  try {
-    if (status === 'done') {
-      const [orderRows] = await pool.execute('SELECT payment_status FROM orders WHERE order_no = ?', [orderNo]);
-      if (orderRows.length === 0) return res.status(404).json({ error: '订单不存在' });
-      if (orderRows[0].payment_status !== 'paid') return res.status(400).json({ error: '请先确认收款后才能标记为已完成' });
-    }
-    await pool.execute('UPDATE orders SET status = ? WHERE order_no = ?', [status, orderNo]);
-    if (status === 'playing') {
-      const [order] = await pool.execute('SELECT user_id FROM orders WHERE order_no = ?', [orderNo]);
-      if (order.length) await sendMessage(order[0].user_id, '订单进行中', `您的订单 ${orderNo} 已开始代练。`);
-    }
-    res.json({ success: true });
-  } catch(err) { res.status(500).json({ error: '服务器错误' }); }
+  res.status(409).json({ error: '请使用确认收款、放入大厅和打手完单流程，不能直接覆盖订单状态' });
 });
 
 app.delete('/api/admin/orders/:orderNo', adminMiddleware, async (req, res) => {
-  try { await pool.execute('DELETE FROM orders WHERE order_no = ?', [req.params.orderNo]); res.json({ success: true }); }
-  catch(err) { res.status(500).json({ error: '服务器错误' }); }
+  res.status(409).json({ error: '订单记录需要保留，请在订单中心归档已完成订单' });
 });
 
 app.put('/api/admin/orders/:orderNo/confirm-payment', adminMiddleware, async (req, res) => {
   const { orderNo } = req.params;
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  if (!reason || reason.length > 500) return res.status(400).json({ error: '请填写实际收款核对说明（最多500字）' });
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
     const [orders] = await conn.execute(
-      'SELECT id, user_id, payment_status FROM orders WHERE order_no = ? FOR UPDATE', [orderNo]
+      'SELECT id, user_id, payment_status, status, booster_id FROM orders WHERE order_no = ? FOR UPDATE', [orderNo]
     );
     if (!orders.length) {
       await conn.rollback();
@@ -1428,9 +1412,12 @@ app.put('/api/admin/orders/:orderNo/confirm-payment', adminMiddleware, async (re
       await conn.rollback();
       return res.status(409).json({ error: '订单已确认付款' });
     }
+    if (orders[0].status !== 'pending' || orders[0].booster_id) {
+      await conn.rollback();return res.status(409).json({error:'订单执行状态与收款状态不一致，请先核对历史记录'});
+    }
     await conn.execute(
       'UPDATE orders SET payment_status = ?, status = ? WHERE id = ?',
-      ['paid', 'playing', orders[0].id]
+      ['paid', 'pending', orders[0].id]
     );
     const [evidence] = await conn.execute(
       `SELECT id FROM manual_payment_evidence
@@ -1450,6 +1437,8 @@ app.put('/api/admin/orders/:orderNo/confirm-payment', adminMiddleware, async (re
       action: evidence.length ? 'manual_payment_confirmed' : 'manual_payment_confirmed_without_evidence',
       targetType: 'order', targetRef: orderNo
     });
+    await conn.execute('INSERT INTO order_management_events (order_type,order_ref,actor_user_id,action,note) VALUES (?,?,?,?,?)',
+      ['boost',orderNo,req.userId,'payment_confirmed',reason]);
     await conn.commit();
     await sendMessage(orders[0].user_id, '支付已确认', `您的订单 ${orderNo} 已确认收款，代练即将开始。`);
     res.json({ success: true, message: '已确认支付' });
@@ -1460,10 +1449,22 @@ app.put('/api/admin/orders/:orderNo/confirm-payment', adminMiddleware, async (re
 });
 
 app.put('/api/admin/orders/:orderNo/hall', adminMiddleware, async (req, res) => {
+  const conn = await pool.getConnection();
   try {
-    await pool.execute('UPDATE orders SET hall_status = ? WHERE order_no = ?', ['open', req.params.orderNo]);
+    await conn.beginTransaction();
+    const [rows] = await conn.execute('SELECT id,status,payment_status,booster_id,hall_status FROM orders WHERE order_no=? FOR UPDATE',[req.params.orderNo]);
+    if (!rows.length) { await conn.rollback(); return res.status(404).json({ error:'订单不存在' }); }
+    const order = rows[0];
+    if (order.status !== 'pending' || order.payment_status !== 'paid' || order.booster_id || order.hall_status === 'open') {
+      await conn.rollback(); return res.status(409).json({ error:'只有已收款且未分配的待接单订单可以放入大厅' });
+    }
+    await conn.execute('UPDATE orders SET hall_status=? WHERE id=?',['open',order.id]);
+    await recordOperation(conn,{eventKey:`order:${req.params.orderNo}:hall_opened`,actorUserId:req.userId,
+      action:'order_dispatched',targetType:'order',targetRef:req.params.orderNo});
+    await conn.commit();
     res.json({ success: true, message: '已放入接单大厅' });
-  } catch(err) { res.status(500).json({ error: '服务器错误' }); }
+  } catch(err) { await conn.rollback(); res.status(500).json({ error: '服务器错误' }); }
+  finally { conn.release(); }
 });
 
 // ---------- 订单详情 ----------
@@ -2602,6 +2603,10 @@ async function recordThirdPartyEvent(conn, orderNo, eventType, actorUserId, note
   );
 }
 
+app.use('/api/order-center', createOrderCenterRouter({
+  pool, authMiddleware, recordOperation, revealOrderCredentials
+}));
+
 app.get('/api/third-party-orders/platforms', authMiddleware, (req, res) => {
   res.json(THIRD_PARTY_PLATFORMS);
 });
@@ -3042,45 +3047,50 @@ app.post('/api/chest/recharge', authMiddleware, async (req, res) => {
     return res.status(503).json({ error: '支付服务暂未启用' });
   }
 
-  const userId = req.userId;
-  const outTradeNo = createOutTradeNo();
-
+  let order;
   try {
-    await pool.execute(
-      'INSERT INTO payment_orders (out_trade_no, user_id, amount) VALUES (?,?,?)',
-      [outTradeNo, userId, RECHARGE_AMOUNT]
-    );
-
-    const params = {
-      notify_url: process.env.ALIPAY_NOTIFY_URL,
-      return_url: process.env.ALIPAY_RETURN_URL,
-      bizContent: {
-        out_trade_no: outTradeNo,
-        total_amount: RECHARGE_AMOUNT,
-        subject: 'QingYi工具站6元兑换10000券',
-        product_code: 'FAST_INSTANT_TRADE_PAY'
-      }
-    };
-
-    const result = await alipaySdk.pageExecute('alipay.trade.page.pay', params);
+    order = await createRechargeOrder(pool, req.userId);
     res.set('Cache-Control', 'no-store');
+    res.set('X-Recharge-Order-No', order.out_trade_no);
+    if (req.get('Accept')?.includes('application/json')) {
+      return res.status(201).json({ order_no:order.out_trade_no,amount:order.amount,ticket_quantity:order.ticket_quantity });
+    }
+    const result = await alipaySdk.pageExecute('alipay.trade.page.pay', paymentFormParams(order,process.env));
     res.send(result);
   } catch (err) {
-    try {
-      await pool.execute(
-        `UPDATE payment_orders
-         SET status = 'closed', closed_at = NOW()
-         WHERE out_trade_no = ? AND status = 'pending'`,
-        [outTradeNo]
-      );
-    } catch {
-      console.error(`支付订单关闭失败 order=${maskTradeReference(outTradeNo)}`);
-    }
-    console.error(`创建支付宝订单失败 order=${maskTradeReference(outTradeNo)}`);
+    // A failed payment-page request does not erase or locally close a payable order.
+    console.error(`创建充值订单失败 code=${err.code || 'INTERNAL_ERROR'}`);
     if (!res.headersSent) {
-      res.status(500).json({ error: '创建支付订单失败' });
+      res.status(500).json({ error:order ? '支付页面暂时无法打开，请在所有订单中继续支付' : '创建支付订单失败',order_no:order?.out_trade_no });
     }
   }
+});
+
+app.post('/api/chest/payments/:outTradeNo/pay', authMiddleware, async (req,res) => {
+  if (!alipaySdk) return res.status(503).json({ error:'支付服务暂未启用' });
+  if (!isValidOutTradeNo(req.params.outTradeNo)) return res.status(400).json({ error:'支付订单号无效' });
+  try {
+    const [rows]=await pool.execute(`SELECT p.out_trade_no,p.amount,p.status,w.provider_status,w.ticket_quantity
+      FROM payment_orders p LEFT JOIN recharge_order_workflow w ON w.out_trade_no=p.out_trade_no
+      WHERE p.out_trade_no=? AND p.user_id=?`,[req.params.outTradeNo,req.userId]);
+    if (!rows.length) return res.status(404).json({ error:'充值订单不存在' });
+    if (!canResumeRecharge(rows[0])) return res.status(409).json({ error:'订单当前不能再次付款，请查询支付结果' });
+    const order={ ...rows[0],ticket_quantity:rows[0].ticket_quantity || RECHARGE_TICKETS };
+    const html=await alipaySdk.pageExecute('alipay.trade.page.pay',paymentFormParams(order,process.env));
+    res.set('Cache-Control','no-store').send(html);
+  } catch { res.status(502).json({ error:'支付页面暂时无法打开，可稍后在原订单继续支付' }); }
+});
+
+app.post('/api/chest/payments/:outTradeNo/refresh', authMiddleware, async (req,res) => {
+  if (!alipaySdk || !paymentConfig) return res.status(503).json({ error:'支付服务暂未启用' });
+  if (!isValidOutTradeNo(req.params.outTradeNo)) return res.status(400).json({ error:'支付订单号无效' });
+  try {
+    const [rows]=await pool.execute('SELECT out_trade_no FROM payment_orders WHERE out_trade_no=? AND user_id=?',
+      [req.params.outTradeNo,req.userId]);
+    if (!rows.length) return res.status(404).json({ error:'充值订单不存在' });
+    const result=await refreshRecharge({ pool,alipaySdk,outTradeNo:req.params.outTradeNo,paymentConfig });
+    res.set('Cache-Control','no-store').json(result);
+  } catch { res.status(502).json({ error:'查询或到账处理暂时失败，请稍后刷新，不要再次付款' }); }
 });
 
 app.get('/api/chest/payments/:outTradeNo', authMiddleware, async (req, res) => {
@@ -3107,9 +3117,10 @@ app.get('/api/chest/payments/:outTradeNo', authMiddleware, async (req, res) => {
 app.get('/api/admin/chest/payments/:outTradeNo/provider-status', adminMiddleware, async (req, res) => {
   if (!alipaySdk) return res.status(503).json({ error: '支付服务暂未启用' });
   const { outTradeNo } = req.params;
+  if (!isValidOutTradeNo(outTradeNo)) return res.status(400).json({error:'支付订单号无效'});
 
   try {
-    const result = await queryAlipayTrade(alipaySdk, outTradeNo);
+    const result = await refreshRecharge({ pool,alipaySdk,outTradeNo,paymentConfig,credit:false });
     res.set('Cache-Control', 'no-store');
     if (!result.found) {
       return res.json({
@@ -3121,8 +3132,7 @@ app.get('/api/admin/chest/payments/:outTradeNo/provider-status', adminMiddleware
     res.json({
       found: true,
       tradeStatus: result.tradeStatus,
-      totalAmount: result.totalAmount,
-      orderReference: maskTradeReference(result.outTradeNo)
+      orderReference: maskTradeReference(outTradeNo)
     });
   } catch (err) {
     console.error(`支付宝订单查询失败 code=${err.code || 'INTERNAL_ERROR'}`);
@@ -3137,21 +3147,21 @@ app.post('/api/admin/chest/payments/:outTradeNo/reconcile', adminMiddleware, asy
   if (req.body?.confirmation !== 'RECONCILE_SIGNED_ALIPAY_PAYMENT') {
     return res.status(400).json({ error: '缺少支付对账确认值' });
   }
+  const reason=typeof req.body.reason==='string' ? req.body.reason.trim() : '';
+  if (!reason || reason.length>500) return res.status(400).json({ error:'请填写人工重试到账原因（最多500字）' });
 
   const { outTradeNo } = req.params;
   try {
-    const result = await reconcileAlipayTrade({
-      pool,
-      alipaySdk,
-      outTradeNo,
-      expectedAppId: paymentConfig.appId,
-      expectedSellerId: paymentConfig.sellerId,
-      ticketCredit: RECHARGE_TICKETS
-    });
+    if (!isValidOutTradeNo(outTradeNo)) return res.status(400).json({ error:'支付订单号无效' });
+    const [orders]=await pool.execute('SELECT out_trade_no FROM payment_orders WHERE out_trade_no=?',[outTradeNo]);
+    if (!orders.length) return res.status(404).json({ error:'充值订单不存在' });
+    await pool.execute('INSERT INTO order_management_events (order_type,order_ref,actor_user_id,action,note) VALUES (?,?,?,?,?)',
+      ['recharge',outTradeNo,req.userId,'reconcile_requested',reason]);
+    const result = await refreshRecharge({ pool,alipaySdk,outTradeNo,paymentConfig });
     console.info(
       `支付宝人工对账 outcome=${result.outcome} order=${maskTradeReference(outTradeNo)}`
     );
-    res.json({ success: result.acknowledge, outcome: result.outcome });
+    res.json({ success: Boolean(result.acknowledge), found: result.found, outcome: result.outcome });
   } catch (err) {
     console.error(`支付宝人工对账失败 code=${err.code || 'INTERNAL_ERROR'}`);
     res.status(502).json({ error: '支付宝订单对账失败' });
@@ -3380,7 +3390,7 @@ app.post('/api/chest/alipay/notify', async (req, res) => {
       return res.send('fail');
     }
 
-    const result = await processAlipayNotification({
+    const result = await processTrackedRecharge({
       pool,
       notification: req.body,
       expectedAppId: paymentConfig.appId,

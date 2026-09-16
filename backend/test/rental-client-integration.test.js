@@ -10,7 +10,7 @@ const publicDir = path.join(__dirname, '..', '..', 'public');
 test('rental client loads before the website script and centralizes account requests', () => {
   const html = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
   const script = fs.readFileSync(path.join(publicDir, 'script.js'), 'utf8');
-  assert.match(html, /<script src="rental-client\.js"><\/script>\s*<script src="script\.js(?:\?[^" ]+)?"><\/script>/);
+  assert.match(html, /<script src="rental-client\.js"><\/script>\s*<script src="order-center\.js(?:\?[^" ]+)?"><\/script>\s*<script src="script\.js(?:\?[^" ]+)?"><\/script>/);
   for (const method of ['getHall', 'getAccount', 'getMyAccounts',
     'getAdminAccounts', 'reviewAccount', 'changeAccountStatus', 'changeAccountArchive']) {
     assert.match(script, new RegExp(`rentalClient\\.${method}\\(`));
