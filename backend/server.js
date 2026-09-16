@@ -13,6 +13,7 @@ const { generateTotpSecret, verifyTotpCode } = require('./lib/totp');
 const { createRecoveryCodes, hashRecoveryCode } = require('./lib/recovery-codes');
 const { postAccountDelta, recordOperation } = require('./lib/accounting');
 const { validateRentalPaymentEvidence } = require('./lib/rental-payment-evidence');
+const { saveRentalScreenshot, MAX_IMAGE_BYTES } = require('./lib/rental-stream-upload');
 const {
   RECHARGE_AMOUNT,
   RECHARGE_TICKETS,
@@ -1861,17 +1862,21 @@ app.post('/api/shop/buy/:itemId', authMiddleware, async (req, res) => {
 
 // ==================== 租号系统 API ====================
 app.post('/api/rental/upload-screenshot', authMiddleware, async (req, res) => {
-  const { screenshot } = req.body;
-  if (!screenshot) return res.status(400).json({ error: '请提供截图' });
   const uploadDir = path.join(__dirname, 'uploads');
-  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-  const filename = `rental_${req.userId}_${Date.now()}.png`;
+  const contentType = req.get('content-type') || '';
+  const contentLength = Number(req.get('content-length') || 0);
+  if (!contentType.toLowerCase().startsWith('application/json') &&
+      contentLength > MAX_IMAGE_BYTES) {
+    return res.status(413).json({ error: '截图大小不能超过 5MB' });
+  }
   try {
-    const base64Data = screenshot.replace(/^data:image\/\w+;base64,/, "");
-    fs.writeFileSync(path.join(uploadDir, filename), base64Data, 'base64');
+    const filename = await saveRentalScreenshot({
+      stream: req, body: req.body, contentType, uploadDir, userId: req.userId
+    });
     res.json({ success: true, filename });
   } catch (err) {
-    res.status(500).json({ error: '保存图片失败' });
+    const clientError = /^(只接受|请提供|截图|图片格式|用户 ID)/.test(err.message);
+    res.status(clientError ? 400 : 500).json({ error: clientError ? err.message : '保存图片失败' });
   }
 });
 

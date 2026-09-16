@@ -11,7 +11,7 @@
             try { names = JSON.parse(names); } catch { return []; }
         }
         return Array.isArray(names) ? names.filter(name =>
-            typeof name === 'string' && /^rental_\d+_\d+\.png$/.test(name)).slice(0, 3) : [];
+            typeof name === 'string' && /^rental_\d+_\d+\.(?:png|jpe?g)$/.test(name)).slice(0, 3) : [];
     }
 
     function createRentalClient({ fetchImpl, getToken, now = Date.now, ttlMs = 5000 } = {}) {
@@ -106,6 +106,27 @@
             return data;
         }
 
+        async function uploadScreenshot(file) {
+            const type = String(file?.type || '').toLowerCase();
+            if (!['image/png', 'image/jpeg'].includes(type)) {
+                throw new Error('只接受 PNG 或 JPEG 图片');
+            }
+            if (!Number.isFinite(file.size) || file.size < 8 || file.size > 5 * 1024 * 1024) {
+                throw new Error('截图大小须在 8 字节到 5MB 之间');
+            }
+            const token = tokenProvider();
+            if (!token) throw new Error('请先登录');
+            const response = await fetcher('/api/rental/upload-screenshot', {
+                method: 'POST', headers: { Authorization: `Bearer ${token}`,
+                    'Content-Type': type }, body: file
+            });
+            let data;
+            try { data = await response.json(); } catch { throw new Error('服务器响应格式错误'); }
+            if (!response.ok) throw new Error(data?.error || '上传失败');
+            if (typeof data?.filename !== 'string') throw new Error('上传响应无效');
+            return data.filename;
+        }
+
         async function changeAccountStatus(id, status) {
             if (!['pending', 'suspended'].includes(status)) throw new Error('账号状态无效');
             const { data } = await requestJson(`/rental/accounts/${checkedId(id)}/status`,
@@ -115,7 +136,7 @@
         }
 
         return { requestJson, getHall, getAccount, getMyAccounts, getAdminAccounts,
-            reviewAccount, changeAccountStatus, invalidateHall };
+            reviewAccount, uploadScreenshot, changeAccountStatus, invalidateHall };
     }
 
     root.RentalClient = { createRentalClient, screenshotNames, accountStatusLabels };

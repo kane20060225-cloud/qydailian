@@ -13,7 +13,7 @@ function response(data, { status = 200, total = null } = {}) {
 
 test('rental screenshot names accept JSON arrays or strings but no unsafe path', () => {
   const names = ['rental_3_1234567890123.png', '../private.pem',
-    'rental_4_1234567890124.png', '<script>', 'rental_5_1234567890125.png'];
+    'rental_4_1234567890124.jpg', '<script>', 'rental_5_1234567890125.jpeg'];
   assert.deepEqual(screenshotNames(names), [names[0], names[2], names[4]]);
   assert.deepEqual(screenshotNames(JSON.stringify(names)), [names[0], names[2], names[4]]);
   assert.deepEqual(screenshotNames('{bad json'), []);
@@ -86,4 +86,23 @@ test('API client surfaces server errors without treating failed JSON as account 
   const client = createRentalClient({ fetchImpl: async () =>
     response({ error: '服务器错误' }, { status: 500 }) });
   await assert.rejects(client.getHall(), /服务器错误/);
+});
+
+test('new rental screenshots upload as a raw image body with client-side size checks', async () => {
+  const calls = [];
+  const file = new Blob([Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'),
+    Buffer.from('synthetic')])], { type: 'image/png' });
+  const client = createRentalClient({ getToken: () => 'synthetic-token',
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return response({ filename: 'rental_3_1234567890123.png' });
+    } });
+  assert.equal(await client.uploadScreenshot(file), 'rental_3_1234567890123.png');
+  assert.equal(calls[0].url, '/api/rental/upload-screenshot');
+  assert.equal(calls[0].options.headers['Content-Type'], 'image/png');
+  assert.equal(calls[0].options.body, file);
+  await assert.rejects(client.uploadScreenshot(new Blob(['bad'], { type: 'text/plain' })),
+    /只接受 PNG 或 JPEG/);
+  await assert.rejects(client.uploadScreenshot(new Blob(['tiny'], { type: 'image/png' })),
+    /8 字节到 5MB/);
 });

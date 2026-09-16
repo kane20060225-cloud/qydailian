@@ -22,4 +22,8 @@ test('only current-user PNG/JPEG screenshot files can be associated', (t) => {
   const invalid = 'rental_3_1700000000001.png';
   fs.writeFileSync(path.join(dir, invalid), Buffer.from('not-an-image'));
   assert.throws(() => validateRentalPaymentEvidence(dir, invalid, 3), /PNG 或 JPEG/);
+  const jpeg = 'rental_3_1700000000002.jpg';
+  fs.writeFileSync(path.join(dir, jpeg), Buffer.from('ffd8ffe000000000', 'hex'));
+  assert.equal(validateRentalPaymentEvidence(dir, jpeg, 3), path.join(dir, jpeg));
+  fs.unlinkSync(path.join(dir, jpeg));
 });

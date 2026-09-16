@@ -7,7 +7,7 @@ const MAX_EVIDENCE_BYTES = 5 * 1024 * 1024;
 
 function validateRentalPaymentEvidence(uploadDir, filename, userId) {
   if (typeof filename !== 'string' ||
-      !new RegExp(`^rental_${Number(userId)}_[0-9]{10,16}\\.png$`).test(filename) ||
+      !new RegExp(`^rental_${Number(userId)}_[0-9]{10,16}\\.(?:png|jpe?g)$`).test(filename) ||
       path.basename(filename) !== filename) {
     throw new Error('付款截图文件名无效或不属于当前用户');
   }

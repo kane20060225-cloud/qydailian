@@ -865,7 +865,7 @@ async function loadAdminRentalOrders() {
         let html = '<table><tr><th>订单</th><th>双方</th><th>现金/积分</th><th>状态</th><th>凭证</th><th>操作</th></tr>';
         orders.forEach(o => {
             const no = rentalSafeText(o.order_no);
-            const screenshot = o.evidence_filename && /^rental_\d+_\d+\.png$/.test(o.evidence_filename) ?
+            const screenshot = o.evidence_filename && /^rental_\d+_\d+\.(?:png|jpe?g)$/.test(o.evidence_filename) ?
                 `<a href="/uploads/${encodeURIComponent(o.evidence_filename)}" target="_blank" rel="noopener">查看截图</a>` : '无';
             html += `<tr><td>${no}</td><td>${rentalSafeText(o.renter_name)} → ${rentalSafeText(o.owner_name)}</td>
                 <td>¥${rentalSafeText(o.total_price)} / ${rentalSafeText(o.credits_used)} 积分</td>
@@ -2771,25 +2771,17 @@ function updateRentalPrice() {
             const files = fileInput.files;
             for (let i = 0; i < Math.min(files.length, 3); i++) {
                 const file = files[i];
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    const base64 = e.target.result;
-                    const token = safeGetItem('token');
-                    const res = await fetch(`${API_BASE}/rental/upload-screenshot`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ screenshot: base64 })
-                    });
-                    const data = await res.json();
-                    if (data.filename) {
-                        uploadedFiles.push(data.filename);
-                        const img = document.createElement('img');
-                        img.src = `/uploads/${data.filename}`;
-                        img.style = 'width:80px; height:80px; object-fit:cover; border-radius:6px;';
-                        previewDiv.appendChild(img);
-                    }
-                };
-                reader.readAsDataURL(file);
+                try {
+                    const filename = await rentalClient.uploadScreenshot(file);
+                    uploadedFiles.push(filename);
+                    const img = document.createElement('img');
+                    img.src = `/uploads/${encodeURIComponent(filename)}`;
+                    img.alt = '已上传账号截图';
+                    img.style = 'width:80px; height:80px; object-fit:cover; border-radius:6px;';
+                    previewDiv.appendChild(img);
+                } catch (err) {
+                    showToast('❌ ' + (err.message || '截图上传失败'));
+                }
             }
         });
     }
