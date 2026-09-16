@@ -23,14 +23,14 @@ test('rental client loads before the website script and centralizes account requ
 test('rental account publishing streams new files instead of converting them to Base64', () => {
   const script = fs.readFileSync(path.join(publicDir, 'script.js'), 'utf8');
   const client = fs.readFileSync(path.join(publicDir, 'rental-client.js'), 'utf8');
-  const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const routes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'rental-accounts.js'), 'utf8');
   const publisher = script.slice(script.indexOf('// 发布出租：上传截图预览'),
     script.indexOf('// 我的租用订单'));
   assert.match(publisher, /rentalClient\.uploadScreenshot\(file\)/);
   assert.doesNotMatch(publisher, /reader\.readAsDataURL\(file\)/);
   assert.match(client, /body: file/);
-  const route = server.slice(server.indexOf("app.post('/api/rental/upload-screenshot'"),
-    server.indexOf("app.get('/api/rental/accounts'"));
+  const route = routes.slice(routes.indexOf("router.post('/rental/upload-screenshot'"),
+    routes.indexOf("router.get('/rental/accounts'"));
   assert.match(route, /await saveRentalScreenshot/);
   assert.doesNotMatch(route, /writeFileSync/);
 });
