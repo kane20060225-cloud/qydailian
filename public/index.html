@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="style.css?v=20260916-nav2">
     <link rel="stylesheet" href="order-center.css?v=20260916-oc3">
     <link rel="stylesheet" href="order-notifications.css?v=20260916-notify1">
+    <link rel="stylesheet" href="booster-availability.css?v=20260916-b13">
 </head>
 <body>
     <!-- 顶部栏 -->
@@ -564,9 +565,11 @@
                 <button class="booster-tab active" data-tab="booster-hall">接单大厅</button>
                 <button class="booster-tab" data-tab="booster-my">我的接单</button>
                 <button class="booster-tab" data-tab="booster-earnings">我的收益</button>
+                <button class="booster-tab" data-tab="booster-availability">上下线设置</button>
             </nav>
         </div>
         <div class="container">
+            <section class="card availability-card" id="boosterAvailabilityCard" aria-live="polite">正在读取工作状态…</section>
             <div class="booster-tab-content active" id="booster-hall">
                 <div id="hallOrderList" class="order-list">加载中...</div>
             </div>
@@ -576,6 +579,7 @@
             <div class="booster-tab-content" id="booster-earnings" style="display:none;">
                 <div id="earningsDisplay">加载中...</div>
             </div>
+            <div class="booster-tab-content" id="booster-availability" style="display:none;"></div>
         </div>
     </div>
 
@@ -979,9 +983,10 @@
     </div>
 </div>
     <script src="ui-runtime.js"></script>
+    <script src="booster-availability.js?v=20260916-b13"></script>
     <script src="rental-client.js"></script>
     <script src="order-center.js?v=20260916-oc3"></script>
     <script src="order-notifications.js?v=20260916-notify1"></script>
-    <script src="script.js?v=20260916-nav2"></script>
+    <script src="script.js?v=20260916-b13"></script>
 </body>
 </html>

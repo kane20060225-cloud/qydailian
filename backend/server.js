@@ -33,6 +33,8 @@ const {visibleOrdersSql}=require('./lib/order-center');
 const {createWecomClient}=require('./lib/wecom-client');
 const {createNotificationSystem,enqueueHall,enqueueUser}=require('./lib/order-notifications');
 const {createNotificationRouter}=require('./routes/order-notifications');
+const {createAvailabilityRouter}=require('./routes/booster-availability');
+const {changeAvailability,validateChange}=require('./lib/booster-availability');
 const { paymentFormParams, createRechargeOrder, processTrackedRecharge,
   refreshRecharge, canResumeRecharge } = require('./lib/recharge-orders');
 const {
@@ -841,6 +843,8 @@ function boosterMiddleware(req, res, next) {
   });
 }
 
+app.use('/api',createAvailabilityRouter({pool,boosterMiddleware,adminMiddleware}));
+
 app.post('/api/auth/logout', authMiddleware, async (req, res) => {
   try {
     const [result] = await pool.execute(
@@ -1483,6 +1487,7 @@ app.post('/api/booster/take/:orderNo', boosterMiddleware, async (req, res) => {
     const [taken]=await conn.execute("UPDATE orders SET booster_id = ?, hall_status = ?, status = ? WHERE order_no = ? AND booster_id IS NULL AND hall_status='open' AND status='pending' AND payment_status='paid'", [boosterId, 'taken', 'playing', orderNo]);
     if(taken.affectedRows!==1){await conn.rollback();return res.status(409).json({error:'订单已被接走，请刷新大厅'});}
     await recordOperation(conn,{eventKey:`order:${orderNo}:taken`,actorUserId:boosterId,action:'order_taken',targetType:'order',targetRef:orderNo});
+    if(req.body?.go_online===true)await changeAvailability(conn,boosterId,boosterId,validateChange({action:'temporary',online:true,hours:2}),'take_online');
     await enqueueUser(conn,{userId:orderRows[0].user_id,key:`taken:${orderNo}`,ref:orderNo,title:'订单已接单',body:`订单 ${orderNo} 已有打手接单，可在个人中心查看进度。`});
     await enqueueUser(conn,{userId:boosterId,key:`take_confirmed:${orderNo}`,kind:'take_confirmed',ref:orderNo,title:'接单成功',body:`订单 ${orderNo} 已分配给你，请在打手面板查看并开始处理。`});
     await conn.commit();

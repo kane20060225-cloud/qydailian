@@ -1,5 +1,6 @@
 'use strict';
 const {SECRET_CONTEXT}=require('./wecom-client');
+const {onlineRecipients,loadAvailability}=require('./booster-availability');
 const WEIGHTS={budget:1,standard:2,silver:3,gold:4};
 function canReceiveOrder(identity,required){return Boolean(WEIGHTS[identity]&&WEIGHTS[required]&&WEIGHTS[identity]>=WEIGHTS[required]);}
 async function enqueueHall(conn,ref) {
@@ -11,14 +12,16 @@ async function enqueueHall(conn,ref) {
     WHERE o.order_no=? AND o.hall_status='open' AND o.booster_id IS NULL AND o.status='pending' AND o.payment_status='paid'
     AND FIELD(u.booster_identity,'budget','standard','silver','gold')>=FIELD(o.required_identity,'budget','standard','silver','gold')
     AND FIELD(o.required_identity,'budget','standard','silver','gold')>0 AND COALESCE(p.new_orders,1)=1 AND COALESCE(s.notify_order_update,1)=1`,[ref]);
-  await queueDeliveries(conn,`hall:${ref}`);
+  await queueDeliveries(conn,`hall:${ref}`,true);
 }
-async function queueDeliveries(conn,key) {
+async function queueDeliveries(conn,key,newOrder=false) {
+  const online=newOrder?await onlineRecipients(conn):[];
+  const eligibility=newOrder?` AND n.user_id IN (${online.length?online.map(()=>'?').join(','):'NULL'})`:'';
   await conn.execute(`INSERT IGNORE INTO notification_deliveries (notification_id)
     SELECT n.id FROM order_notifications n JOIN wecom_user_bindings b ON b.user_id=n.user_id
     JOIN wecom_notification_config c ON c.id=1 AND c.enabled=1 AND c.corp_id=b.corp_id AND c.agent_id=b.agent_id
     LEFT JOIN notification_preferences p ON p.user_id=n.user_id
-    WHERE n.event_key=? AND COALESCE(p.wecom,1)=1`,[key]);
+    WHERE n.event_key=? AND COALESCE(p.wecom,1)=1${eligibility}`,[key,...online]);
 }
 async function enqueueUser(conn,{userId,key,kind='order_update',ref,title,body}) {
   await conn.execute(`INSERT IGNORE INTO order_notifications (user_id,event_key,kind,order_type,order_ref,title,body)
@@ -60,11 +63,12 @@ function createNotificationSystem({pool,cipher,wecomClient,siteUrl}) {
             LEFT JOIN user_settings s ON s.user_id=n.user_id WHERE n.id=?`,[id]);
           const n=rows[0];let valid=n && n.wecom_user_id && n.corp_id===config.corp_id && Number(n.agent_id)===Number(config.agent_id) && n.wecom_enabled && n.order_updates_enabled && ['booster','admin','user'].includes(n.role);
           if(valid && n.kind==='new_order') {const [orders]=await pool.execute('SELECT hall_status,booster_id,status,payment_status,required_identity FROM orders WHERE order_no=?',[n.order_ref]);const o=orders[0];
-            valid=n.role==='booster' && n.new_orders_enabled && o?.hall_status==='open' && !o.booster_id && o.status==='pending' && o.payment_status==='paid' && canReceiveOrder(n.booster_identity,o.required_identity);}
+            valid=n.role==='booster' && n.new_orders_enabled && o?.hall_status==='open' && !o.booster_id && o.status==='pending' && o.payment_status==='paid' && canReceiveOrder(n.booster_identity,o.required_identity) && (await loadAvailability(pool,n.user_id)).online;}
           if(!valid || Date.now()-new Date(n.created_at).getTime()>86400000){await pool.execute("UPDATE notification_deliveries SET status='skipped',last_error_code='STALE_OR_DISABLED',locked_at=NULL WHERE notification_id=?",[id]);continue;}
           // Recheck config immediately before sending, so edits/disable do not use a stale secret.
           const fresh=await loadConfig(pool,cipher);
           if(!fresh?.enabled || fresh.corp_id!==config.corp_id || Number(fresh.agent_id)!==Number(config.agent_id) || fresh.secret!==config.secret){await pool.execute("UPDATE notification_deliveries SET status='pending',locked_at=NULL WHERE notification_id=?",[id]);break;}
+          if(n.kind==='new_order'&&!(await loadAvailability(pool,n.user_id)).online){await pool.execute("UPDATE notification_deliveries SET status='skipped',last_error_code='BOOSTER_OFFLINE',locked_at=NULL WHERE notification_id=?",[id]);continue;}
           const messageId=await wecomClient.send(fresh,n.wecom_user_id,n,siteUrl);
           await pool.execute("UPDATE notification_deliveries SET status='sent',message_id=?,last_error_code=NULL,locked_at=NULL WHERE notification_id=?",[messageId,id]);
         }catch(err){const code=/^WECOM_[A-Z0-9_-]+$/.test(err.code||'')?err.code:'DELIVERY_FAILED';

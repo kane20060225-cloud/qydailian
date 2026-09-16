@@ -259,6 +259,11 @@ function init() {
         }
       }});
     initOrderNotifications();
+    BoosterAvailability.init({apiBase:API_BASE,getToken:()=>safeGetItem('token'),onToast:showToast,
+      onIdentity:userId=>window.updateBoosterIdentity(userId),onSettings:()=>{
+        const tab=document.querySelector('.settings-nav-btn[data-setting="notifications"]');
+        if(tab)selectPanelNavigation(tab,'.settings-nav-btn');showSection('settings');
+      }});
     updateDetailCards();
     refreshPrice();
     generatePlayers();
@@ -378,6 +383,9 @@ function selectPanelNavigation(button, selector) {
 
 function showSection(target) {
     if (target !== 'mainMenu' && !sections[target]) return;
+    if(document.body.dataset.currentSection==='booster'&&target!=='booster'){
+        if(!BoosterAvailability.canLeave())return;BoosterAvailability.leave();
+    }
     if (mainMenu) mainMenu.style.display = 'none';
     Object.values(sections).forEach(sec => { if (sec) sec.style.display = 'none'; });
 
@@ -409,6 +417,7 @@ function showSection(target) {
             document.querySelector('.admin-tab.active')?.click();
             break;
         case 'booster':
+            BoosterAvailability.refresh();
             document.querySelector('.booster-tab.active')?.click();
             break;
         case 'tools':
@@ -1066,9 +1075,10 @@ document.addEventListener('click', async (e) => {
     if (e.target.classList.contains('take-order-btn')) {
         const orderNo = e.target.dataset.order;
         try {
-            const res = await fetch(`${API_BASE}/booster/take/${orderNo}`, { method:'POST', headers:{'Authorization':`Bearer ${token}`} });
+            const availability=await BoosterAvailability.prepareTake();if(!availability)return;
+            const res = await fetch(`${API_BASE}/booster/take/${orderNo}`, { method:'POST', headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(availability) });
             const data = await res.json();
-            if (res.ok) { showToast('✅ 接单成功'); loadHallOrders(); } else showToast('❌ ' + (data.error||'接单失败'));
+            if (res.ok) { showToast('✅ 接单成功'); loadHallOrders();BoosterAvailability.refresh(); } else showToast('❌ ' + (data.error||'接单失败'));
         } catch (err) { showToast('❌ 网络错误'); }
     }
     if (e.target.classList.contains('complete-order-btn')) {
@@ -1259,35 +1269,7 @@ async function loadAdminCustomRequests() {
     list.innerHTML = html;
   } catch (err) { list.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
 }
-async function loadAdminBoosters() {
-    const list = getEl('adminBoostersList'); if (!list) return;
-    const token = safeGetItem('token');
-    try {
-        const res = await fetch(`${API_BASE}/admin/boosters`, { headers: { 'Authorization': `Bearer ${token}` } });
-        const boosters = await res.json();
-        if (!boosters.length) { list.innerHTML = '<p>暂无打手</p>'; return; }
-        let html = '<table><tr><th>用户名</th><th>身份组</th><th>积分</th><th>当前接单</th><th>操作</th></tr>';
-        boosters.forEach(b => {
-            html += `<tr>
-                <td>${b.username}</td>
-                <td>${b.booster_identity}</td>
-                <td>${b.booster_points}</td>
-                <td>${b.active_orders || 0} 单</td>
-                <td>
-                    <select class="booster-identity-select" data-userid="${b.id}">
-                        <option value="gold" ${b.booster_identity==='gold'?'selected':''}>金牌</option>
-                        <option value="silver" ${b.booster_identity==='silver'?'selected':''}>银牌</option>
-                        <option value="standard" ${b.booster_identity==='standard'?'selected':''}>标准</option>
-                        <option value="budget" ${b.booster_identity==='budget'?'selected':''}>特惠</option>
-                    </select>
-                    <button onclick="updateBoosterIdentity(${b.id})">更新</button>
-                </td>
-            </tr>`;
-        });
-        html += '</table>';
-        list.innerHTML = html;
-    } catch (err) { list.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
-}
+async function loadAdminBoosters() { return BoosterAvailability.loadAdmin(); }
 window.updateBoosterIdentity = async function(userId) {
     const select = document.querySelector(`.booster-identity-select[data-userid="${userId}"]`);
     if (!select) return;
@@ -1419,6 +1401,7 @@ document.querySelectorAll('.booster-tab').forEach(tab => {
         if (target === 'booster-hall') loadHallOrders();
         else if (target === 'booster-my') loadMyBoosterOrders();
         else if (target === 'booster-earnings') loadEarnings();
+        else if (target === 'booster-availability') BoosterAvailability.showSchedule();
     });
 });
 async function loadHallOrders() {

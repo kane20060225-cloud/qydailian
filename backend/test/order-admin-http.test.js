@@ -3,6 +3,7 @@ const test=require('node:test');const assert=require('node:assert/strict');const
 Object.assign(process.env,{JWT_SECRET:'b9-test-jwt',DATA_ENCRYPTION_KEY:Buffer.alloc(32,9).toString('base64'),DB_HOST:'127.0.0.1',DB_USER:'test',DB_PASSWORD:'test',DB_NAME:'test',ALIPAY_ENABLED:'false'});
 let row,updates=0,audits=0,failAudit=false,snapshot;
 const conn={beginTransaction:async()=>{snapshot=row?{...row}:null;},commit:async()=>{snapshot=null;},rollback:async()=>{row=snapshot?{...snapshot}:null;},release(){},execute:async(sql,p)=>{
+  if(sql==='SELECT * FROM booster_availability')return [[]];
   if(sql.startsWith('SELECT id,status,payment_status,booster_id,hall_status'))return [row?[{...row}]:[]];
   if(sql.startsWith('UPDATE orders SET hall_status')){row.hall_status=p[0];updates++;return [{affectedRows:1}];}
   if(sql.startsWith('INSERT INTO operation_audit')){if(failAudit)throw Error('audit unavailable');audits++;return [{affectedRows:1}];}
