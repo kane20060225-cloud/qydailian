@@ -16,7 +16,7 @@
     <link rel="stylesheet" href="ui-foundation.css?v=20260917-b19">
     <link rel="stylesheet" href="light-theme.css?v=20260917-b19">
     <link rel="stylesheet" href="theme-components.css?v=20260917-b19">
-    <link rel="stylesheet" href="service-content.css?v=20260917-b19">
+    <link rel="stylesheet" href="service-content.css?v=20260917-b21-2">
     <link rel="stylesheet" href="dark-theme.css?v=20260917-b19">
 </head>
 <body>
@@ -120,9 +120,13 @@
         <div class="section-top">
             <button class="back-btn" data-back="mainMenu">← 返回首页</button>
             <h2 class="section-heading">⚡ 代练下单</h2>
+            <button type="button" id="boostActivitiesButton" class="boost-activities-button" aria-haspopup="dialog" aria-controls="boostActivitiesDialog"><span class="activity-gift" aria-hidden="true">🎁</span><span>当前活动</span><span id="boostActivitiesCount" class="activity-count" hidden></span></button>
         </div>
+        <dialog id="boostActivitiesDialog" class="boost-activities-dialog" aria-labelledby="boostActivitiesTitle">
+            <header class="boost-activities-header"><h3 id="boostActivitiesTitle">🎁 当前活动</h3><button type="button" id="boostActivitiesClose" class="modal-close" aria-label="关闭活动窗口">×</button></header>
+            <div id="boostActivities" aria-live="polite"><p class="activity-empty">正在加载活动…</p></div>
+        </dialog>
         <div class="container boost-container">
-            <details id="boostActivities" class="activities-strip" hidden><summary>当前活动</summary></details>
             <p id="boostActivitySelection" class="service-status" hidden></p>
             <div class="boost-progress" aria-label="下单流程">
                 <span class="active"><b>1</b>选择服务</span><i></i><span><b>2</b>填写信息</span><i></i><span><b>3</b>确认提交</span>
@@ -1020,7 +1024,7 @@
     <script src="boost-checkout.js?v=20260917-b19"></script>
     <script src="rental-discovery.js?v=20260916-b16"></script>
     <script src="service-defaults.js?v=20260917-b19"></script>
-    <script src="service-content.js?v=20260917-b19"></script>
-    <script src="script.js?v=20260917-b20"></script>
+    <script src="service-content.js?v=20260917-b21"></script>
+    <script src="script.js?v=20260917-b21"></script>
 </body>
 </html>

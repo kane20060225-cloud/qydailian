@@ -1,0 +1,11 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+const workspace=path.resolve(__dirname,'../..'),output=path.join(workspace,'artifacts/ui-preview/b21-release');
+const files=['backend/lib/login-devices.js','public/index.html','public/script.js','public/service-content.js','public/service-content.css'];
+const git=args=>cp.execFileSync('git',args,{cwd:workspace,maxBuffer:16*1024*1024}),hash=bytes=>crypto.createHash('sha256').update(bytes).digest('hex'),normalized=bytes=>hash(bytes.toString('utf8').replace(/\r\n/g,'\n'));
+const commit=git(['rev-parse','HEAD']).toString().trim(),baseline=process.argv[2];assert.match(baseline||'',/^[a-f0-9]{40}$/);
+assert.equal(git(['status','--porcelain']).toString().trim(),'','Commit all source changes before preparing a release');
+fs.mkdirSync(output,{recursive:true});git(['archive','--format=tar','--output='+path.join(output,'runtime.tar'),commit,...files]);
+const manifest={commit,baseline_commit:baseline,release:'b21-devices-activities-release-'+commit.slice(0,10),archive_sha256:hash(fs.readFileSync(path.join(output,'runtime.tar'))),files:files.map(name=>({path:name,baseline:normalized(git(['show',baseline+':'+name])),sha256:normalized(git(['show',commit+':'+name]))}))};
+fs.writeFileSync(path.join(output,'manifest.json'),JSON.stringify(manifest,null,2));fs.copyFileSync(path.join(__dirname,'deploy-b21-release.cjs'),path.join(output,'deploy.cjs'));
+console.log(JSON.stringify({output,release:manifest.release,commit,archive_sha256:manifest.archive_sha256},null,2));

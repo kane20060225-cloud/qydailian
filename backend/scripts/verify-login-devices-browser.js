@@ -14,6 +14,7 @@ else if(p==='/api/user/messages')data=[];
 await route.fulfill({status,contentType:'application/json',body:JSON.stringify(data)});});
 await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'networkidle'});
 const key=await page.evaluate(()=>getLoginDeviceId());await page.reload({waitUntil:'networkidle'});assert.equal(await page.evaluate(()=>getLoginDeviceId()),key);
+await page.evaluate(()=>localStorage.removeItem('qy.login.device.v1'));await page.reload({waitUntil:'networkidle'});assert.equal(await page.evaluate(()=>getLoginDeviceId()),key,'cookie restores device identity after local storage is lost');
 await page.evaluate(()=>showSection('admin'));await page.locator('#adminOrderCenter [data-show-metrics]').waitFor();await page.waitForFunction(()=>!document.querySelector('#adminOrderList').hasAttribute('aria-busy'));assert.equal(metricsCalls,0);assert.equal(await page.locator('[data-metrics]').count(),0);
 await page.locator('[data-show-metrics]').click();await page.locator('[data-metrics]').filter({hasText:'9 小时'}).waitFor();assert.equal(metricsCalls,1);await page.locator('#ocClose').click();
 await page.evaluate(()=>showSection('settings'));await page.locator('[data-setting="devices"]').click();await page.locator('.login-device-card').waitFor();

@@ -13,10 +13,25 @@ function isPublicIp(value){
   if(isIP(ip)===4){const [a,b]=ip.split('.').map(Number);return !(a===0||a===10||a===127||a>=224||a===169&&b===254||a===172&&b>=16&&b<=31||a===192&&b===168||a===100&&b>=64&&b<=127||a===192&&b===0||a===198&&(b===18||b===19)||a===198&&b===51||a===203&&b===0);}
   return /^[23][0-9a-f]{3}:/i.test(ip)&&!/^2001:(?:db8|0):/i.test(ip);
 }
-function collapseDevices(rows){
+function historySignature(agent){
+  let value=normalizeAgent(agent);
+  // Older iOS records sometimes omit Safari's optional Version/Safari tokens.
+  // Keep the platform, WebKit build and any other browser/app identifiers.
+  if(/iPhone|iPad|iPod/i.test(value)&&/AppleWebKit/i.test(value)&&!/(?:CriOS|FxiOS|EdgiOS|OPiOS)\//i.test(value)){
+    value=value.replace(/\s+(?:Version|Safari)\/[^\s]+/gi,'');
+  }
+  return value.replace(/\s+/g,' ').trim();
+}
+function collapseDevices(rows,userId){
   const sorted=[...rows].sort((a,b)=>new Date(b.login_time)-new Date(a.login_time)||Number(b.id)-Number(a.id));
-  const known=new Set(sorted.filter(r=>r.device_key).map(r=>normalizeAgent(r.device_info))),seen=new Set();
-  return sorted.filter(r=>{const agent=normalizeAgent(r.device_info);if(!r.device_key&&known.has(agent))return false;const key=r.device_key||'legacy:'+agent;if(seen.has(key))return false;seen.add(key);return true;}).slice(0,10);
+  const legacy=row=>!row.device_key||(userId!=null&&row.device_key===deviceKey(userId,null,row.device_info));
+  const known=new Map(),seen=new Set();
+  for(const row of sorted){if(legacy(row))continue;const signature=historySignature(row.device_info);if(!known.has(signature))known.set(signature,new Set());known.get(signature).add(row.device_key);}
+  return sorted.filter(row=>{
+    const signature=historySignature(row.device_info),matches=known.get(signature);
+    const key=legacy(row)?(matches?.size===1?[...matches][0]:'legacy:'+signature):row.device_key;
+    if(seen.has(key))return false;seen.add(key);return true;
+  }).slice(0,10);
 }
 function createLocator({fetchImpl=global.fetch,now=Date.now}={}){
   const cache=new Map();let day='',requests=0;
@@ -44,7 +59,7 @@ async function listDevices(db,userId,locate){
     SELECT id,device_key,device_info,ip_address,login_time,ROW_NUMBER() OVER (
       PARTITION BY COALESCE(device_key,SHA2(COALESCE(device_info,''),256)) ORDER BY login_time DESC,id DESC) AS rn
     FROM login_devices WHERE user_id=?) AS latest WHERE rn=1 ORDER BY login_time DESC,id DESC LIMIT 100`,[userId]);
-  return Promise.all(collapseDevices(rows).map(async row=>({device_info:row.device_info,ip_address:row.ip_address,login_time:row.login_time,login_location:await locate(row.ip_address)})));
+  return Promise.all(collapseDevices(rows,userId).map(async row=>({device_info:row.device_info,ip_address:row.ip_address,login_time:row.login_time,login_location:await locate(row.ip_address)})));
 }
 async function initialize(db){
   const [columns]=await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='login_devices' AND COLUMN_NAME='device_key'");

@@ -30,12 +30,21 @@
 .service-editor-feedback { color:var(--red); white-space:pre-wrap; }
 .service-editor-save { position:sticky; bottom:12px; background:var(--card-bg); border:1px solid var(--border); border-radius:10px; padding:12px; display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
 .content-manager-tabs { flex-wrap:wrap; }
-@media(min-width:1400px) {
- body[data-current-section=boost] .boost-container.has-activities { position:relative; width:calc(100% - 300px); margin-left:max(24px,calc((100vw - 1460px)/2)); margin-right:auto; }
- #boostActivities { position:absolute; top:0; left:calc(100% + 8px); width:220px; }
- #boostActivities > summary { padding:16px 14px; }
- #boostActivities .activity-list { display:block; padding:0 12px 12px; max-height:calc(100dvh - 220px); overflow:auto; }
- #boostActivities .activity-card + .activity-card { margin-top:12px; }
+body .boost-activities-button { gap:8px; padding:7px 12px; border:1px solid var(--border); background:var(--surface-muted); color:var(--text-secondary); box-shadow:none; }
+body .boost-activities-button.has-activities { background:rgba(240,160,50,.12); border-color:#d59a37; color:var(--text); }
+.activity-gift { display:grid; place-items:center; width:28px; height:28px; border-radius:8px; background:rgba(240,160,50,.18); font-size:1.2rem; }
+.activity-count { min-width:20px; padding:2px 6px; border-radius:12px; background:#b9700c; color:#fff; font-size:.7rem; }
+.boost-activities-dialog { margin:auto; padding:0; width:min(720px,calc(100% - 32px)); max-height:calc(100dvh - 48px); overflow:auto; overscroll-behavior:contain; background:var(--card-bg); color:var(--text); border:1px solid var(--border); border-radius:18px; box-shadow:0 24px 80px var(--modal-shadow-color); }
+.boost-activities-dialog::backdrop { background:var(--overlay); backdrop-filter:blur(4px); }
+.boost-activities-header { position:sticky; top:0; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 20px; margin-bottom:16px; background:var(--card-bg); border-bottom:1px solid var(--border); z-index:1; }
+.boost-activities-header h3 { font-size:1.1rem; }
+#boostActivities .activity-list { grid-template-columns:minmax(0,1fr); }
+body:has(#boostActivitiesDialog[open]) { overflow:hidden; }
+@media(max-width:700px) {
+ body #sectionBoost > .section-top { flex-wrap:wrap; }
+ body .boost-activities-button { gap:6px; padding:5px 8px; font-size:.75rem; }
+ .activity-gift { width:24px; height:24px; font-size:1rem; }
+ .boost-activities-header { padding:12px 16px; }
 }
 @media(max-width:700px) {
  .activity-list { grid-template-columns:1fr; }

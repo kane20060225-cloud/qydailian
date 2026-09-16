@@ -400,6 +400,7 @@ function selectPanelNavigation(button, selector) {
 }
 
 function showSection(target) {
+    if(target!=='boost')ServiceContent.closeActivities();
     if (target !== 'mainMenu' && !sections[target]) return;
     if(document.body.dataset.currentSection==='booster'&&target!=='booster'){
         if(!BoosterAvailability.canLeave())return;BoosterAvailability.leave();
@@ -2272,10 +2273,13 @@ async function loadMessages() {
 // 登录设备
 let loginDeviceFallback;
 function getLoginDeviceId() {
-    const key='qy.login.device.v1',saved=safeGetItem(key);
-    if (/^[a-zA-Z0-9_-]{16,100}$/.test(saved||'')) return saved;
-    if (!loginDeviceFallback) loginDeviceFallback=Array.from(crypto.getRandomValues(new Uint8Array(24)),v=>v.toString(16).padStart(2,'0')).join('');
-    safeSetItem(key,loginDeviceFallback);return loginDeviceFallback;
+    const key='qy.login.device.v1',valid=value=>/^[a-zA-Z0-9_-]{16,100}$/.test(value||'');
+    const saved=safeGetItem(key),cookie=document.cookie.split('; ').find(part=>part.startsWith('qy_login_device='))?.slice('qy_login_device='.length);
+    // A non-authentication cookie recovers identity if only localStorage is lost.
+    const id=valid(saved)?saved:valid(cookie)?cookie:(loginDeviceFallback||(loginDeviceFallback=Array.from(crypto.getRandomValues(new Uint8Array(24)),v=>v.toString(16).padStart(2,'0')).join('')));
+    if(saved!==id)safeSetItem(key,id);
+    document.cookie=`qy_login_device=${id}; path=/; max-age=31536000; SameSite=Lax${location.protocol==='https:'?'; Secure':''}`;
+    return id;
 }
 function loginDeviceLabel(agent) {
     const ua=String(agent||''),os=/Android/i.test(ua)?'Android':/iPhone|iPad/i.test(ua)?'iOS':/Windows/i.test(ua)?'Windows':/Macintosh|Mac OS/i.test(ua)?'macOS':/Linux/i.test(ua)?'Linux':'未知系统';

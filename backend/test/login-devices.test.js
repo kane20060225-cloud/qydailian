@@ -9,7 +9,32 @@ test('stable device identity survives browser upgrades and isolates users and de
 });
 test('history collapses legacy duplicates while preserving distinct known devices with identical agents',()=>{
  const rows=[{id:1,device_info:'Chrome/100.1',login_time:'2026-01-01'},{id:2,device_info:'Chrome/130.2',login_time:'2026-02-01'},{id:3,device_key:'a',device_info:'Chrome/131.3',login_time:'2026-03-01'},{id:4,device_key:'b',device_info:'Chrome/131.3',login_time:'2026-04-01'},{id:5,device_key:'a',device_info:'Chrome/132.3',login_time:'2026-05-01'}];
- assert.deepEqual(devices.collapseDevices(rows).map(r=>r.id),[5,4]);assert.deepEqual(devices.collapseDevices(rows.slice(0,2)).map(r=>r.id),[2]);
+ assert.deepEqual(devices.collapseDevices(rows).map(r=>r.id),[5,4,2]);assert.deepEqual(devices.collapseDevices(rows.slice(0,2)).map(r=>r.id),[2]);
+});
+
+test('legacy and fallback identities merge into one known device using the newest login and IP',async()=>{
+ const ua='Mozilla/5.0 Chrome/130.2',rows=[
+  {id:1,device_key:'known-device',device_info:ua,ip_address:'1.1.1.1',login_time:'2026-09-15'},
+  {id:2,device_key:devices.deviceKey(7,null,ua),device_info:ua,ip_address:'8.8.8.8',login_time:'2026-09-16'},
+  {id:3,device_info:'Mozilla/5.0 Chrome/131.3',ip_address:'9.9.9.9',login_time:'2026-09-17'}
+ ];
+ const located=[];const result=await devices.listDevices({execute:async()=>[rows]},7,async ip=>{located.push(ip);return '最新地点';});
+ assert.equal(result.length,1);assert.equal(result[0].login_time,'2026-09-17');assert.equal(result[0].ip_address,'9.9.9.9');assert.equal(result[0].login_location,'最新地点');assert.deepEqual(located,['9.9.9.9']);
+});
+
+test('iOS legacy Safari variants collapse while explicit device and other browser identities stay separate',()=>{
+ const base='Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko)',ua=base+' Version/18.0 Mobile/15E148 Safari/604.1';
+ const rows=[{id:1,device_info:ua,login_time:'2026-09-15'},{id:2,device_info:base+' Mobile/15E148',login_time:'2026-09-16'}];
+ assert.deepEqual(devices.collapseDevices(rows).map(r=>r.id),[2]);
+ rows.push({id:3,device_key:'iphone-a',device_info:ua,login_time:'2026-09-17'});
+ assert.deepEqual(devices.collapseDevices(rows).map(r=>r.id),[3]);
+ rows.push({id:4,device_key:'iphone-b',device_info:ua,login_time:'2026-09-18'},{id:5,device_info:base+' CriOS/130.0 Mobile/15E148 Safari/604.1',login_time:'2026-09-19'});
+ assert.deepEqual(devices.collapseDevices(rows).map(r=>r.id),[5,4,3,2]);
+});
+
+test('IP equality cannot merge distinct known devices; device list stays at the latest ten',()=>{
+ const rows=Array.from({length:12},(_,id)=>({id,device_key:'device-'+id,device_info:'Chrome/130.0',ip_address:'1.1.1.1',login_time:new Date(2026,8,id+1).toISOString()}));
+ assert.deepEqual(devices.collapseDevices(rows).map(r=>r.id),[11,10,9,8,7,6,5,4,3,2]);
 });
 test('login upsert records latest IP and agent without affecting authentication',async()=>{
  let captured;await devices.recordLogin({execute:async(...args)=>captured=args},7,'abcdef0123456789','Chrome','::ffff:1.1.1.1');
