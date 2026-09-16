@@ -24,11 +24,11 @@ function fakeConnection() {
   const conn = {
     async execute(sql, params = []) {
       const q = sql.replace(/\s+/g, ' ').trim();
-      if (q.startsWith('SELECT table_name, column_name, column_type FROM information_schema.columns')) {
+      if (q.startsWith('SELECT TABLE_NAME AS table_name, COLUMN_NAME AS column_name, COLUMN_TYPE AS column_type FROM information_schema.columns')) {
         return [state.columns.map(([table_name, column_name, column_type]) =>
           ({ table_name, column_name, column_type }))];
       }
-      if (q.startsWith('SELECT table_name, index_name, seq_in_index, column_name FROM information_schema.statistics')) {
+      if (q.startsWith('SELECT TABLE_NAME AS table_name, INDEX_NAME AS index_name, SEQ_IN_INDEX AS seq_in_index, COLUMN_NAME AS column_name FROM information_schema.statistics')) {
         return [state.indexes.map(([table_name, index_name, seq_in_index, column_name]) =>
           ({ table_name, index_name, seq_in_index, column_name }))];
       }

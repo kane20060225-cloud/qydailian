@@ -35,11 +35,14 @@ function loadMigration() {
 
 async function readSchema(conn) {
   const [columns] = await conn.execute(
-    `SELECT table_name, column_name, column_type FROM information_schema.columns
+    `SELECT TABLE_NAME AS table_name, COLUMN_NAME AS column_name,
+            COLUMN_TYPE AS column_type FROM information_schema.columns
      WHERE table_schema = DATABASE() AND table_name IN ('rental_accounts', 'rental_orders')`
   );
   const [indexes] = await conn.execute(
-    `SELECT table_name, index_name, seq_in_index, column_name FROM information_schema.statistics
+    `SELECT TABLE_NAME AS table_name, INDEX_NAME AS index_name,
+            SEQ_IN_INDEX AS seq_in_index, COLUMN_NAME AS column_name
+     FROM information_schema.statistics
      WHERE table_schema = DATABASE() AND table_name IN ('rental_accounts', 'rental_orders')`
   );
   const [versionTables] = await conn.execute(
