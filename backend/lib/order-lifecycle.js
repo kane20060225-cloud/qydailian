@@ -15,7 +15,7 @@ function reasonInput(reason) {
 async function event(conn, recordOperation, type, ref, actor, action, reason) {
   await conn.execute('INSERT INTO order_management_events (order_type,order_ref,actor_user_id,action,note) VALUES (?,?,?,?,?)',
     [type, ref, actor, action, reason]);
-  await recordOperation(conn, { eventKey: `lifecycle:${type}:${ref}:${action}:${crypto.randomUUID()}`, actorUserId: actor,
+  await recordOperation(conn, { eventKey: `lifecycle:${crypto.randomUUID()}`, actorUserId: actor,
     action, targetType: type === 'recharge' ? 'payment_order' : SOURCES[type][1], targetRef: ref });
 }
 

@@ -11,7 +11,7 @@ const database=process.argv.find(a=>a.startsWith('--database='))?.slice(11);
 if(!/^qydailian_b14_test_[a-z0-9_]+$/.test(database||'')){console.error('Explicit empty --database=qydailian_b14_test_<suffix> required');process.exit(2);}
 const REF='RC1700000000000B14TEST';
 const sdk={exec:async(method,p,opts)=>{assert.equal(method,'alipay.trade.query');assert.equal(opts.validateSign,true);
-  return {code:'10000',outTradeNo:p.bizContent.out_trade_no,tradeNo:'b14-synthetic-trade',tradeStatus:'TRADE_SUCCESS',totalAmount:'6.00'};}};
+  return {code:'10000',outTradeNo:p.bizContent.out_trade_no,tradeNo:'b14-synthetic-'+p.bizContent.out_trade_no,tradeStatus:'TRADE_SUCCESS',totalAmount:'6.00'};}};
 (async()=>{
  const pool=mysql.createPool({host:process.env.DB_HOST||'127.0.0.1',port:Number(process.env.DB_PORT||3306),user:process.env.DB_USER,password:process.env.DB_PASSWORD,database,connectionLimit:8});
  try{
@@ -54,7 +54,7 @@ const sdk={exec:async(method,p,opts)=>{assert.equal(method,'alipay.trade.query')
   const results=await Promise.allSettled([resolveRecharge({...review,ref:backfill,outcome:'tickets_backfilled',alipaySdk:sdk}),resolveRecharge({...review,ref:backfill,outcome:'tickets_backfilled',alipaySdk:sdk})]);
   assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal((await get('recharge',backfill)).state,'credited');
   assert.equal((await pool.execute('SELECT chest_tickets FROM users WHERE id=1'))[0][0].chest_tickets,10020);
-  await processTrackedRecharge({pool,notification:{out_trade_no:backfill,trade_no:'b14-synthetic-trade',trade_status:'TRADE_SUCCESS',total_amount:'6.00',app_id:'b14-test-app',seller_id:'b14-test-seller'},expectedAppId:'b14-test-app',expectedSellerId:'b14-test-seller'});
+  await processTrackedRecharge({pool,notification:{out_trade_no:backfill,trade_no:'b14-synthetic-'+backfill,trade_status:'TRADE_SUCCESS',total_amount:'6.00',app_id:'b14-test-app',seller_id:'b14-test-seller'},expectedAppId:'b14-test-app',expectedSellerId:'b14-test-seller'});
   assert.equal((await pool.execute('SELECT chest_tickets FROM users WHERE id=1'))[0][0].chest_tickets,10020);
   const rollbackRef='RC1700000000000B14ROLLBACK';await recharge(rollbackRef);
   await assert.rejects(()=>resolveRecharge({...review,ref:rollbackRef,outcome:'tickets_backfilled',alipaySdk:sdk,recordOperation:async()=>{throw Error('injected audit failure');}}),/audit failure/);
@@ -62,4 +62,4 @@ const sdk={exec:async(method,p,opts)=>{assert.equal(method,'alipay.trade.query')
   assert.equal(Number((await pool.execute('SELECT COUNT(*) AS total FROM recharge_order_resolutions WHERE out_trade_no=?',[rollbackRef]))[0][0].total),0);
   console.log('B14 isolated MySQL verification passed: concurrent refund/backfill, no fabricated history ledger, timeout exclusions before LIMIT, missing rental ledger protection, rollback, late payment visibility and duplicate notify.');
  }finally{await pool.end();}
-})().catch(err=>{console.error('B14 isolated verification failed:',err.code||err.message);process.exitCode=1;});
+})().catch(err=>{console.error('B14 isolated verification failed:',err.stack||err.message);process.exitCode=1;});

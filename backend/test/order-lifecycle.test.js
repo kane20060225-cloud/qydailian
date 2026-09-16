@@ -93,6 +93,10 @@ test('historical credited resolution records evidence without adding tickets or 
   assert.equal(f.state.resolutions[0].outcome,'historical_credited');assert.equal(f.state.audit.length,1);
   await assert.rejects(()=>f.resolve(),/已有核销/);assert.equal(f.state.tickets,20);
 });
+test('historic references up to 64 characters keep audit keys within the database limit',async()=>{
+  const ref='H'.repeat(64);const f=fixture({order:{status:'paid',out_trade_no:ref}});await f.resolve({ref});
+  assert.ok(f.state.audit[0][0].length<=128);assert.equal(f.state.audit[0][4],ref);
+});
 test('pure unpaid test resolution closes with metadata while preserving original payment record',async()=>{
   const f=fixture({order:{status:'paid'}});await f.resolve({outcome:'test_closed'});
   assert.equal(f.state.order.status,'paid');assert.equal(f.state.tickets,20);assert.equal(f.state.ledger.length,0);assert.equal(f.state.resolutions[0].outcome,'test_closed');
