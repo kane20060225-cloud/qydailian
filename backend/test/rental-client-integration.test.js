@@ -26,7 +26,9 @@ test('rental account publishing streams new files instead of converting them to 
   const routes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'rental-accounts.js'), 'utf8');
   const publisher = script.slice(script.indexOf('// 发布出租：上传截图预览'),
     script.indexOf('// 我的租用订单'));
-  assert.match(publisher, /rentalClient\.uploadScreenshot\(file\)/);
+  assert.match(publisher, /rentalClient\.uploadScreenshot\(entry\.file, \{/);
+  assert.match(publisher, /onProgress\(percent\)/);
+  assert.match(publisher, /upload-retry-btn/);
   assert.doesNotMatch(publisher, /reader\.readAsDataURL\(file\)/);
   assert.match(client, /body: file/);
   const route = routes.slice(routes.indexOf("router.post('/rental/upload-screenshot'"),

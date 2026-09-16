@@ -31,6 +31,21 @@ document.cookie = 'token=; path=/; max-age=0; SameSite=Lax';
 
 // ==================== 快捷获取 DOM 元素 ====================
 const getEl = (id) => document.getElementById(id);
+UIRuntime.enhanceModals(document);
+let authExpiryPrompted = false;
+
+function promptLoginExpired() {
+    if (authExpiryPrompted) return;
+    authExpiryPrompted = true;
+    safeSetItem('token', '');
+    safeSetItem('username', '');
+    safeSetItem('role', '');
+    safeSetItem('userId', '');
+    checkLoginStatus();
+    showToast('登录已过期，请重新登录后继续刚才的操作');
+    const expiredLoginModal = getEl('loginModal');
+    if (expiredLoginModal) expiredLoginModal.style.display = 'flex';
+}
 
 // ==================== 积分抵扣相关 ====================
 async function loadUserCreditsForBoost() {
@@ -51,7 +66,12 @@ function getUseCredits() {
 
 // ==================== 配置 ====================
 const API_BASE = '/api';
-const rentalClient = RentalClient.createRentalClient({ getToken: () => safeGetItem('token') });
+const rentalClient = RentalClient.createRentalClient({
+    getToken: () => safeGetItem('token'),
+    onUnauthorized: promptLoginExpired,
+    // Resolve window.fetch at request time so rental requests share login-expiry handling.
+    fetchImpl: (...args) => window.fetch(...args)
+});
 
 const projectDetails = {
     silver: { name:'银币', a:{desc:'有紫狗牌有高级银币/百万',price:7.8}, b:{desc:'无紫狗牌有高级银币/百万',price:10.8}, c:{desc:'无紫狗牌无高级银币/百万',price:13.8} },
@@ -126,15 +146,7 @@ window.fetch = async function(...args) {
   const response = await originalFetch(...args);
   const requestHeaders = new Headers(args[1]?.headers || args[0]?.headers || {});
   if (response.status === 401 && requestHeaders.has('Authorization')) {
-    // 清除本地登录状态
-    safeSetItem('token', '');
-    safeSetItem('username', '');
-    safeSetItem('role', '');
-    safeSetItem('userId', '');
-    checkLoginStatus();
-    showToast('登录已过期，请重新登录');
-    // 打开登录弹窗（如果存在）
-    if (loginModal) loginModal.style.display = 'flex';
+    promptLoginExpired();
   }
   return response;
 };
@@ -603,6 +615,7 @@ if (loginForm) loginForm.addEventListener('submit', async (e) => {
         const res = await fetch(`${API_BASE}/auth/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, password, twoFactorCode, recoveryCode }) });
         const data = await res.json();
         if (res.ok && data.success) {
+            authExpiryPrompted = false;
             safeSetItem('token', data.token);
             safeSetItem('username', data.user.username);
             safeSetItem('role', data.user.role);
@@ -767,8 +780,13 @@ const refreshOrdersBtn = getEl('refreshOrdersBtn');
 const adminOrderList = getEl('adminOrderList');
 
 function rentalSafeText(value) {
-    return String(value ?? '').replace(/[&<>"']/g, char =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+    return UIRuntime.safeText(value);
+}
+
+function renderRentalState(container, kind, message, retry) {
+    UIRuntime.renderAsyncState(container, {
+        kind, message, ...(retry ? { onRetry: retry, retryLabel: '重新加载' } : {})
+    });
 }
 
 let adminRentalAccountPage = 1;
@@ -779,37 +797,38 @@ async function loadAdminRentalAccounts() {
     const token = safeGetItem('token');
     if (!container || !token) return;
     const status = getEl('adminRentalAccountStatus')?.value || '';
+    renderRentalState(container, 'loading', '正在加载出租账号申请…');
     try {
         const { accounts, total } = await rentalClient.getAdminAccounts({
             status, page: adminRentalAccountPage
         });
         if (!accounts.length) {
-            container.innerHTML = '<p>当前筛选没有出租账号申请</p>';
+            renderRentalState(container, 'empty', '当前筛选没有出租账号申请');
         } else {
             const statusText = RentalClient.accountStatusLabels;
-            let html = '<table><tr><th>ID/账号UID</th><th>出租方</th><th>客户端</th><th>时租/天租</th><th>状态</th><th>资料</th><th>操作</th></tr>';
+            let html = '<table><caption class="sr-only">出租账号审核列表</caption><thead><tr><th scope="col">ID/账号UID</th><th scope="col">出租方</th><th scope="col">客户端</th><th scope="col">时租/天租</th><th scope="col">状态</th><th scope="col">资料</th><th scope="col">操作</th></tr></thead><tbody>';
             accounts.forEach(a => {
                 const id = Number(a.id);
                 if (!Number.isSafeInteger(id) || id <= 0) return;
                 const screenshotLinks = rentalAccountScreenshots(a.screenshots).map((name, index) =>
                     `<a href="/uploads/${encodeURIComponent(name)}" target="_blank" rel="noopener">截图 ${index + 1}</a>`).join(' ');
                 html += `<tr>
-                    <td>${id} / ${rentalSafeText(a.game_uid || '未填写')}</td>
-                    <td>${rentalSafeText(a.owner_name)}</td><td>${rentalSafeText(a.client_type)}</td>
-                    <td>¥${rentalSafeText(a.hourly_price)} / ¥${rentalSafeText(a.daily_price)}</td>
-                    <td>${a.deleted_at ? '已删除' : statusText[a.status] || rentalSafeText(a.status)}</td>
-                    <td><details><summary>查看资料</summary>
+                    <td data-label="ID/账号UID">${id} / ${rentalSafeText(a.game_uid || '未填写')}</td>
+                    <td data-label="出租方">${rentalSafeText(a.owner_name)}</td><td data-label="客户端">${rentalSafeText(a.client_type)}</td>
+                    <td data-label="时租/天租">¥${rentalSafeText(a.hourly_price)} / ¥${rentalSafeText(a.daily_price)}</td>
+                    <td data-label="状态">${a.deleted_at ? '已删除' : statusText[a.status] || rentalSafeText(a.status)}</td>
+                    <td data-label="资料"><details><summary>查看资料</summary>
                         <p>坦克：${rentalSafeText(a.tank_list || '未填写')}</p>
                         <p>时段：${rentalSafeText(a.available_time_desc || '不限')}</p>
                         <p>规则：${rentalSafeText(a.rules || '无')}</p>${screenshotLinks || '无截图'}
                     </details></td>
-                    <td>
+                    <td data-label="操作" class="table-actions">
                         ${!a.deleted_at && (a.status === 'pending' || a.status === 'suspended') ? `<button class="admin-rental-account-review-btn" data-id="${id}" data-approved="true">${a.status === 'pending' ? '审核通过' : '重新上架'}</button>` : ''}
                         ${!a.deleted_at && (a.status === 'pending' || a.status === 'active') ? `<button class="admin-rental-account-review-btn" data-id="${id}" data-approved="false">${a.status === 'pending' ? '驳回' : '强制下架'}</button>` : ''}
                         <button class="admin-rental-account-archive-btn" data-id="${id}" data-action="${a.deleted_at ? 'restore' : 'archive'}">${a.deleted_at ? '恢复为待审核' : '删除'}</button>
                     </td></tr>`;
             });
-            container.innerHTML = html + '</table>';
+            container.innerHTML = html + '</tbody></table>';
         }
         const pages = Math.max(1, Math.ceil(total / 25));
         const info = getEl('adminRentalPageInfo');
@@ -819,7 +838,7 @@ async function loadAdminRentalAccounts() {
         if (prev) prev.disabled = adminRentalAccountPage <= 1;
         if (next) next.disabled = adminRentalAccountPage >= pages;
     } catch (err) {
-        container.textContent = err.message || '申请加载失败';
+        renderRentalState(container, 'error', err.message || '申请加载失败', loadAdminRentalAccounts);
     }
 }
 
@@ -873,32 +892,35 @@ async function loadAdminRentalOrders() {
     const container = getEl('adminRentalOrderList');
     const token = safeGetItem('token');
     if (!container || !token) return;
+    renderRentalState(container, 'loading', '正在加载租号订单…');
     try {
         const res = await fetch(`${API_BASE}/admin/rental/orders`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const orders = await res.json();
-        if (!res.ok || !Array.isArray(orders)) throw new Error('加载失败');
-        if (!orders.length) { container.innerHTML = '<p>暂无租号订单</p>'; return; }
-        let html = '<table><tr><th>订单</th><th>双方</th><th>现金/积分</th><th>状态</th><th>凭证</th><th>操作</th></tr>';
+        if (!res.ok || !Array.isArray(orders)) throw new Error(orders?.error || '加载失败');
+        if (!orders.length) { renderRentalState(container, 'empty', '暂无租号订单'); return; }
+        let html = '<table><caption class="sr-only">租号付款与结算订单</caption><thead><tr><th scope="col">订单</th><th scope="col">双方</th><th scope="col">现金/积分</th><th scope="col">处理进度</th><th scope="col">凭证</th><th scope="col">操作</th></tr></thead><tbody>';
         orders.forEach(o => {
             const no = rentalSafeText(o.order_no);
             const screenshot = o.evidence_filename && /^rental_\d+_\d+\.(?:png|jpe?g)$/.test(o.evidence_filename) ?
                 `<a href="/uploads/${encodeURIComponent(o.evidence_filename)}" target="_blank" rel="noopener">查看截图</a>` : '无';
-            html += `<tr><td>${no}</td><td>${rentalSafeText(o.renter_name)} → ${rentalSafeText(o.owner_name)}</td>
-                <td>¥${rentalSafeText(o.total_price)} / ${rentalSafeText(o.credits_used)} 积分</td>
-                <td>${rentalSafeText(o.status)}；${rentalSafeText(o.payment_status)}${o.disputed_at ? '；争议中' : ''}</td>
-                <td>${screenshot}；${rentalSafeText(o.evidence_status || '未提交')}；预期 ¥${rentalSafeText(o.expected_amount || 0)}
+            html += `<tr><td data-label="订单">${no}</td><td data-label="双方">${rentalSafeText(o.renter_name)} → ${rentalSafeText(o.owner_name)}</td>
+                <td data-label="现金/积分">¥${rentalSafeText(o.total_price)} / ${rentalSafeText(o.credits_used)} 积分</td>
+                <td data-label="处理进度">${UIRuntime.rentalTimelineHtml(o)}</td>
+                <td data-label="凭证">${screenshot}；${rentalSafeText(o.evidence_status || '未提交')}；预期 ¥${rentalSafeText(o.expected_amount || 0)}
                     ${o.payment_reference ? `；收款编号 ${rentalSafeText(o.payment_reference)}` : ''}
                     ${o.refund_reference ? `；退款编号 ${rentalSafeText(o.refund_reference)}` : ''}</td>
-                <td>
+                <td data-label="操作" class="table-actions">
                     ${o.status === 'pending' && o.payment_status === 'submitted' ? `<button class="admin-rental-review-btn" data-order="${no}" data-approved="true">核实收款</button><button class="admin-rental-review-btn" data-order="${no}" data-approved="false">驳回凭证</button>` : ''}
                     ${(o.status === 'pending' || o.status === 'active') && o.payment_status === 'paid' ? `<button class="admin-rental-refund-btn" data-order="${no}" data-amount="${rentalSafeText(o.total_price)}">核实退款并取消</button>` : ''}
                     ${o.status === 'active' && o.disputed_at && o.owner_complete_requested_at && !o.resolved_at ? `<button class="admin-rental-resolve-btn" data-order="${no}">裁决完成</button>` : ''}
                 </td></tr>`;
         });
-        container.innerHTML = html + '</table>';
-    } catch { container.innerHTML = '<p>租号订单加载失败</p>'; }
+        container.innerHTML = html + '</tbody></table>';
+    } catch (err) {
+        renderRentalState(container, 'error', err.message || '租号订单加载失败', loadAdminRentalOrders);
+    }
 }
 
 getEl('refreshAdminRentalBtn')?.addEventListener('click', loadAdminRentalOrders);
@@ -2557,26 +2579,11 @@ function renderOrderDefaults() {
 
 // ---------- 语言 / 地区 ----------
 function renderLanguage() {
-    const settings = window._userSettings || {};
-    const currentLang = settings.language || 'zh';
     const content = getEl('settingsContent');
     content.innerHTML = `
         <div class="card"><h4>语言 / 地区</h4>
-            <select id="languageSelect" style="width:200px;">
-                <option value="zh" ${currentLang==='zh'?'selected':''}>简体中文</option>
-                <option value="en" ${currentLang==='en'?'selected':''}>English</option>
-            </select>
-            <button id="saveLanguageBtn" class="submit-btn" style="margin-top:12px;">保存</button>
+            <p>当前仅提供简体中文。英文界面尚未完整实现，因此暂不显示不可用的切换入口。</p>
         </div>`;
-    getEl('saveLanguageBtn')?.addEventListener('click', async () => {
-        const language = getEl('languageSelect').value;
-        const token = safeGetItem('token');
-        await fetch(`${API_BASE}/user/settings`, {
-            method: 'PUT', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ language })
-        });
-        showToast('语言设置已保存');
-    });
 }
 
 // 站内邮箱
@@ -2649,10 +2656,10 @@ document.querySelectorAll('.rental-tab').forEach(tab => {
 async function loadRentalHall(force = false) {
     const container = getEl('rentalHallList');
     if (!container) return;
-    container.innerHTML = '加载中...';
+    renderRentalState(container, 'loading', '正在加载可租账号…');
     try {
         const accounts = await rentalClient.getHall({ force });
-        if (!accounts.length) { container.innerHTML = '<p>暂无可租账号</p>'; return; }
+        if (!accounts.length) { renderRentalState(container, 'empty', '暂无可租账号，请稍后再来'); return; }
         let html = '';
         accounts.forEach(acc => {
             const id = Number(acc.id);
@@ -2679,7 +2686,7 @@ async function loadRentalHall(force = false) {
             });
         });
     } catch (err) {
-        container.innerHTML = '<p style="color:var(--red)">加载失败</p>';
+        renderRentalState(container, 'error', err.message || '可租账号加载失败', () => loadRentalHall(true));
     }
 }
 getEl('refreshRentalHallBtn')?.addEventListener('click', () => loadRentalHall(true));
@@ -2782,26 +2789,88 @@ function updateRentalPrice() {
 (function() {
     const fileInput = getEl('rentalScreenshotFile');
     const previewDiv = getEl('rentalScreenshotPreview');
-    let uploadedFiles = [];
+    const queueDiv = getEl('rentalUploadQueue');
+    const submitButton = getEl('submitRentalAccountBtn');
+    let uploadEntries = [];
+
+    function syncUploadControls() {
+        if (submitButton) submitButton.disabled = uploadEntries.some(entry => entry.status === 'uploading');
+    }
+
+    function createUploadRow(entry) {
+        const row = document.createElement('div');
+        row.className = 'upload-item';
+        const name = document.createElement('span');
+        name.className = 'upload-item-name';
+        name.textContent = entry.file.name || '剪贴板截图';
+        const progress = document.createElement('progress');
+        progress.max = 100;
+        progress.value = 0;
+        progress.setAttribute('aria-label', `${name.textContent} 上传进度`);
+        const status = document.createElement('span');
+        status.className = 'upload-item-status';
+        status.textContent = '等待上传';
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.className = 'upload-retry-btn';
+        retry.textContent = '重试';
+        retry.hidden = true;
+        retry.addEventListener('click', () => uploadEntry(entry));
+        row.append(name, progress, status, retry);
+        queueDiv?.appendChild(row);
+        entry.row = row;
+        entry.progress = progress;
+        entry.statusText = status;
+        entry.retry = retry;
+    }
+
+    async function uploadEntry(entry) {
+        entry.status = 'uploading';
+        entry.retry.hidden = true;
+        entry.progress.value = 0;
+        entry.statusText.textContent = '上传中 0%';
+        syncUploadControls();
+        try {
+            entry.filename = await rentalClient.uploadScreenshot(entry.file, {
+                onProgress(percent) {
+                    entry.progress.value = percent;
+                    entry.statusText.textContent = `上传中 ${percent}%`;
+                }
+            });
+            entry.status = 'done';
+            entry.statusText.textContent = '上传完成';
+            const img = document.createElement('img');
+            img.src = `/uploads/${encodeURIComponent(entry.filename)}`;
+            img.alt = `已上传账号截图：${entry.file.name || '截图'}`;
+            previewDiv?.appendChild(img);
+        } catch (err) {
+            entry.status = 'failed';
+            entry.statusText.textContent = err.message || '上传失败';
+            entry.retry.hidden = false;
+        } finally {
+            syncUploadControls();
+        }
+    }
+
+    function queueFiles(files) {
+        const available = Math.max(0, 3 - uploadEntries.length);
+        const selected = Array.from(files || []).slice(0, available);
+        if (!selected.length) {
+            if (files?.length) showToast('最多只能上传 3 张截图');
+            return;
+        }
+        if (files.length > available) showToast('最多只能上传 3 张截图，多余文件未上传');
+        selected.forEach(file => {
+            const entry = { file, filename: '', status: 'queued' };
+            uploadEntries.push(entry);
+            createUploadRow(entry);
+            uploadEntry(entry);
+        });
+        fileInput.value = '';
+    }
 
     if (fileInput) {
-        fileInput.addEventListener('change', async () => {
-            const files = fileInput.files;
-            for (let i = 0; i < Math.min(files.length, 3); i++) {
-                const file = files[i];
-                try {
-                    const filename = await rentalClient.uploadScreenshot(file);
-                    uploadedFiles.push(filename);
-                    const img = document.createElement('img');
-                    img.src = `/uploads/${encodeURIComponent(filename)}`;
-                    img.alt = '已上传账号截图';
-                    img.style = 'width:80px; height:80px; object-fit:cover; border-radius:6px;';
-                    previewDiv.appendChild(img);
-                } catch (err) {
-                    showToast('❌ ' + (err.message || '截图上传失败'));
-                }
-            }
-        });
+        fileInput.addEventListener('change', () => queueFiles(fileInput.files));
     }
 
     // 提交出租申请
@@ -2816,7 +2885,7 @@ function updateRentalPrice() {
             daily_price: parseFloat(getEl('rentalDaily').value) || 0,
             available_time_desc: getEl('rentalAvailableTime').value.trim(),
             rules: getEl('rentalRules').value.trim(),
-            screenshots: uploadedFiles
+            screenshots: uploadEntries.filter(entry => entry.status === 'done').map(entry => entry.filename)
         };
         try {
             const res = await fetch(`${API_BASE}/rental/accounts`, {
@@ -2836,7 +2905,9 @@ function updateRentalPrice() {
                 getEl('rentalAvailableTime').value = '';
                 getEl('rentalRules').value = '';
                 previewDiv.innerHTML = '';
-                uploadedFiles = [];
+                queueDiv?.replaceChildren();
+                uploadEntries = [];
+                syncUploadControls();
             } else {
                 msgEl.textContent = '❌ ' + (data.error || '提交失败');
             }
@@ -2851,12 +2922,14 @@ async function loadRentedOrders() {
     const container = getEl('rentalRentedList');
     if (!container) return;
     const token = safeGetItem('token');
-    if (!token) { container.innerHTML = '<p>请先登录</p>'; return; }
+    if (!token) { renderRentalState(container, 'empty', '请先登录后查看租用记录'); return; }
+    renderRentalState(container, 'loading', '正在加载租用记录…');
     try {
         const res = await fetch(`${API_BASE}/rental/my-rented`, { headers: { 'Authorization': `Bearer ${token}` } });
         const orders = await res.json();
-        if (!orders.length) { container.innerHTML = '<p>暂无租用记录</p>'; return; }
-        let html = '<table><tr><th>订单号</th><th>账号</th><th>出租方</th><th>类型</th><th>数量</th><th>金额</th><th>状态</th><th>付款/结算</th><th>操作</th></tr>';
+        if (!res.ok || !Array.isArray(orders)) throw new Error(orders?.error || '租用记录加载失败');
+        if (!orders.length) { renderRentalState(container, 'empty', '暂无租用记录'); return; }
+        let html = '<div class="table-scroll"><table class="responsive-table"><caption class="sr-only">我的租用订单</caption><thead><tr><th scope="col">订单号</th><th scope="col">账号</th><th scope="col">出租方</th><th scope="col">类型/数量</th><th scope="col">金额</th><th scope="col">处理进度</th><th scope="col">操作</th></tr></thead><tbody>';
         orders.forEach(o => {
             const canCancel = (o.status === 'pending' || o.status === 'active') &&
                 (o.payment_status === 'unpaid' || o.payment_status === 'rejected') &&
@@ -2864,13 +2937,10 @@ async function loadRentedOrders() {
             const canSubmitEvidence = o.status === 'pending' && Number(o.total_price) > 0 &&
                 (o.payment_status === 'unpaid' || o.payment_status === 'rejected');
             html += `<tr>
-                <td>${o.order_no}</td><td>${o.game_uid || '未知'}</td><td>${o.owner_name}</td>
-                <td>${o.rental_type}</td><td>${o.quantity}</td><td>¥${o.total_price}</td>
-                <td>${o.status}</td>
-                <td>${o.disputed_at ? '争议处理中' : o.owner_complete_requested_at && o.status === 'active' ? '待租用方确认完成' :
-                    o.payment_status === 'paid' ? '已确认收款' : o.payment_status === 'submitted' ? '付款待人工核实' :
-                    o.payment_status === 'rejected' ? '付款凭证未通过' : '待付款'}</td>
-                <td>
+                <td data-label="订单号">${rentalSafeText(o.order_no)}</td><td data-label="账号">${rentalSafeText(o.game_uid || '未知')}</td><td data-label="出租方">${rentalSafeText(o.owner_name)}</td>
+                <td data-label="类型/数量">${rentalSafeText(o.rental_type)} × ${rentalSafeText(o.quantity)}</td><td data-label="金额">¥${rentalSafeText(o.total_price)}</td>
+                <td data-label="处理进度">${UIRuntime.rentalTimelineHtml(o)}</td>
+                <td data-label="操作" class="table-actions">
                     ${canSubmitEvidence ? `<button class="rental-pay-evidence-btn" data-order="${o.order_no}">上传付款截图</button>` : ''}
                     ${o.status === 'active' && o.owner_complete_requested_at && !o.disputed_at ? `<button class="rental-confirm-completion-btn" data-order="${o.order_no}">确认完成</button>` : ''}
                     ${o.status === 'active' && o.payment_status === 'paid' && !o.disputed_at ? `<button class="rental-dispute-btn" data-order="${o.order_no}">发起争议</button>` : ''}
@@ -2878,9 +2948,9 @@ async function loadRentedOrders() {
                 </td>
             </tr>`;
         });
-        html += '</table>';
+        html += '</tbody></table></div>';
         container.innerHTML = html;
-    } catch (err) { container.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+    } catch (err) { renderRentalState(container, 'error', err.message || '租用记录加载失败', loadRentedOrders); }
 }
 
 // 我的出租：账号列表
@@ -2888,21 +2958,22 @@ async function loadMyRentalAccounts(deleted = false) {
     const container = getEl(deleted ? 'myRentalDeletedList' : 'myRentalAccountsList');
     if (!container) return;
     const token = safeGetItem('token');
-    if (!token) { container.innerHTML = '<p>请先登录</p>'; return; }
+    if (!token) { renderRentalState(container, 'empty', '请先登录后管理出租账号'); return; }
+    renderRentalState(container, 'loading', deleted ? '正在加载已删除账号…' : '正在加载出租账号…');
     try {
         const accounts = await rentalClient.getMyAccounts({ deleted });
-        if (!accounts.length) { container.innerHTML = deleted ? '<p>没有已删除账号</p>' : '<p>你还没有发布出租账号</p>'; return; }
+        if (!accounts.length) { renderRentalState(container, 'empty', deleted ? '没有已删除账号' : '你还没有发布出租账号'); return; }
         let html = (deleted ? '<p>恢复后进入待审核，不会自动上架。</p>' :
             '<p>待审核账号不会在租号大厅展示；仅管理员可通过“管理面板 → 租号审核”上架。</p>') +
-            '<table><tr><th>UID</th><th>客户端</th><th>时租/天租</th><th>状态</th><th>操作</th></tr>';
+            '<div class="table-scroll"><table class="responsive-table"><caption class="sr-only">我的出租账号</caption><thead><tr><th scope="col">UID</th><th scope="col">客户端</th><th scope="col">时租/天租</th><th scope="col">状态</th><th scope="col">操作</th></tr></thead><tbody>';
         accounts.forEach(a => {
             const id = Number(a.id);
             if (!Number.isSafeInteger(id) || id <= 0) return;
             html += `<tr>
-                <td>${rentalSafeText(a.game_uid || '—')}</td><td>${rentalSafeText(a.client_type)}</td>
-                <td>¥${rentalSafeText(a.hourly_price)} / ¥${rentalSafeText(a.daily_price)}</td>
-                <td>${deleted ? '已删除' : a.status === 'pending' ? '待管理员审核' : a.status === 'active' ? '已上架' : '已下架/未通过'}</td>
-                <td>
+                <td data-label="UID">${rentalSafeText(a.game_uid || '—')}</td><td data-label="客户端">${rentalSafeText(a.client_type)}</td>
+                <td data-label="时租/天租">¥${rentalSafeText(a.hourly_price)} / ¥${rentalSafeText(a.daily_price)}</td>
+                <td data-label="状态">${deleted ? '已删除' : a.status === 'pending' ? '待管理员审核' : a.status === 'active' ? '已上架' : '已下架/未通过'}</td>
+                <td data-label="操作" class="table-actions">
                     ${deleted ? `<button class="rental-account-archive-btn" data-id="${id}" data-action="restore">恢复为待审核</button>` : `
                         ${a.status === 'active' ? `<button class="shelve-btn" data-id="${id}" data-status="suspended">下架</button>` : ''}
                         ${a.status === 'suspended' ? `<button class="shelve-btn" data-id="${id}" data-status="pending">申请重新审核</button>` : ''}
@@ -2911,9 +2982,11 @@ async function loadMyRentalAccounts(deleted = false) {
                 </td>
             </tr>`;
         });
-        html += '</table>';
+        html += '</tbody></table></div>';
         container.innerHTML = html;
-    } catch (err) { container.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+    } catch (err) {
+        renderRentalState(container, 'error', err.message || '出租账号加载失败', () => loadMyRentalAccounts(deleted));
+    }
 }
 
 function loadMyRentalDeletedAccounts() { return loadMyRentalAccounts(true); }
@@ -2924,20 +2997,20 @@ async function loadMyRentalOrders() {
     const container = getEl('myRentalOrdersList');
     if (!container) return;
     const token = safeGetItem('token');
+    if (!token) { renderRentalState(container, 'empty', '请先登录后查看出租订单'); return; }
+    renderRentalState(container, 'loading', '正在加载出租订单…');
     try {
         const res = await fetch(`${API_BASE}/rental/my-orders`, { headers: { 'Authorization': `Bearer ${token}` } });
         const orders = await res.json();
-        if (!orders.length) { container.innerHTML = '<p>暂无出租订单</p>'; return; }
-        let html = '<table><tr><th>订单号</th><th>租客</th><th>类型</th><th>数量</th><th>金额</th><th>状态</th><th>付款/结算</th><th>操作</th></tr>';
+        if (!res.ok || !Array.isArray(orders)) throw new Error(orders?.error || '出租订单加载失败');
+        if (!orders.length) { renderRentalState(container, 'empty', '暂无出租订单'); return; }
+        let html = '<div class="table-scroll"><table class="responsive-table"><caption class="sr-only">我的出租订单</caption><thead><tr><th scope="col">订单号</th><th scope="col">租客</th><th scope="col">类型/数量</th><th scope="col">金额</th><th scope="col">处理进度</th><th scope="col">操作</th></tr></thead><tbody>';
         orders.forEach(o => {
             html += `<tr>
-                <td>${o.order_no}</td><td>${o.renter_name}</td>
-                <td>${o.rental_type}</td><td>${o.quantity}</td><td>¥${o.total_price}</td>
-                <td>${o.status}</td>
-                <td>${o.disputed_at ? '争议处理中' : o.owner_complete_requested_at && o.status === 'active' ? '待租用方确认' :
-                    o.payment_status === 'paid' ? '已确认收款' : o.payment_status === 'submitted' ? '付款待人工核实' :
-                    o.payment_status === 'rejected' ? '付款凭证未通过' : '待付款'}</td>
-                <td>
+                <td data-label="订单号">${rentalSafeText(o.order_no)}</td><td data-label="租客">${rentalSafeText(o.renter_name)}</td>
+                <td data-label="类型/数量">${rentalSafeText(o.rental_type)} × ${rentalSafeText(o.quantity)}</td><td data-label="金额">¥${rentalSafeText(o.total_price)}</td>
+                <td data-label="处理进度">${UIRuntime.rentalTimelineHtml(o)}</td>
+                <td data-label="操作" class="table-actions">
                     ${o.status === 'pending' && o.payment_status === 'paid' && !o.disputed_at ? `<button class="confirm-rental-btn" data-order="${o.order_no}">确认租用</button>` : ''}
                     ${o.status === 'active' && o.payment_status === 'paid' && !o.disputed_at && !o.owner_complete_requested_at ? `<button class="complete-rental-btn" data-order="${o.order_no}">申请完成</button>` : ''}
                     ${o.status === 'active' && o.payment_status === 'paid' && !o.disputed_at ? `<button class="rental-dispute-btn" data-order="${o.order_no}">发起争议</button>` : ''}
@@ -2945,9 +3018,9 @@ async function loadMyRentalOrders() {
                 </td>
             </tr>`;
         });
-        html += '</table>';
+        html += '</tbody></table></div>';
         container.innerHTML = html;
-    } catch (err) { container.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+    } catch (err) { renderRentalState(container, 'error', err.message || '出租订单加载失败', loadMyRentalOrders); }
 }
 
 async function loadRentalEarnings() {

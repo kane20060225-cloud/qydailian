@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createRentalClient, screenshotNames, accountStatusLabels } =
+const { createRentalClient, screenshotNames, accountStatusLabels, RentalApiError } =
   require('../../public/rental-client.js');
 
 function response(data, { status = 200, total = null } = {}) {
@@ -105,6 +105,28 @@ test('API client surfaces server errors without treating failed JSON as account 
   await assert.rejects(client.getHall(), /服务器错误/);
 });
 
+test('API errors expose status and retryability without losing the server message', async () => {
+  const client = createRentalClient({ fetchImpl: async () =>
+    response({ error: '稍后再试', code: 'TEMPORARY' }, { status: 503 }) });
+  await assert.rejects(client.getHall(), error => {
+    assert.equal(error instanceof RentalApiError, true);
+    assert.equal(error.status, 503);
+    assert.equal(error.retryable, true);
+    assert.equal(error.code, 'TEMPORARY');
+    assert.equal(error.message, '稍后再试');
+    return true;
+  });
+});
+
+test('authenticated rental requests report an expired session to the shared UI handler', async () => {
+  let expired = 0;
+  const client = createRentalClient({ getToken: () => 'expired-token',
+    onUnauthorized: () => expired++, fetchImpl: async () =>
+      response({ error: '登录已过期' }, { status: 401 }) });
+  await assert.rejects(client.getMyAccounts(), /登录已过期/);
+  assert.equal(expired, 1);
+});
+
 test('new rental screenshots upload as a raw image body with client-side size checks', async () => {
   const calls = [];
   const file = new Blob([Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'),
@@ -122,4 +144,22 @@ test('new rental screenshots upload as a raw image body with client-side size ch
     /只接受 PNG 或 JPEG/);
   await assert.rejects(client.uploadScreenshot(new Blob(['tiny'], { type: 'image/png' })),
     /8 字节到 5MB/);
+});
+
+test('screenshot uploader reports progress and keeps a retryable file reference', async () => {
+  const progress = [];
+  const file = new Blob([Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'),
+    Buffer.from('progress')])], { type: 'image/png' });
+  const client = createRentalClient({ getToken: () => 'synthetic-token',
+    fetchImpl: async () => { throw new Error('progress upload should use uploadImpl'); },
+    uploadImpl: async (url, options) => {
+      assert.equal(url, '/api/rental/upload-screenshot');
+      assert.equal(options.body, file);
+      options.onProgress(35);
+      options.onProgress(80);
+      return response({ filename: 'rental_3_1234567890123.png' });
+    } });
+  assert.equal(await client.uploadScreenshot(file, { onProgress: value => progress.push(value) }),
+    'rental_3_1234567890123.png');
+  assert.deepEqual(progress, [35, 80, 100]);
 });
