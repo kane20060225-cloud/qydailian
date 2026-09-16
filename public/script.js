@@ -265,6 +265,7 @@ if (profileBtn) profileBtn.addEventListener('click', () => showSection('profile'
 if (adminPanelBtn) adminPanelBtn.addEventListener('click', () => showSection('admin'));
 if (boosterPanelBtn) boosterPanelBtn.addEventListener('click', () => showSection('booster'));
 if (leagueAdminBtn) leagueAdminBtn.addEventListener('click', () => showSection('leagueAdmin'));
+getEl('thirdPartyOrdersBtn')?.addEventListener('click', () => showSection('thirdparty'));
 
 function showSection(target) {
     if (mainMenu) mainMenu.style.display = 'none';
