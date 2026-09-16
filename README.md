@@ -35,4 +35,5 @@
 界面细节、文案统一及浅色主题重构说明见 [B17_UI_REDESIGN.md](docs/B17_UI_REDESIGN.md)。B17 无需数据库迁移，效果图由本地浏览器验证生成。
 
 深浅主题共用布局见 [B18_THEME_PARITY.md](docs/B18_THEME_PARITY.md)。深色组件配色恢复、网页代练项目编辑及游戏/平台活动管理见 [B19_SERVICE_CONTENT_RUNBOOK.md](docs/B19_SERVICE_CONTENT_RUNBOOK.md)；B19 上线须先初始化新增配置表，再发布文件并重启后端。
-- [B20 管理入口与登录设备](docs/B20_WORKSPACE_DEVICES_RUNBOOK.md)
+
+经营指标独立入口、打手上下线设置及登录设备合并见 [B20_WORKSPACE_DEVICES_RUNBOOK.md](docs/B20_WORKSPACE_DEVICES_RUNBOOK.md)。B19/B20 联合发布结果见 [B20_DEPLOYMENT_REPORT.md](docs/B20_DEPLOYMENT_REPORT.md)。
