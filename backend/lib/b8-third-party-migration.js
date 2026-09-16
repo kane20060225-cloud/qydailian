@@ -52,13 +52,13 @@ async function readB8Schema(conn) {
   if (Number(versionTables[0]?.total) !== 1) throw new Error('B5 schema_migrations is required before B8');
   const [versions] = await conn.execute('SELECT checksum FROM schema_migrations WHERE version=?', [VERSION]);
   const [tables] = await conn.execute(
-    `SELECT table_name FROM information_schema.tables
+    `SELECT TABLE_NAME AS table_name FROM information_schema.tables
      WHERE table_schema = DATABASE() AND table_name IN (?,?)`, tableNames
   );
   const present = new Set(tables.map((row) => row.table_name));
   for (const table of present) {
     const [columns] = await conn.execute(
-      `SELECT column_name, column_type FROM information_schema.columns
+      `SELECT COLUMN_NAME AS column_name, COLUMN_TYPE AS column_type FROM information_schema.columns
        WHERE table_schema = DATABASE() AND table_name = ?`, [table]
     );
     const foundColumns = new Map(columns.map((row) => [row.column_name, row.column_type.toLowerCase()]));
@@ -66,7 +66,8 @@ async function readB8Schema(conn) {
       if (foundColumns.get(name) !== type) throw new Error(`B8 schema conflict: ${table}.${name}`);
     }
     const [indexes] = await conn.execute(
-      `SELECT index_name, seq_in_index, column_name FROM information_schema.statistics
+      `SELECT INDEX_NAME AS index_name, SEQ_IN_INDEX AS seq_in_index, COLUMN_NAME AS column_name
+       FROM information_schema.statistics
        WHERE table_schema = DATABASE() AND table_name = ?`, [table]
     );
     for (const [indexName, expectedColumns] of Object.entries(EXPECTED[table].indexes)) {
