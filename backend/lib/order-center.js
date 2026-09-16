@@ -74,7 +74,7 @@ FROM third_party_orders o JOIN users u ON u.id=o.creator_id
 `;
 
 const REMOVED_SQL = `CASE WHEN r.state_snapshot=c.state AND r.payment_snapshot=COALESCE(c.payment_status,'') THEN r.removed_at ELSE NULL END`;
-const READ_MODEL_SQL = `SELECT c.*, a.archived_at, ${REMOVED_SQL} AS removed_at, r.reason AS removal_reason FROM (${ORDER_UNION_SQL}) c
+const READ_MODEL_SQL = `SELECT c.*, a.archived_at, ${REMOVED_SQL} AS removed_at, DATE_ADD(${REMOVED_SQL},INTERVAL 14 DAY) AS purge_after, r.reason AS removal_reason FROM (${ORDER_UNION_SQL}) c
  LEFT JOIN order_management_state a ON a.order_type=c.order_type AND a.order_ref=c.order_ref
  LEFT JOIN order_removals r ON r.order_type=c.order_type AND r.order_ref=c.order_ref`;
 

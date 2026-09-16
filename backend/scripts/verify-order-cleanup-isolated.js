@@ -2,7 +2,7 @@
 // Synthetic fixtures only. Never loads the production .env or accepts a production database name.
 const assert=require('node:assert/strict');const mysql=require('mysql2/promise');const express=require('express');
 const {runMigration}=require('../lib/b11-order-cleanup-migration');
-const {changeRemoval,candidates,createCleanupService}=require('../lib/order-cleanup');
+const {changeRemoval,candidates,createCleanupService,purgeOrder}=require('../lib/order-cleanup');
 const {recordOperation}=require('../lib/accounting');const {createOrderCenterRouter}=require('../routes/order-center');
 const {visibleOrdersSql}=require('../lib/order-center');
 const {createRechargeOrder,processTrackedRecharge}=require('../lib/recharge-orders');
@@ -55,6 +55,44 @@ if(!/^qydailian_b11_test_[a-z0-9_]+$/.test(database||'')){console.error('Explici
     assert.equal((await pool.execute(`SELECT ro.order_no FROM rental_orders ro WHERE ${visibleOrdersSql('rental','ro.order_no')}`))[0].length,0);
     assert.equal((await pool.execute(`SELECT t.order_no FROM third_party_orders t WHERE ${visibleOrdersSql('third_party','t.order_no')}`))[0].length,0);
     assert.equal((await pool.execute('SELECT COUNT(*) AS n FROM orders'))[0][0].n,8);
-    console.log('B11 isolated verification passed: trash/restore, row locks, funded protection, rollback, expiry, automatic cleanup and late duplicate recharge callbacks credit once.');
+    // Permanent expiry is based on time in Trash, independent of optional invalid-order cleanup.
+    await pool.execute('UPDATE order_cleanup_settings SET enabled=0 WHERE id=1');
+    await pool.execute('UPDATE order_removals SET removed_at=DATE_SUB(NOW(),INTERVAL 14 DAY)');
+    await remove('boost','OLD',{restore:true});await remove('boost','OLD');
+    await remove('boost','YOUNG');await pool.execute("UPDATE order_removals SET removed_at=DATE_SUB(NOW(),INTERVAL 13 DAY) WHERE order_ref='YOUNG'");
+    await assert.rejects(()=>purgeOrder({...deps,type:'boost',ref:'YOUNG'}),/14天/);
+    await pool.execute("UPDATE orders SET status='done',payment_status='paid' WHERE order_no IN ('FUNDED','EVIDENCE')");
+    for(const ref of ['FUNDED','EVIDENCE'])await remove('boost',ref);
+    await remove('recharge',pending.out_trade_no);
+    await pool.execute("UPDATE order_removals SET removed_at=DATE_SUB(NOW(),INTERVAL 15 DAY) WHERE order_ref IN ('FUNDED','EVIDENCE',?)",[pending.out_trade_no]);
+    for(const ref of ['CHANGED','RESTORE-RACE'])await pool.execute("INSERT INTO orders (order_no,user_id,project,detail,total_price,payment_status) VALUES (?,1,'test','purge',6,'unpaid')",[ref]);
+    for(const ref of ['CHANGED','RESTORE-RACE'])await remove('boost',ref);
+    await pool.execute("UPDATE order_removals SET removed_at=DATE_SUB(NOW(),INTERVAL 15 DAY) WHERE order_ref IN ('CHANGED','RESTORE-RACE')");
+    await pool.execute("UPDATE orders SET payment_status='paid' WHERE order_no='CHANGED'");
+    await assert.rejects(()=>purgeOrder({...deps,type:'boost',ref:'CHANGED'}));
+    // Restore commits while the purger waits on the source row; no deletion is allowed afterward.
+    const restorer=await pool.getConnection();await restorer.beginTransaction();await restorer.execute("SELECT id FROM orders WHERE order_no='RESTORE-RACE' FOR UPDATE");
+    const restoringRace=purgeOrder({...deps,type:'boost',ref:'RESTORE-RACE'});await restorer.execute("DELETE FROM order_removals WHERE order_ref='RESTORE-RACE' AND order_type='boost'");await restorer.commit();restorer.release();await assert.rejects(()=>restoringRace);
+    // Inject a failure after the dependent TP workflow has been deleted; rollback must restore everything.
+    const failDeletePool={getConnection:async()=>{const c=await pool.getConnection();return {beginTransaction:c.beginTransaction.bind(c),commit:c.commit.bind(c),rollback:c.rollback.bind(c),release:c.release.bind(c),execute:async(sql,p)=>{if(sql.startsWith('DELETE FROM third_party_orders'))throw Error('injected purge failure');return c.execute(sql,p);}};}};
+    await pool.execute("INSERT INTO third_party_order_workflow (order_no,external_order_no) VALUES ('OLD-TP','synthetic')");
+    await assert.rejects(()=>purgeOrder({pool:failDeletePool,recordOperation,type:'third_party',ref:'OLD-TP'}),/injected purge failure/);
+    assert.equal((await pool.execute("SELECT COUNT(*) AS n FROM third_party_order_workflow WHERE order_no='OLD-TP'"))[0][0].n,1);
+    assert.equal((await pool.execute("SELECT COUNT(*) AS n FROM operation_audit WHERE action='order_permanently_deleted'"))[0][0].n,0);
+    const ledgerBefore=Number((await pool.execute('SELECT COUNT(*) AS n FROM account_ledger'))[0][0].n);
+    const expiry=await service.run();assert.equal(expiry.disabled,true);assert.equal(expiry.purged,4);
+    for(const [type,ref] of [['boost','ROLLBACK'],['rental','OLD-RENT'],['third_party','OLD-TP'],['recharge',closed.out_trade_no]]) {
+      assert.equal((await pool.execute('SELECT COUNT(*) AS n FROM order_removals WHERE order_type=? AND order_ref=?',[type,ref]))[0][0].n,0);
+      assert.equal((await fetch(base+'/'+type+'/'+ref)).status,404);await assert.rejects(()=>remove(type,ref,{restore:true}));
+    }
+    for(const ref of ['OLD','YOUNG','FUNDED','EVIDENCE','CHANGED','RESTORE-RACE'])assert.equal((await pool.execute('SELECT COUNT(*) AS n FROM orders WHERE order_no=?',[ref]))[0][0].n,1);
+    assert.equal((await pool.execute('SELECT COUNT(*) AS n FROM payment_orders WHERE out_trade_no=?',[pending.out_trade_no]))[0][0].n,1);
+    assert.equal(Number((await pool.execute('SELECT COUNT(*) AS n FROM account_ledger'))[0][0].n),ledgerBefore);
+    assert.equal((await pool.execute("SELECT COUNT(*) AS n FROM operation_audit WHERE action='order_permanently_deleted'"))[0][0].n,4);
+    assert.equal((await service.run()).purged,0);
+    await Promise.all([processTrackedRecharge({...notify,notification:{...notify.notification,out_trade_no:pending.out_trade_no,trade_no:'b11-synthetic-late-trade'}}),processTrackedRecharge({...notify,notification:{...notify.notification,out_trade_no:pending.out_trade_no,trade_no:'b11-synthetic-late-trade'}})]);
+    assert.equal((await pool.execute('SELECT chest_tickets FROM users WHERE id=1'))[0][0].chest_tickets,20000);
+    assert.equal((await list()).orders.find(o=>o.order_ref===pending.out_trade_no).state,'credited');
+    console.log('Isolated verification passed: deletion/restore, exact 14-day expiry, physical purge of all eligible types, reset on restore, concurrent restore/payment protection, rollback, audit, protected funds and late duplicate recharge callbacks.');
   }finally{if(server)await new Promise(r=>server.close(r));await pool.end();}
 })().catch(err=>{console.error('B11 isolated verification failed:',err.code||err.message);process.exitCode=1;});

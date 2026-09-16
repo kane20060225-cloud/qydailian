@@ -12,4 +12,5 @@
 .oc-bulk input,.oc-select input,.oc-cleanup-confirm input,#ocCleanupEnabled{width:18px;height:18px;flex-shrink:0}
 .oc-select{font-size:12px;margin-bottom:10px}.oc-cleanup-preview{max-height:280px;overflow:auto;padding-left:20px;overflow-wrap:anywhere}.oc-cleanup-preview li{margin:10px 0}.oc-cleanup-confirm{margin:14px 0}
 .oc-reason input[type=number]{min-height:44px;padding:10px;background:var(--card-bg);color:var(--text);border:1px solid var(--border);border-radius:8px}.oc-reason label:has(input[type=checkbox]){flex-direction:row;align-items:center}.oc-bulk button,[data-run-cleanup]{min-height:44px;padding:9px 14px;border-radius:8px}
+.oc-trash-expiry{font-size:12px;color:var(--text-muted);margin:12px 0 0;overflow-wrap:anywhere}
 @media(max-width:600px){.oc-bulk>label,.oc-bulk>.oc-muted{width:100%}.oc-bulk button{flex:1;min-height:44px}.oc-cleanup-confirm{align-items:flex-start}}

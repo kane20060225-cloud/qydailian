@@ -3,7 +3,7 @@
 const express = require('express');
 const crypto = require('node:crypto');
 const { TYPES, READ_MODEL_SQL, parseFilters, filterClause, decorateOrder, csvCell } = require('../lib/order-center');
-const {changeRemoval,getSettings,settingsInput,candidates,createCleanupService}=require('../lib/order-cleanup');
+const {changeRemoval,getSettings,settingsInput,candidates,createCleanupService,TRASH_RETENTION_DAYS}=require('../lib/order-cleanup');
 
 const SOURCES = {
   boost: ['order','orders','order_no'], rental: ['rental_order','rental_orders','order_no'],
@@ -34,7 +34,7 @@ function createOrderCenterRouter({ pool, authMiddleware, recordOperation, reveal
   router.get('/cleanup',async(req,res)=>{
     if(req.orderRole!=='admin')return res.status(403).json({error:'无管理员权限'});
     try {const settings=await getSettings(pool);const rows=await candidates(pool,settings.retention_days);
-      res.json({settings,candidates:rows.map(r=>({type:r.order_type,ref:r.order_ref,title:r.title,created_at:r.created_at})),limit:200});
+      res.json({settings,trash_retention_days:TRASH_RETENTION_DAYS,candidates:rows.map(r=>({type:r.order_type,ref:r.order_ref,title:r.title,created_at:r.created_at})),limit:200});
     }catch{res.status(500).json({error:'清理规则加载失败'});}
   });
   router.put('/cleanup',async(req,res)=>{
