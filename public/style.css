@@ -1661,7 +1661,7 @@ body.theme-light .quick-card strong { color: var(--text); }
         left: 0; right: 0; bottom: 0;
         z-index: 220;
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(5, 1fr);
         min-height: calc(64px + env(safe-area-inset-bottom));
         padding: 5px 8px env(safe-area-inset-bottom);
         border-top: 1px solid var(--border);
@@ -1721,4 +1721,79 @@ body.theme-light .quick-card strong { color: var(--text); }
     #adminRentalAccountList td::before,
     #adminRentalOrderList td::before,
     .responsive-table td::before { content: attr(data-label); color: var(--accent); font-weight: 700; }
+}
+
+/* 全站入口与面板功能导航 */
+.top-bar { gap: 28px; }
+.logo-area { flex-shrink: 0; text-decoration: none; border-radius: 6px; }
+.logo-area:focus-visible, .site-nav-link:focus-visible, .panel-more summary:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 4px;
+}
+.logo-area:hover .logo-icon { transform: scale(1.08); }
+.logo-icon { transition: transform var(--transition); }
+.site-nav { display: flex; align-items: center; gap: 24px; flex: 1; }
+.site-nav-link {
+    position: relative; display: inline-flex; align-items: center; min-height: 44px;
+    color: var(--text-secondary); text-decoration: none; font-size: .9rem; font-weight: 600;
+    white-space: nowrap; transition: color var(--transition);
+}
+.site-nav-link:hover, .site-nav-link.active { color: var(--accent); }
+.site-nav-link.active::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+    background: var(--accent); border-radius: 2px;
+}
+.user-actions { flex-shrink: 0; margin-left: auto; }
+.panel-top {
+    position: sticky; top: var(--site-header-height, 80px); z-index: 80;
+    gap: 18px; background: rgba(20,27,38,.96);
+}
+.panel-top > .back-btn, .panel-top > .section-heading { flex-shrink: 0; }
+.panel-top .panel-nav {
+    display: flex; align-items: center; flex: 1; min-width: 0; gap: 8px;
+    margin: 0; padding: 0 0 0 18px; flex-wrap: nowrap;
+    border: 0; border-left: 1px solid var(--border);
+}
+.panel-nav > button { min-height: 40px; padding: 8px 12px; flex-shrink: 0; }
+.panel-nav button.active { color: var(--accent); border-color: var(--accent); background: rgba(240,160,80,.12); box-shadow: none; }
+.panel-more { position: relative; flex-shrink: 0; }
+.panel-more[hidden] { display: none; }
+.panel-more summary {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    min-height: 40px; padding: 8px 14px; border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text-secondary); font-size: .85rem;
+    font-weight: 600; cursor: pointer; list-style: none;
+}
+.panel-more summary::-webkit-details-marker { display: none; }
+.panel-more[open] summary, .panel-more:has(button.active) summary { color: var(--accent); border-color: var(--accent); }
+.panel-more-menu {
+    position: absolute; right: 0; top: calc(100% + 8px); min-width: 160px;
+    padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--card-bg); box-shadow: 0 12px 30px rgba(0,0,0,.3);
+}
+.panel-more-menu button { display: flex; width: 100%; min-height: 44px; margin-bottom: 4px; }
+.panel-more-menu button:last-child { margin-bottom: 0; }
+body.theme-light .panel-top { background: rgba(255,255,255,.96); }
+@media (max-width: 1000px) {
+    .top-bar { gap: 18px; }
+    .site-nav { gap: 16px; }
+    .site-nav-link { font-size: .82rem; }
+    .panel-top { flex-wrap: wrap; }
+    .panel-top .panel-nav { flex-basis: 100%; border-left: 0; padding-left: 0; }
+}
+@media (min-width: 601px) and (max-width: 760px) {
+    .top-bar { flex-wrap: wrap; gap: 8px 16px; padding-top: 10px; padding-bottom: 8px; }
+    .site-nav { order: 3; flex-basis: 100%; }
+    .site-nav-link { min-height: 36px; }
+}
+@media (max-width: 600px) {
+    .site-nav { display: none; }
+    .top-bar { gap: 8px; }
+    .logo-area { gap: 7px; }
+    .top-bar .user-actions { flex-shrink: 1; min-width: 0; }
+    .top-bar .user-menu { min-width: 0; }
+    .top-bar .user-menu-btn { max-width: 100%; padding: 7px 10px; gap: 4px; font-size: .78rem; }
+    #displayUsername { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .panel-top { gap: 10px 14px; top: var(--site-header-height, 60px); }
+    .panel-top .panel-nav { overflow-x: auto; padding: 2px 0 6px; gap: 8px; scrollbar-width: thin; }
+    .panel-nav > button { min-height: 44px; }
 }

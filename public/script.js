@@ -282,22 +282,85 @@ document.querySelectorAll('.back-btn').forEach(btn => {
         showSection(target);
     });
 });
-document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
-    btn.addEventListener('click', () => showSection(btn.dataset.navTarget));
+document.querySelectorAll('[data-nav-target]').forEach(btn => {
+    btn.addEventListener('click', (event) => {
+        if (btn.tagName === 'A' && (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)) return;
+        event.preventDefault();
+        showSection(btn.dataset.navTarget);
+    });
 });
 if (profileBtn) profileBtn.addEventListener('click', () => showSection('profile'));
 if (adminPanelBtn) adminPanelBtn.addEventListener('click', () => showSection('admin'));
 if (boosterPanelBtn) boosterPanelBtn.addEventListener('click', () => showSection('booster'));
 getEl('thirdPartyOrdersBtn')?.addEventListener('click', () => showSection('thirdparty'));
 
+let restoringNavigation = false;
+
+function syncNavigation(target) {
+    document.querySelectorAll('.site-nav-link, .mobile-nav-btn').forEach(link => {
+        const active = link.dataset.navTarget === target;
+        link.classList.toggle('active', active);
+        if (active) link.setAttribute('aria-current', 'page');
+        else link.removeAttribute('aria-current');
+    });
+}
+
+function saveNavigation() {
+    if (restoringNavigation) return;
+    const target = document.body.dataset.currentSection || 'mainMenu';
+    const tab = target === 'admin' ? document.querySelector('.admin-tab.active')?.dataset.admintab
+        : target === 'booster' ? document.querySelector('.booster-tab.active')?.dataset.tab : '';
+    const hash = `#${target}${tab ? '/' + tab : ''}`;
+    if (window.location.hash !== hash) window.history.pushState(null, '', hash);
+}
+
+function restoreNavigation() {
+    const [requested, tab] = window.location.hash.slice(1).split('/');
+    const role = safeGetItem('role');
+    let target = requested || 'mainMenu';
+    if (target !== 'mainMenu' && !sections[target]) target = 'mainMenu';
+    if (target === 'admin' && (!safeGetItem('token') || role !== 'admin')) target = 'mainMenu';
+    if (target === 'booster' && (!safeGetItem('token') || !['admin', 'booster'].includes(role))) target = 'mainMenu';
+    restoringNavigation = true;
+    try {
+        showSection(target);
+        const tabs = target === 'admin' ? document.querySelectorAll('.admin-tab')
+            : target === 'booster' ? document.querySelectorAll('.booster-tab') : [];
+        const selected = Array.from(tabs).find(button => (button.dataset.admintab || button.dataset.tab) === tab);
+        if (selected && !selected.classList.contains('active')) selected.click();
+    } finally {
+        restoringNavigation = false;
+    }
+}
+
+function layoutNavigation() {
+    const header = document.querySelector('.top-bar');
+    if (header) document.documentElement.style.setProperty('--site-header-height', `${header.offsetHeight}px`);
+    const more = getEl('adminNavMore');
+    if (!more) return;
+    const compact = window.innerWidth > 600 && window.innerWidth < 1400;
+    const menu = more.querySelector('.panel-more-menu');
+    ['roles', 'content', 'shop', 'chest'].forEach(target => {
+        const button = document.querySelector(`.admin-tab[data-admintab="${target}"]`);
+        if (!button) return;
+        if (compact) menu.appendChild(button);
+        else more.before(button);
+    });
+    more.hidden = !compact;
+    if (!compact) more.open = false;
+}
+
 function showSection(target) {
+    if (target !== 'mainMenu' && !sections[target]) return;
     if (mainMenu) mainMenu.style.display = 'none';
     Object.values(sections).forEach(sec => { if (sec) sec.style.display = 'none'; });
 
     if (target === 'mainMenu') {
         if (mainMenu) mainMenu.style.display = 'flex';
         document.body.dataset.currentSection = 'mainMenu';
-        document.querySelectorAll('.mobile-nav-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.navTarget === 'mainMenu'));
+        syncNavigation('mainMenu');
+        saveNavigation();
+        if (userDropdown) userDropdown.style.display = 'none';
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
     }
@@ -306,7 +369,9 @@ function showSection(target) {
     if (!targetSection) return;
     targetSection.style.display = 'block';
     document.body.dataset.currentSection = target;
-    document.querySelectorAll('.mobile-nav-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.navTarget === target));
+    syncNavigation(target);
+    saveNavigation();
+    if (userDropdown) userDropdown.style.display = 'none';
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     switch (target) {
@@ -315,10 +380,10 @@ function showSection(target) {
             loadOrders();
             break;
         case 'admin':
-            loadAdminOrders();
+            document.querySelector('.admin-tab.active')?.click();
             break;
         case 'booster':
-            loadHallOrders();
+            document.querySelector('.booster-tab.active')?.click();
             break;
         case 'tools':
             resetToolsOnEnter();
@@ -1050,8 +1115,16 @@ if (e.target.classList.contains('delete-custom-btn')) {
 // ========== 管理面板选项卡切换（修改后） ==========
 document.querySelectorAll('.admin-tab').forEach(tab => {
     tab.addEventListener('click', () => {
-        document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.admin-tab').forEach(t => {
+            t.classList.remove('active');
+            t.removeAttribute('aria-current');
+        });
         tab.classList.add('active');
+        tab.setAttribute('aria-current', 'page');
+        tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        const more = getEl('adminNavMore');
+        if (more) more.open = false;
+        if (document.body.dataset.currentSection === 'admin') saveNavigation();
         const target = tab.dataset.admintab;
 
         // 隐藏所有子面板（包括新增的 adminChestSection）
@@ -1307,8 +1380,13 @@ getEl('submitPaymentBtn')?.addEventListener('click', async () => {
 // ==================== 打手面板 ====================
 document.querySelectorAll('.booster-tab').forEach(tab => {
     tab.addEventListener('click', () => {
-        document.querySelectorAll('.booster-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.booster-tab').forEach(t => {
+            t.classList.remove('active');
+            t.removeAttribute('aria-current');
+        });
         tab.classList.add('active');
+        tab.setAttribute('aria-current', 'page');
+        if (document.body.dataset.currentSection === 'booster') saveNavigation();
         const target = tab.dataset.tab;
         document.querySelectorAll('.booster-tab-content').forEach(c => c.style.display = 'none');
         const targetEl = getEl(target);
@@ -3646,3 +3724,14 @@ getEl('goUploadPaymentBtn')?.addEventListener('click', () => {
 
 // ==================== 启动 ====================
 init();
+window.addEventListener('popstate', restoreNavigation);
+window.addEventListener('resize', layoutNavigation);
+layoutNavigation();
+if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => {
+        const header = document.querySelector('.top-bar');
+        document.documentElement.style.setProperty('--site-header-height', `${header.offsetHeight}px`);
+    }).observe(document.querySelector('.top-bar'));
+}
+if (window.location.hash) restoreNavigation();
+else syncNavigation('mainMenu');

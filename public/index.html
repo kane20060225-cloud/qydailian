@@ -4,17 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blitz情谊工具站</title>
-    <link rel="stylesheet" href="style.css?v=20260916-b10">
+    <link rel="stylesheet" href="style.css?v=20260916-nav1">
     <link rel="stylesheet" href="order-center.css?v=20260916-oc3">
     <link rel="stylesheet" href="order-notifications.css?v=20260916-notify1">
 </head>
 <body>
     <!-- 顶部栏 -->
     <header class="top-bar">
-        <div class="logo-area">
-            <span class="logo-icon">🎯</span>
+        <a class="logo-area" href="#mainMenu" data-nav-target="mainMenu" aria-label="Blitz情谊工具站，返回首页">
+            <span class="logo-icon" aria-hidden="true">🎯</span>
             <span class="logo-text">Blitz情谊工具站</span>
-        </div>
+        </a>
+        <nav class="site-nav" aria-label="全站导航">
+            <a class="site-nav-link active" href="#mainMenu" data-nav-target="mainMenu" aria-current="page">首页</a>
+            <a class="site-nav-link" href="#boost" data-nav-target="boost">代练下单</a>
+            <a class="site-nav-link" href="#rental" data-nav-target="rental">账号租赁</a>
+            <a class="site-nav-link" href="#tools" data-nav-target="tools">实用工具</a>
+        </nav>
         <div class="user-actions" id="userActions">
             <button class="register-btn" id="openRegisterBtn">📝 注册</button>
             <button class="login-btn" id="openLoginBtn">🔑 登录</button>
@@ -33,6 +39,14 @@
             </div>
         </div>
     </header>
+
+    <nav class="mobile-nav" aria-label="移动端主导航">
+        <button class="mobile-nav-btn active" data-nav-target="mainMenu"><span>⌂</span><small>首页</small></button>
+        <button class="mobile-nav-btn" data-nav-target="boost"><span>⚡</span><small>代练</small></button>
+        <button class="mobile-nav-btn" data-nav-target="rental"><span>🎮</span><small>租号</small></button>
+        <button class="mobile-nav-btn" data-nav-target="tools"><span>🧮</span><small>工具</small></button>
+        <button class="mobile-nav-btn" data-nav-target="profile"><span>◉</span><small>我的</small></button>
+    </nav>
 
     <!-- 主菜单 -->
     <main id="mainMenu" class="main-menu">
@@ -446,12 +460,10 @@
 
     <!-- ==================== 全屏页面：管理面板 ==================== -->
     <div id="sectionAdmin" class="content-section" style="display: none;">
-        <div class="section-top">
-            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+        <div class="section-top panel-top">
+            <button class="back-btn" data-back="mainMenu">← 返回首页</button>
             <h2 class="section-heading">🛠️ 管理面板</h2>
-        </div>
-        <div class="container">
-            <div class="admin-tabs" style="display:flex; gap:10px; margin-bottom:15px; flex-wrap: wrap;">
+            <nav class="admin-tabs panel-nav" aria-label="管理功能">
                 <button class="admin-tab active" data-admintab="orders">📋 订单管理</button>
                 <button class="admin-tab" data-admintab="rental">🎮 租号审核</button>
                 <button class="admin-tab" data-admintab="custom">✏️ 定制需求</button>
@@ -460,7 +472,13 @@
                 <button class="admin-tab" data-admintab="content">📰 内容管理</button>
                 <button class="admin-tab" data-admintab="shop">🛒 积分商城</button>
                 <button class="admin-tab" data-admintab="chest">🎁 开箱配置</button>
-            </div>
+                <details class="panel-more" id="adminNavMore" hidden>
+                    <summary>更多 <span aria-hidden="true">▾</span></summary>
+                    <div class="panel-more-menu"></div>
+                </details>
+            </nav>
+        </div>
+        <div class="container">
             <div id="adminOrdersSection">
                 <p>优先处理待办，按订单类型核对收款、验收和异常；已结束订单可归档。</p>
                 <div id="adminOrderCenter" class="order-center"><div id="adminOrderList" class="oc-list">加载中...</div></div>
@@ -540,16 +558,16 @@
 
     <!-- ==================== 全屏页面：打手面板 ==================== -->
     <div id="sectionBooster" class="content-section" style="display: none;">
-        <div class="section-top">
-            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+        <div class="section-top panel-top">
+            <button class="back-btn" data-back="mainMenu">← 返回首页</button>
             <h2 class="section-heading">⚔️ 打手面板</h2>
-        </div>
-        <div class="container">
-            <div class="booster-tabs">
+            <nav class="booster-tabs panel-nav" aria-label="打手功能">
                 <button class="booster-tab active" data-tab="booster-hall">接单大厅</button>
                 <button class="booster-tab" data-tab="booster-my">我的接单</button>
                 <button class="booster-tab" data-tab="booster-earnings">我的收益</button>
-            </div>
+            </nav>
+        </div>
+        <div class="container">
             <div class="booster-tab-content active" id="booster-hall">
                 <div id="hallOrderList" class="order-list">加载中...</div>
             </div>
@@ -958,17 +976,10 @@
         <button class="submit-btn" id="saveChestConfigBtn">💾 保存配置</button>
     </div>
 </div>
-    <nav class="mobile-nav" aria-label="移动端主导航">
-        <button class="mobile-nav-btn active" data-nav-target="mainMenu"><span>⌂</span><small>首页</small></button>
-        <button class="mobile-nav-btn" data-nav-target="boost"><span>⚡</span><small>代练</small></button>
-        <button class="mobile-nav-btn" data-nav-target="rental"><span>🎮</span><small>租号</small></button>
-        <button class="mobile-nav-btn" data-nav-target="profile"><span>◉</span><small>我的</small></button>
-    </nav>
-
     <script src="ui-runtime.js"></script>
     <script src="rental-client.js"></script>
     <script src="order-center.js?v=20260916-oc3"></script>
     <script src="order-notifications.js?v=20260916-notify1"></script>
-    <script src="script.js?v=20260916-notify1"></script>
+    <script src="script.js?v=20260916-nav1"></script>
 </body>
 </html>
