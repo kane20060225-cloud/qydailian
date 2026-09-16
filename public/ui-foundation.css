@@ -21,6 +21,7 @@
   --tp-active-text: #70b9ff; --tp-active-bg: rgba(112,185,255,.12);
   --tp-acceptance-text: #ad91ff; --tp-acceptance-bg: rgba(173,145,255,.12);
   --logo-background: linear-gradient(135deg,#f0c070,#e8993d); --logo-fill: transparent;
+  --register-border: #f0a050; --workflow-border: rgba(240,160,80,.25);
   --oc-info-text: var(--text); --oc-info-bg: rgba(128,128,128,.12);
   --oc-success-text: var(--text); --oc-success-bg: rgba(128,128,128,.12);
   --oc-warning-text: var(--text); --oc-warning-bg: rgba(128,128,128,.12);

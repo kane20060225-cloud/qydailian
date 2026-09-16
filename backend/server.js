@@ -35,6 +35,10 @@ const {createWecomClient}=require('./lib/wecom-client');
 const {createNotificationSystem,enqueueHall,enqueueUser}=require('./lib/order-notifications');
 const {createNotificationRouter}=require('./routes/order-notifications');
 const {createAvailabilityRouter}=require('./routes/booster-availability');
+const {createServiceContentRouter}=require('./routes/service-content');
+const serviceContent=require('./lib/service-content');
+const loginDevices=require('./lib/login-devices');
+const locateLoginIp=loginDevices.createLocator();
 const {changeAvailability,validateChange}=require('./lib/booster-availability');
 const { paymentFormParams, createRechargeOrder, processTrackedRecharge,
   refreshRecharge, canResumeRecharge } = require('./lib/recharge-orders');
@@ -287,6 +291,8 @@ async function initDB() {
         device_info TEXT,
         ip_address VARCHAR(100),
         login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        device_key CHAR(64) NULL,
+        UNIQUE KEY uq_login_device (user_id,device_key),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
@@ -793,10 +799,7 @@ app.post('/api/auth/login', async (req, res) => {
     try {
       const ua = (req.headers['user-agent'] || '').substring(0, 65535);
       const ip = (req.ip || req.connection.remoteAddress || '').substring(0, 100);
-      await connection.execute(
-        'INSERT INTO login_devices (user_id, device_info, ip_address) VALUES (?, ?, ?)',
-        [user.id, ua, ip]
-      );
+      await loginDevices.recordLogin(connection,user.id,req.body.device_id,ua,ip);
     } catch (e) { console.error('记录登录设备失败:', e.message); }
 
     try {
@@ -845,6 +848,7 @@ function boosterMiddleware(req, res, next) {
 }
 
 app.use('/api',createAvailabilityRouter({pool,boosterMiddleware,adminMiddleware}));
+app.use('/api',createServiceContentRouter({pool,adminMiddleware,recordOperation}));
 
 app.post('/api/auth/logout', authMiddleware, async (req, res) => {
   try {
@@ -1038,15 +1042,14 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
     conn = await pool.getConnection();
     await conn.beginTransaction();
 
-    let finalTotal = total_price;
+    // Lock the catalog until creation commits: a concurrent edit cannot change this quote.
+    const quoted=serviceContent.quote(await serviceContent.read(conn,true),req.body);
+    let finalTotal = quoted.gross;
     let creditsUsed = 0;
     if (use_credits && use_credits > 0) {
       const [creditsRow] = await conn.execute('SELECT qy_credits FROM users WHERE id = ? FOR UPDATE', [req.userId]);
       const available = creditsRow[0]?.qy_credits || 0;
-      creditsUsed = Math.min(use_credits, available);
-      const maxDiscountByCredits = creditsUsed / 100;
-      const actualDiscount = Math.min(maxDiscountByCredits, total_price);
-      creditsUsed = Math.floor(actualDiscount * 100);
+      creditsUsed = Math.min(use_credits, available,Math.round(quoted.gross*100));
       if (creditsUsed > 0) {
         await postAccountDelta(conn, {
           userId: req.userId, accountType: 'qy_credits', delta: -creditsUsed,
@@ -1054,7 +1057,7 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
           sourceRef: order_no, actorUserId: req.userId
         });
       }
-      finalTotal = total_price - actualDiscount;
+      finalTotal = (Math.round(quoted.gross*100)-creditsUsed)/100;
     }
 
     const protectedGameAccount = sensitiveFieldCipher.encrypt(
@@ -1069,7 +1072,7 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
     const [result] = await conn.execute(
       `INSERT INTO orders (order_no, user_id, project, detail, quantity, player_name, price, urgent, total_price, remark, game_uid, game_account, game_password, client_type, required_identity, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
-      [order_no, req.userId, project, detail, quantity, player_name, price, urgent?1:0, finalTotal,
+      [order_no, req.userId, quoted.project, quoted.detail, quantity, quoted.player_name, quoted.price, urgent?1:0, finalTotal,
        remark||null, game_uid||null, protectedGameAccount, protectedGamePassword,
        client_type||'Android', player_type||'standard']
     );
@@ -1082,6 +1085,7 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
     res.status(201).json({ success: true, order_no, order_id: result.insertId, total_price: Number(Number(finalTotal).toFixed(2)), credits_used: creditsUsed, state: Number(finalTotal)===0?'payment_review':'pending_payment' });
   } catch(err) {
     if (conn) await conn.rollback();
+    if(err.status)return res.status(err.status).json({error:err.message});
     console.error('创建订单失败:', err);
     res.status(500).json({ error: '服务器内部错误' });
   } finally {
@@ -1257,11 +1261,8 @@ app.put('/api/user/messages/read-all', authMiddleware, async (req, res) => {
 
 app.get('/api/user/devices', authMiddleware, async (req, res) => {
   try {
-    const [rows] = await pool.execute(
-      'SELECT device_info, ip_address, login_time FROM login_devices WHERE user_id = ? ORDER BY login_time DESC LIMIT 10',
-      [req.userId]
-    );
-    res.json(rows);
+    res.set('Cache-Control','no-store');
+    res.json(await loginDevices.listDevices(pool,req.userId,locateLoginIp));
   } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 

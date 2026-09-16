@@ -33,3 +33,6 @@
 三步下单、订单指引、租号筛选、删除申请与历史异常核对说明见 [B16_ORDER_DELETION_RUNBOOK.md](backend/migrations/B16_ORDER_DELETION_RUNBOOK.md)。发布此版本前需执行 B16 审核元数据增量迁移；核对删除保留原始订单及资金记录。
 
 界面细节、文案统一及浅色主题重构说明见 [B17_UI_REDESIGN.md](docs/B17_UI_REDESIGN.md)。B17 无需数据库迁移，效果图由本地浏览器验证生成。
+
+深浅主题共用布局见 [B18_THEME_PARITY.md](docs/B18_THEME_PARITY.md)。深色组件配色恢复、网页代练项目编辑及游戏/平台活动管理见 [B19_SERVICE_CONTENT_RUNBOOK.md](docs/B19_SERVICE_CONTENT_RUNBOOK.md)；B19 上线须先初始化新增配置表，再发布文件并重启后端。
+- [B20 管理入口与登录设备](docs/B20_WORKSPACE_DEVICES_RUNBOOK.md)

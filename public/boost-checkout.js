@@ -6,6 +6,8 @@
   let config, step = 1, submitted = null;
   const radio = name => document.querySelector(`input[name="${name}"]:checked`)?.value;
   function save() {
+    // Keep a draft for dynamically added projects until the authoritative catalog loads.
+    if(global.ServiceContent&&!global.ServiceContent.ready)return;
     // Strict allowlist: never persist account credentials, password, UID or remarks.
     const draft = {version:1, quantity:Number($('quantityInput').value), urgent:$('urgentCheckbox').checked};
     ['project','detail','player','clientType'].forEach(name => draft[name] = radio(name));
@@ -25,6 +27,7 @@
     } catch {}
   }
   function validate(target) {
+    if(target>=2&&global.ServiceContent&&!global.ServiceContent.ready){config.toast('请先加载最新的项目与价格');global.ServiceContent.load();return false;}
     if (target >= 2 && !config.selection().valid) { config.toast('请选择服务方案'); return false; }
     if (target >= 3) {
       for (const id of ['gameAccount','gamePassword']) {
@@ -113,5 +116,5 @@
     restore(); config.refresh(); setStep(1);
   }
   function resetForLogout(){if(!config)return;submitted=null;['gameAccount','gamePassword','gameUid','remarkInput','useCreditsInput'].forEach(id=>$(id).value='');$('availableCredits').textContent='0';$('boostOrderResult').hidden=true;document.querySelector('.boost-layout').hidden=false;$('boostCheckoutBar').hidden=false;setStep(1);config.refresh();}
-  global.BoostCheckout = {init,sync,success,resetForLogout,canSubmit:() => !submitted && step === 3 && validate(3)};
+  global.BoostCheckout = {init,sync,success,resetForLogout,catalogChanged:()=>{if(config&&!submitted)setStep(1,false);},selectService:()=>{if(submitted){config.toast('当前订单已提交，请先选择“再下一单”');return false;}return setStep(1,false);},canSubmit:() => !submitted && step === 3 && validate(3)};
 })(window);

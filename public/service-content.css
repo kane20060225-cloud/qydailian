@@ -1,0 +1,48 @@
+/* Identical geometry in both themes; all colors come from palette variables. */
+.service-status { margin: 0 0 14px; color: var(--text-secondary); font-size: .85rem; }
+.service-status button { margin-left: 8px; }
+#boostEditProjects { margin-left: auto; font-size: .8rem; }
+.activities-strip { width:100%; margin:0; background:var(--card-bg); border:1px solid var(--accent-border); border-radius:14px; }
+.activities-strip > summary { cursor:pointer; padding:16px 20px; color:var(--accent); font-weight:700; }
+.activity-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; padding:0 16px 16px; }
+.activity-card { min-width:0; padding:16px; background:var(--surface-muted); border:1px solid var(--border); border-radius:10px; }
+.activity-card h3 { font-size:1rem; margin:8px 0; overflow-wrap:anywhere; }
+.activity-card p { font-size:.85rem; line-height:1.7; color:var(--text-secondary); white-space:pre-wrap; overflow-wrap:anywhere; }
+.activity-kind { font-size:.75rem; color:var(--accent); }
+.activity-period { display:block; margin:10px 0; font-size:.75rem; color:var(--text-muted); }
+.activity-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.activity-actions a { font-size:.8rem; color:var(--accent); }
+.activity-actions button { font-size:.8rem; }
+.activity-empty { margin:0; padding:0 20px 20px; color:var(--text-muted); font-size:.85rem; }
+.activity-list.is-sidebar { display:block; padding:0 14px 14px; max-height:calc(100dvh - var(--site-header-height,80px) - 140px); overflow:auto; }
+.activity-list.is-sidebar .activity-card + .activity-card { margin-top:12px; }
+.service-editor-toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin:16px 0; }
+.service-editor-help { color:var(--text-secondary); font-size:.85rem; line-height:1.8; }
+.service-editor-item { background:var(--card-bg); border:1px solid var(--border); border-radius:12px; margin:12px 0; padding:16px; }
+.service-editor-item > summary { cursor:pointer; font-weight:700; overflow-wrap:anywhere; }
+.service-editor-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:16px; }
+.service-editor-fields label { display:flex; flex-direction:column; gap:6px; font-size:.85rem; min-width:0; }
+.service-editor-fields input,.service-editor-fields textarea,.service-editor-fields select { width:100%; min-width:0; padding:10px; }
+.service-editor-fields .check-label { flex-direction:row; align-items:center; }
+.service-editor-fields input[type=checkbox] { width:auto; }
+.service-editor-fields .field-wide { grid-column:1/-1; }
+.service-option-editor { grid-column:1/-1; display:grid; grid-template-columns:minmax(0,1fr) 140px auto; gap:12px; align-items:end; border-top:1px solid var(--border); padding-top:12px; }
+.service-editor-feedback { color:var(--red); white-space:pre-wrap; }
+.service-editor-save { position:sticky; bottom:12px; background:var(--card-bg); border:1px solid var(--border); border-radius:10px; padding:12px; display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+.content-manager-tabs { flex-wrap:wrap; }
+@media(min-width:1400px) {
+ body[data-current-section=boost] .boost-container.has-activities { position:relative; width:calc(100% - 300px); margin-left:max(24px,calc((100vw - 1460px)/2)); margin-right:auto; }
+ #boostActivities { position:absolute; top:0; left:calc(100% + 8px); width:220px; }
+ #boostActivities > summary { padding:16px 14px; }
+ #boostActivities .activity-list { display:block; padding:0 12px 12px; max-height:calc(100dvh - 220px); overflow:auto; }
+ #boostActivities .activity-card + .activity-card { margin-top:12px; }
+}
+@media(max-width:700px) {
+ .activity-list { grid-template-columns:1fr; }
+ .activities-strip > summary { padding:14px 16px; }
+ .activity-card { padding:14px; }
+ .service-editor-fields { grid-template-columns:1fr; }
+ .service-option-editor { grid-template-columns:minmax(0,1fr) 100px; }
+ .service-option-editor .check-label { grid-column:1/-1; }
+ .service-editor-save { bottom:calc(80px + env(safe-area-inset-bottom)); }
+}

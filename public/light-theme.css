@@ -22,6 +22,7 @@ body.theme-light {
   --tp-active-text: var(--accent); --tp-active-bg: var(--accent-soft);
   --tp-acceptance-text: var(--warning); --tp-acceptance-bg: var(--warning-soft);
   --logo-background: none; --logo-fill: currentColor;
+  --register-border: transparent; --workflow-border: transparent;
   --oc-info-text: var(--accent); --oc-info-bg: var(--accent-soft);
   --oc-success-text: var(--green); --oc-success-bg: var(--success-soft);
   --oc-warning-text: var(--warning); --oc-warning-bg: var(--warning-soft);

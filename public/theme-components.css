@@ -14,7 +14,7 @@ body .site-nav-link.active::after { display: none; }
 body button { background: var(--card-bg); border: 1px solid var(--control-border); color: var(--text-secondary); font-weight: 600; box-shadow: none; }
 body button:hover { background: var(--surface-muted); border-color: var(--border-hover); color: var(--text); transform: none; box-shadow: none; }
 body button:disabled { background: var(--surface-inset); border-color: var(--border); color: var(--text-muted); opacity: .7; }
-body .register-btn { border: 0; background: transparent; color: var(--text-secondary); border-radius: 9px; }
+body .register-btn { border: 1px solid var(--register-border); background: transparent; color: var(--text-secondary); border-radius: 9px; }
 body .login-btn { border-radius: 9px; background: var(--login-bg); border-color: var(--login-border); color: var(--login-text); }
 body .user-menu-btn, body .order-notification-bell { background: var(--surface-muted); border-color: var(--border); }
 body .theme-toggle-btn { background: var(--surface-muted); border-color: var(--border); color: var(--text-secondary); border-radius: 10px; }
@@ -39,7 +39,7 @@ body .hero-primary { background: var(--hero-button-bg); border-color: transparen
 body .hero-primary:hover { background: var(--hero-button-bg); color: var(--hero-button-text); border-color: transparent; }
 body .hero-secondary { background: var(--card-bg); border-color: var(--control-border); color: var(--text); }
 body .hero-trust { gap: 18px; margin-top: 18px; font-size: .78rem; }
-body .hero-panel { display: block; padding: 26px; border: 0; background: var(--surface-muted); border-radius: 16px; box-shadow: none; backdrop-filter: none; }
+body .hero-panel { display: block; padding: 26px; border: 1px solid var(--workflow-border); background: var(--surface-muted); border-radius: 16px; box-shadow: none; backdrop-filter: none; }
 body .hero-panel-label { color: var(--text); font-size: .9rem; }
 body .hero-panel li { min-height: 82px; grid-template-columns: 34px 1fr; gap: 14px; }
 body .hero-panel li:last-child { min-height: 54px; }
@@ -307,3 +307,6 @@ body .boost-summary .submit-order-btn:hover { background: var(--boost-button-hov
 body .calc-btn, body .checkin-btn, body .recharge-btn { background: var(--utility-bg); border-color: var(--accent); color: var(--utility-text); }
 body .calc-btn:hover, body .checkin-btn:hover, body .recharge-btn:hover { background: var(--utility-hover); border-color: var(--accent); color: var(--utility-text); }
 body .boost-summary .submit-order-btn:disabled { background: var(--disabled-bg); color: var(--text-muted); border-color: var(--disabled-bg); }
+.login-device-card { margin-bottom: 12px; overflow-wrap: anywhere; }
+.login-device-card h5 { margin: 0 0 12px; font-size: 16px; }
+.login-device-card p { margin: 8px 0; }

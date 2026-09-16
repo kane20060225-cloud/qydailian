@@ -28,13 +28,14 @@ const {evaluateAvailability,validateChange,emptySchedule}=require('../lib/booste
     else if(p==='/api/user/profile')data={id:7,username:'布局验证',role:'admin',booster_identity:'gold',balance:0,qy_credits:0,chest_tickets:0};
     else if(p==='/api/user/credits')data={qy_credits:0};
     else if(p==='/api/chest/tickets')data={tickets:0};
+    else if(p==='/api/service-content')data={...require('../../public/service-defaults'),revision:1,catalog_revision:1,server_time:new Date().toISOString()};
     else if(p==='/api/user/settings')data={};
     else if(p==='/api/order-center')data={orders:[],total:0,page:1,page_size:25,summary:[]};
     else if(p==='/api/notifications/wecom/config')data={deliveries:[]};
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
    });
    await page.goto(origin,{waitUntil:'domcontentloaded'});await page.evaluate(()=>showSection('booster'));
-   await page.locator('#boosterAvailabilityCard').filter({hasText:'当前离线'}).waitFor();
+   assert.equal(await page.locator('#boosterAvailabilityCard').isVisible(),false);for(const tab of ['booster-my','booster-earnings','booster-hall']){await page.locator('.booster-tab[data-tab="'+tab+'"]').click();assert.equal(await page.locator('#boosterAvailabilityCard').isVisible(),false);}await page.locator('.booster-tab[data-tab="booster-availability"]').click();await page.locator('#boosterAvailabilityCard').filter({hasText:'当前离线'}).waitFor();
    await page.locator('[data-availability="toggle"]').click();await page.locator('#boosterAvailabilityCard').filter({hasText:'当前在线'}).waitFor();
    await page.locator('[data-availability="toggle"]').click();await page.locator('#boosterAvailabilityCard').filter({hasText:'当前离线'}).waitFor();
    await page.locator('.booster-tab[data-tab="booster-availability"]').click();

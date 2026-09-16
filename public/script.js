@@ -77,15 +77,23 @@ const rentalClient = RentalClient.createRentalClient({
     fetchImpl: (...args) => window.fetch(...args)
 });
 
-const projectDetails = {
-    silver: { name:'银币', a:{desc:'有紫狗牌有高级银币/百万',price:7.8}, b:{desc:'无紫狗牌有高级银币/百万',price:10.8}, c:{desc:'无紫狗牌无高级银币/百万',price:13.8} },
-    exp: { name:'单车经验', a:{desc:'有紫狗牌有高级经验/万',price:3.8}, b:{desc:'无紫狗牌有高级经验/万',price:5.8}, c:{desc:'无紫狗牌无高级经验/万',price:6.8} },
-    winrate: { name:'胜率', a:{desc:'70%胜率/10场',price:17.8}, b:{desc:'75%胜率/10场',price:22.8}, c:{desc:'80%胜率/10场',price:32.8} },
-    average: { name:'场均', a:{desc:'3000场均/10场',price:19.8}, b:{desc:'3300场均/10场',price:28.8}, c:{desc:'3500场均/10场',price:37.8} },
-    mmedal: { name:'M章', a:{desc:'1个M章',price:29.8}, b:{desc:'3个M章',price:57.8}, c:{desc:'5个M章',price:138.8} },
-    rings: { name:'三环', a:{desc:'0%到65%',price:59.8}, b:{desc:'65%到85%',price:49.8}, c:{desc:'85%到95%',price:88.8} },
-    rating: { name:'评级', a:{desc:'3千到4千/百分',price:11.8}, b:{desc:'4千到5千/百分',price:14.8}, c:{desc:'5千到6千/百分',price:29.8} }
-};
+const projectDetails = Object.fromEntries(ServiceDefaults.projects.map(p=>[p.key,{name:p.name,...Object.fromEntries(p.options.map(o=>[o.key,o]))}]));
+let selectedBoostActivity=null;
+
+function applyServiceCatalog(doc,initial){
+    let selected=getSelectedProject(),detail=getSelectedDetail();
+    if(initial){try{const draft=JSON.parse(safeGetItem('qy.boost.services.v1'));if(draft?.project){selected=draft.project;detail=draft.detail;}}catch{}}
+    for(const key of Object.keys(projectDetails))delete projectDetails[key];
+    for(const p of doc.projects)projectDetails[p.key]={name:p.name,...Object.fromEntries(p.options.map(o=>[o.key,o]))};
+    const grid=getEl('projectGrid'),custom=getEl('customRequestCard'),esc=ServiceContent.escape;
+    grid.querySelectorAll('label.project-card').forEach(el=>el.remove());
+    for(const p of doc.projects){const label=document.createElement('label');label.className='project-card';label.dataset.project=p.key;label.innerHTML=`<input type="radio" name="project" value="${esc(p.key)}"><div class="card-inner"><span class="card-icon">${esc(p.icon)}</span><span class="card-name">${esc(p.name)}</span><span class="card-desc">${esc(p.description)}</span></div>`;grid.insertBefore(label,custom);}
+    const project=[...grid.querySelectorAll('input[name=project]')].find(el=>el.value===selected)||grid.querySelector('input[name=project]');if(project)project.checked=true;
+    const wanted=doc.projects.find(p=>p.key===project?.value)?.options.find(o=>o.key===detail)?.key||doc.projects.find(p=>p.key===project?.value)?.options[0]?.key;
+    document.querySelectorAll('input[name=detail]').forEach(el=>el.checked=el.value===wanted);
+    const copy=document.querySelector('.service-card-primary .service-copy small');if(copy)copy.textContent=doc.projects.map(p=>p.name).join('、');
+    updateDetailCards();refreshPrice();
+}
 
 const identityWeights = { gold: 4, silver: 3, standard: 2, budget: 1 };
 const playerData = [
@@ -274,6 +282,9 @@ function init() {
       payment:orderNo=>{currentOrderNo=orderNo;getEl('guideOrderNo').textContent=orderNo;getEl('paymentGuideModal').style.display='flex';},
       selection:()=>{const p=projectDetails[getSelectedProject()],d=p?.[getSelectedDetail()],player=playerData.find(p=>p.key===document.querySelector('input[name="player"]:checked')?.value);return {valid:!!(p&&d&&player),project:p?.name,detail:d?.desc,player:player?.name,quantity:getQty(),urgent:isUrgent(),credits:getUseCredits(),total:calcTotal()};}});
     RentalDiscovery.init({render:renderRentalHallAccounts});
+    ServiceContent.init({getRole:()=>safeGetItem('role'),getToken:()=>safeGetItem('token'),toast:showToast,applyCatalog:applyServiceCatalog,
+      openEditor:field=>{showSection('admin');document.querySelector('.admin-tab[data-admintab=content]')?.click();switchContentManagerTab(field);},
+      selectActivity:activity=>{if(!BoostCheckout.selectService())return;showSection('boost');const project=[...document.querySelectorAll('input[name=project]')].find(el=>el.value===activity.project_key),detail=[...document.querySelectorAll('input[name=detail]')].find(el=>el.value===activity.option_key);if(project&&detail){project.checked=true;detail.checked=true;selectedBoostActivity=activity;getEl('boostActivitySelection').hidden=false;getEl('boostActivitySelection').textContent='活动服务：'+activity.title+'。费用按所选方案计算，请核对活动目标与计价单位。';updateDetailCards();refreshPrice();BoostCheckout.sync();getEl('boostStepTitle').focus();}}});
     checkLoginStatus();
     bindUpdateRole();
     initChestSimulator();
@@ -513,12 +524,8 @@ function isUrgent() { return urgentCheck ? urgentCheck.checked : false; }
 function updateDetailCards() {
     const p = projectDetails[getSelectedProject()];
     if (!p) return;
-    if (detailDescA) detailDescA.textContent = p.a.desc;
-    if (detailDescB) detailDescB.textContent = p.b.desc;
-    if (detailDescC) detailDescC.textContent = p.c.desc;
-    if (detailPriceA) detailPriceA.textContent = `¥${p.a.price}`;
-    if (detailPriceB) detailPriceB.textContent = `¥${p.b.price}`;
-    if (detailPriceC) detailPriceC.textContent = `¥${p.c.price}`;
+    ['a','b','c'].forEach(key=>{const option=p[key],card=document.querySelector(`.detail-card[data-detail="${key}"]`);if(card)card.hidden=!option;const suffix=key.toUpperCase();if(getEl('detailDesc'+suffix))getEl('detailDesc'+suffix).textContent=option?.desc||'';if(getEl('detailPrice'+suffix))getEl('detailPrice'+suffix).textContent=option?'¥'+option.price:'';});
+    if(!p[getSelectedDetail()]){const first=Object.keys(p).find(key=>['a','b','c'].includes(key));const input=[...document.querySelectorAll('input[name=detail]')].find(el=>el.value===first);if(input)input.checked=true;}
 }
 
 function calcTotal() {
@@ -533,6 +540,7 @@ function calcTotal() {
 }
 
 function refreshPrice() {
+    if(selectedBoostActivity&&(selectedBoostActivity.project_key!==getSelectedProject()||selectedBoostActivity.option_key!==getSelectedDetail())){selectedBoostActivity=null;getEl('boostActivitySelection').hidden=true;}
     const project = projectDetails[getSelectedProject()];
     if (!project) return;
     const detail = project[getSelectedDetail()];
@@ -544,7 +552,7 @@ function refreshPrice() {
     if (totalPriceDisplay) totalPriceDisplay.textContent = `¥${calcTotal().toFixed(2)}`;
     if (urgentRow) urgentRow.style.display = isUrgent() ? 'flex' : 'none';
 }
-projectRadios.forEach(r => r.addEventListener('change', () => { updateDetailCards(); refreshPrice(); }));
+getEl('projectGrid')?.addEventListener('change',event=>{if(event.target.name==='project'){updateDetailCards();refreshPrice();BoostCheckout.sync();}});
 detailRadios.forEach(r => r.addEventListener('change', refreshPrice));
 if (qtyMinus) qtyMinus.addEventListener('click', () => { if (getQty() > 1) { qtyInput.value = getQty() - 1; refreshPrice(); } });
 if (qtyPlus) qtyPlus.addEventListener('click', () => { if (getQty() < 99) { qtyInput.value = getQty() + 1; refreshPrice(); } });
@@ -642,6 +650,7 @@ getEl('calcBtn')?.addEventListener('click', () => {
 
 // ==================== 用户登录状态管理 ====================
 function checkLoginStatus() {
+    ServiceContent.authChanged();
     window.OrderNotifications?.syncSession();
     const token = safeGetItem('token');
     const username = safeGetItem('username');
@@ -716,7 +725,7 @@ if (loginForm) loginForm.addEventListener('submit', async (e) => {
     const recoveryCode = getEl('loginRecoveryCode')?.value.trim();
     if (!username || !password) { if (loginError) loginError.textContent = '用户名和密码不能为空'; return; }
     try {
-        const res = await fetch(`${API_BASE}/auth/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, password, twoFactorCode, recoveryCode }) });
+        const res = await fetch(`${API_BASE}/auth/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, password, twoFactorCode, recoveryCode, device_id: getLoginDeviceId() }) });
         const data = await res.json();
         if (res.ok && data.success) {
             authExpiryPrompted = false;
@@ -799,6 +808,7 @@ async function loadOrders() {
 if (submitOrderBtn) {
     submitOrderBtn.addEventListener('click', async function() {
         if (this.disabled || !BoostCheckout.canSubmit()) return;
+        if(!ServiceContent.ready){showToast('请先加载最新的项目与价格');ServiceContent.load();return;}
         const token = safeGetItem('token');
         if (!token) { showToast('请先登录，服务选项和数量已保存'); getEl('loginModal').style.display='flex'; return; }
         const project = getSelectedProject(); const detail = getSelectedDetail(); const qty = getQty();
@@ -810,7 +820,7 @@ if (submitOrderBtn) {
         const detailInfo = projectInfo[detail];
         if (!detailInfo) { showToast('❌ 请选择详情'); return; }
         const base = detailInfo.price;
-        const remark = getEl('remarkInput')?.value.trim() || '';
+        const remark = [selectedBoostActivity?'活动：'+selectedBoostActivity.title:'',getEl('remarkInput')?.value.trim()||''].filter(Boolean).join('\n').slice(0,200);
         const gameUid = getEl('gameUid')?.value.trim() || '';
         const gameAccount = getEl('gameAccount')?.value.trim() || '';
         const gamePassword = getEl('gamePassword')?.value.trim() || '';
@@ -823,6 +833,7 @@ if (submitOrderBtn) {
         this.textContent = '⏳ 提交中...';
         try {
             const body = {
+                catalog_revision:ServiceContent.catalogRevision,project_key:project,option_key:detail,
                 project: projectInfo.name,
                 detail: `${detail.toUpperCase()} - ${detailInfo.desc}`,
                 quantity: qty,
@@ -848,8 +859,10 @@ if (submitOrderBtn) {
                getEl('guideOrderNo').textContent = currentOrderNo;
                if(Number(data.total_price ?? total)>0)getEl('paymentGuideModal').style.display = 'flex';
                BoostCheckout.success(data, body);
+               selectedBoostActivity=null;getEl('boostActivitySelection').hidden=true;
             } else {
                showToast('❌ ' + (data.error || '提交失败'));
+               if(res.status===409)await ServiceContent.load();
             }
         } catch (err) { showToast('提交结果未确认，请先到订单中心查看是否已生成订单，避免重复下单'); }
         finally {
@@ -1372,6 +1385,10 @@ getEl('submitPaymentBtn')?.addEventListener('click', async () => {
 // ==================== 打手工作台 ====================
 document.querySelectorAll('.booster-tab').forEach(tab => {
     tab.addEventListener('click', () => {
+        if (tab.dataset.tab !== 'booster-availability' && getEl('booster-availability').style.display !== 'none') {
+            if (!BoosterAvailability.canLeave()) return;
+            BoosterAvailability.leave();
+        }
         document.querySelectorAll('.booster-tab').forEach(t => {
             t.classList.remove('active');
             t.removeAttribute('aria-current');
@@ -2253,22 +2270,32 @@ async function loadMessages() {
 }
 
 // 登录设备
+let loginDeviceFallback;
+function getLoginDeviceId() {
+    const key='qy.login.device.v1',saved=safeGetItem(key);
+    if (/^[a-zA-Z0-9_-]{16,100}$/.test(saved||'')) return saved;
+    if (!loginDeviceFallback) loginDeviceFallback=Array.from(crypto.getRandomValues(new Uint8Array(24)),v=>v.toString(16).padStart(2,'0')).join('');
+    safeSetItem(key,loginDeviceFallback);return loginDeviceFallback;
+}
+function loginDeviceLabel(agent) {
+    const ua=String(agent||''),os=/Android/i.test(ua)?'Android':/iPhone|iPad/i.test(ua)?'iOS':/Windows/i.test(ua)?'Windows':/Macintosh|Mac OS/i.test(ua)?'macOS':/Linux/i.test(ua)?'Linux':'未知系统';
+    const browser=/Edg(?:e|A|iOS)?\//i.test(ua)?'Edge':/Firefox|FxiOS/i.test(ua)?'Firefox':/Chrome|CriOS/i.test(ua)?'Chrome':/Safari/i.test(ua)?'Safari':'未知浏览器';
+    return `${os} · ${browser}`;
+}
 async function loadDevices() {
     const content = getEl('settingsContent');
-    content.innerHTML = '<p>正在加载…</p>';
+    const marker=document.createElement('p');marker.textContent='正在读取登录设备…';content.replaceChildren(marker);
     const token = safeGetItem('token');
-    const res = await fetch(`${API_BASE}/user/devices`, { headers: { 'Authorization': `Bearer ${token}` } });
-    const devices = await res.json();
-    if (!devices.length) { content.innerHTML = '<p>暂无设备记录</p>'; return; }
-    let html = '<h4>登录设备</h4>';
-    devices.forEach(d => {
-        html += `<div class="card" style="margin-bottom:8px;">
-            <p><strong>设备：</strong>${d.device_info || '未知'}</p>
-            <p><strong>IP：</strong>${d.ip_address}</p>
-            <p><strong>时间：</strong>${new Date(d.login_time).toLocaleString()}</p>
-        </div>`;
-    });
-    content.innerHTML = html;
+    const current=()=>content.contains(marker)&&token===safeGetItem('token');
+    const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    try {
+        const res = await fetch(`${API_BASE}/user/devices`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const devices=await res.json();if(!res.ok)throw Error(devices.error||'读取失败');if(!Array.isArray(devices))throw Error('设备记录暂不可用');if(!current())return;
+        content.innerHTML='<h4>登录设备</h4><p class="field-help">同一浏览器设备仅显示一次，最多展示最近10台设备。登录时间和地点来自最近一次登录；地点由 IP 推测，可能与实际位置不同。</p>'+(!devices.length?'<p>暂无登录设备记录</p>':devices.map(d=>`<article class="card login-device-card"><h5>${escape(loginDeviceLabel(d.device_info))}</h5><p><strong>登录地点：</strong>${escape(d.login_location||'地点暂不可用')}</p><p><strong>最近登录：</strong>${escape(new Date(d.login_time).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}))}（北京时间）</p><p><strong>IP：</strong>${escape(d.ip_address||'未知')}</p></article>`).join(''));
+    } catch(err) {
+        if(!current())return;content.innerHTML=`<p role="alert">${escape(err.message)}</p><button type="button" id="retryLoginDevices">重新读取</button>`;
+        getEl('retryLoginDevices').addEventListener('click',loadDevices);
+    }
 }
 
 // ==================== 账号租赁模块 ====================
@@ -2851,6 +2878,7 @@ async function loadGameNews() {
 
 
 // ==================== 内容管理（管理员） ====================
+let contentManagerLoadSerial=0;
 
 function getEndpointForType(type) {
   const map = {
@@ -2861,6 +2889,9 @@ function getEndpointForType(type) {
 }
 
 async function loadContentManager(type) {
+  const serial=++contentManagerLoadSerial;
+  if(['projects','activities'].includes(type)){ServiceContent.edit(type);return;}
+  ServiceContent.cancelEditor();
   const view = getEl('contentManagerView');
   const token = safeGetItem('token');
   if (!token) { view.innerHTML = '<p>请先登录</p>'; return; }
@@ -2869,10 +2900,13 @@ async function loadContentManager(type) {
   try {
     const res = await fetch(`${API_BASE}${endpoint}`, { headers: { 'Authorization': `Bearer ${token}` } });
     const items = await res.json();
+    if(serial!==contentManagerLoadSerial)return;
+    if(!res.ok||!Array.isArray(items))throw Error('加载失败');
     window._contentItems = items;  // 缓存，方便编辑
     view.innerHTML = renderContentEditor(type, items);
     bindContentEditorEvents(type);
   } catch (err) {
+    if(serial!==contentManagerLoadSerial)return;
     view.innerHTML = '<p style="color:var(--red)">加载失败</p>';
   }
 }

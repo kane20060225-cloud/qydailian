@@ -1,0 +1,40 @@
+/* Restore the original dark component colors. No layout or typography overrides. */
+body:where(:not(.theme-light)) button { background: var(--card-bg); border-color: var(--border); color: var(--text); }
+body:where(:not(.theme-light)) button:hover { background: rgba(240,160,80,.08); border-color: var(--accent); }
+body:where(:not(.theme-light)) .register-btn { background: transparent; border-color: var(--accent); color: var(--accent); }
+body:where(:not(.theme-light)) .login-btn { background: transparent; border-color: #58a6ff; color: #58a6ff; }
+body:where(:not(.theme-light)) .login-btn:hover { background: rgba(88,166,255,.1); border-color: #58a6ff; color: #58a6ff; }
+body:where(:not(.theme-light)) .hero-copy h1 { color: #fff; }
+body:where(:not(.theme-light)) .hero-copy > p { color: #b8c2d1; }
+body:where(:not(.theme-light)) .hero-primary, body:where(:not(.theme-light)) .hero-primary:hover { background: linear-gradient(135deg,#f6bd71,#e9973e); border-color: transparent; color: #141414; }
+body:where(:not(.theme-light)) .hero-secondary { background: rgba(20,27,38,.82); color: var(--text); }
+body:where(:not(.theme-light)) .hero-panel { background: rgba(18,26,39,.84); }
+body:where(:not(.theme-light)) .hero-panel-label { color: var(--text-secondary); }
+body:where(:not(.theme-light)) .hero-panel li > span { background: transparent; border-color: rgba(240,160,80,.4); color: var(--accent); }
+body:where(:not(.theme-light)) .hero-panel li small { color: var(--text-muted); }
+body:where(:not(.theme-light)) .home-section-heading > div > span { color: var(--accent); }
+body:where(:not(.theme-light)) .main-menu .service-card { background: rgba(20,27,38,.92); }
+body:where(:not(.theme-light)) .main-menu .service-card-primary,
+body:where(:not(.theme-light)) .main-menu .service-card-primary:hover { background: linear-gradient(135deg,rgba(55,37,24,.95),rgba(20,27,38,.94)); border-color: rgba(240,160,80,.55); }
+body:where(:not(.theme-light)) .service-card .menu-icon { background: rgba(240,160,80,.12); }
+body:where(:not(.theme-light)) .service-copy small, body:where(:not(.theme-light)) .quick-card small { color: var(--text-muted); }
+body:where(:not(.theme-light)) .card-header h3, body:where(:not(.theme-light)) .section-heading { color: var(--text); }
+body:where(:not(.theme-light)) .card-num { background: rgba(240,160,80,.15); color: var(--accent); }
+body:where(:not(.theme-light)) .card-inner, body:where(:not(.theme-light)) .detail-inner, body:where(:not(.theme-light)) .player-inner,
+body:where(:not(.theme-light)) input:not([type=checkbox]):not([type=radio]):not([type=range]),
+body:where(:not(.theme-light)) select, body:where(:not(.theme-light)) textarea { background-color: var(--surface-muted); border-color: var(--border); color: var(--text); }
+body:where(:not(.theme-light)) .project-card input:checked + .card-inner { background: rgba(240,160,80,.08); border-color: var(--accent); box-shadow: 0 0 18px var(--accent-glow); }
+body:where(:not(.theme-light)) .detail-card input:checked + .detail-inner { background: rgba(240,160,80,.06); border-color: var(--accent); box-shadow: 0 0 16px var(--accent-glow); }
+body:where(:not(.theme-light)) .player-card input:checked + .player-inner { background: rgba(240,160,80,.08); border-color: var(--accent); }
+body:where(:not(.theme-light)) .price-box { background: var(--surface-inset); border-color: var(--border); }
+body:where(:not(.theme-light)) .detail-price, body:where(:not(.theme-light)) .price-total { color: var(--price); }
+body:where(:not(.theme-light)) #submitOrderBtn, body:where(:not(.theme-light)) #boostNext,
+body:where(:not(.theme-light)) #submitOrderBtn:hover, body:where(:not(.theme-light)) #boostNext:hover { background: linear-gradient(135deg,#f0ad60,#e58a2f); color: #17130f; border-color: transparent; }
+body:where(:not(.theme-light)) #submitOrderBtn:disabled, body:where(:not(.theme-light)) #boostNext:disabled { background: var(--disabled-bg); color: var(--text-muted); border-color: var(--disabled-bg); }
+body:where(:not(.theme-light)) .calc-btn, body:where(:not(.theme-light)) .checkin-btn, body:where(:not(.theme-light)) .recharge-btn { background: rgba(240,160,80,.1); color: var(--accent); border-color: var(--accent); }
+body:where(:not(.theme-light)) .copy-btn, body:where(:not(.theme-light)) .copy-calc-btn { background: rgba(240,160,80,.08); color: var(--accent); border-color: var(--accent); }
+body:where(:not(.theme-light)) .modal-header h3, body:where(:not(.theme-light)) .oc-modal-body > h4 { color: var(--accent); }
+body:where(:not(.theme-light)) .oc-modal-footer { background: var(--card-bg); }
+body:where(:not(.theme-light)) .oc-meta strong, body:where(:not(.theme-light)) .oc-metric-grid strong { color: var(--accent); }
+body:where(:not(.theme-light)) .tp-payment-row strong { color: #f7c873; }
+body:where(:not(.theme-light)) .tp-payment-row strong.paid { color: var(--green); }

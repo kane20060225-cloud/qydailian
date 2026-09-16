@@ -35,6 +35,7 @@ const conn = {
   release() {},
   async execute(sql, params) {
     const q = sql.replace(/\s+/g, ' ').trim();
+    if(q==='SELECT revision, document, updated_at FROM site_service_content WHERE id=1 FOR UPDATE')return [[{revision:1,document:{projects:[{key:'test',name:'test',enabled:true,options:[{key:'a',desc:'test',price:10,enabled:true},{key:'b',desc:'test',price:2,enabled:true}]}],activities:[]}}]];
     if (q === 'SELECT qy_credits FROM users WHERE id = ? FOR UPDATE' ||
         q === 'SELECT qy_credits FROM users WHERE id=? FOR UPDATE') {
       return [[{ qy_credits: state.users[params[0]].qy_credits }]];
@@ -126,7 +127,7 @@ test('normal order credit debit is recorded with the order transaction', async (
   const token = issueSessionToken(3, 0, process.env.JWT_SECRET);
   const response = await fetch(`${base}/api/orders`, {
     method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ project: 'test', detail: 'test', quantity: 1,
+    body: JSON.stringify({ project: 'test', detail: 'A - test', quantity: 1,urgent:false,
       player_name: 'test', price: 10, total_price: 10, use_credits: 100,
       game_account: 'account', game_password: 'password' })
   });
@@ -155,8 +156,19 @@ test('shop purchase posts one debit and inventory change atomically', async (t) 
 
 test('full credit boost discount reports the real zero amount and remains pending manual review',async t=>{
  reset();const base=await serve(t),token=issueSessionToken(3,0,process.env.JWT_SECRET);
- const response=await fetch(`${base}/api/orders`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({project:'test',detail:'test',quantity:1,player_name:'test',price:2,total_price:2,use_credits:200,game_account:'synthetic',game_password:'synthetic'})});
+ const response=await fetch(`${base}/api/orders`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({project:'test',detail:'B - test',quantity:1,urgent:false,player_name:'test',price:2,total_price:2,use_credits:200,game_account:'synthetic',game_password:'synthetic'})});
  assert.equal(response.status,201);const data=await response.json();assert.equal(data.total_price,0);assert.equal(data.credits_used,200);assert.equal(data.state,'payment_review');assert.equal(state.users[3].qy_credits,0);assert.equal(state.ledger[0][3],-200);assert.equal(state.audit.length,1);
+});
+
+test('credit discounts retain exact cents rather than losing one credit to floating point',async t=>{
+ reset();state.users[3].qy_credits=30;const base=await serve(t),token=issueSessionToken(3,0,process.env.JWT_SECRET);
+ const response=await fetch(base+'/api/orders',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({project:'test',detail:'B - test',quantity:1,urgent:false,player_name:'test',price:2,total_price:2,use_credits:29})});assert.equal(response.status,201);const data=await response.json();assert.equal(data.credits_used,29);assert.equal(data.total_price,1.71);assert.equal(state.users[3].qy_credits,1);assert.equal(state.ledger[0][3],-29);
+});
+
+test('stale and forged catalog quotes cannot create an order or debit credits',async t=>{
+ reset();const base=await serve(t),token=issueSessionToken(3,0,process.env.JWT_SECRET);
+ for(const change of [{catalog_revision:0},{price:1,total_price:1}]){const response=await fetch(base+'/api/orders',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({project_key:'test',option_key:'a',project:'test',detail:'A - test',quantity:1,urgent:false,player_type:'standard',player_name:'test',price:10,total_price:10,use_credits:100,...change})});assert.equal(response.status,409);}
+ assert.equal(state.users[3].qy_credits,200);assert.equal(state.orders.length,0);assert.equal(state.ledger.length,0);assert.equal(state.audit.length,0);
 });
 
 test('paid booster completion posts earnings and rewards only once', async (t) => {

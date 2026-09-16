@@ -18,6 +18,7 @@ const {decorateOrder}=require('../lib/order-center'),{guidance}=require('../lib/
    await context.route('**/*',async route=>{
     const req=route.request(),url=new URL(req.url()),p=url.pathname;if(url.origin!==origin){await route.abort();return;}if(!p.startsWith('/api/')){await route.continue();return;}
     let data=[],status=200;
+    if(p==='/api/service-content'){await route.fulfill({json:require('../lib/service-content').published({revision:1,...require('../lib/service-content').defaults})});return;}
     if(p==='/api/user/settings'){if(req.method()==='PUT'){saves++;if(failSave){status=503;data={error:'测试：账号同步暂不可用'};}else data={success:true};}else data={theme};}
     else if(p==='/api/user/profile')data={id:7,username:'界面验收',email:'test@example.invalid',role:'admin',reputation:100,booster_identity:'standard',referral_code:'UI-TEST',created_at:now};
     else if(p==='/api/user/credits')data={qy_credits:1200,total_earned_credits:1500,vip_level:2};
@@ -30,7 +31,7 @@ const {decorateOrder}=require('../lib/order-center'),{guidance}=require('../lib/
     await route.fulfill({status,contentType:'application/json',body:JSON.stringify(data)});
    });
    const check=async name=>{
-    if(name==='admin')await page.locator('[data-metrics] .oc-metric-grid').waitFor();
+    if(name==='admin'){assert.equal(await page.locator('#adminOrderCenter [data-metrics]').count(),0);}
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,theme+' '+viewport.width+' '+name+' overflow');
     assert.deepEqual(errors,[],name+' page errors');
     const background=await page.evaluate(()=>getComputedStyle(document.body).backgroundImage);

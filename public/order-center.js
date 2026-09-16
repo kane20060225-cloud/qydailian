@@ -48,7 +48,7 @@
       ${admin?'<label>处理顺序<select name="sort"><option value="priority">紧急程度优先</option><option value="waiting">等待最久优先</option><option value="newest">最新创建优先</option></select></label>':''}<button type="button" data-refresh>刷新</button><details class="oc-more"><summary>更多筛选</summary><div class="oc-filter-extra"><label>起始日期<input name="from" type="date"></label><label>结束日期<input name="to" type="date"></label><label>支付渠道<select name="channel"><option value="">全部渠道</option><option>支付宝</option><option>人工核实</option><option>情谊积分</option></select></label>${admin?'<label>归档记录<select name="archived"><option value="0">未归档</option><option value="1">已归档</option></select></label><button type="button" data-export>导出当前结果</button>':''}<button type="button" data-reset>重置筛选</button></div></details></form>`);
     root.insertAdjacentHTML('beforeend','<div class="oc-paging"><button type="button" data-page="-1">上一页</button><span aria-live="polite"></span><button type="button" data-page="1">下一页</button></div>');
     if(admin)root.querySelector('form').insertAdjacentHTML('afterend','<div class="oc-bulk"><label><input type="checkbox" data-select-all> 选择本页可操作订单</label><button type="button" data-bulk disabled>删除选中（0）</button><button type="button" data-trash>回收站</button><button type="button" data-cleanup>自动清理设置</button><button type="button" data-timeout>24小时超时关闭</button><span class="oc-muted">普通无资金订单在回收站保留14天；付款、凭证及核对删除记录长期保留。</span></div>');
-    if(admin)root.querySelector('.oc-summary').insertAdjacentHTML('afterend','<section class="oc-operating-metrics" aria-label="经营指标"><h4>近90天经营指标</h4><div data-metrics>正在加载指标…</div></section>');
+    if(admin)root.querySelector('[data-refresh]').insertAdjacentHTML('afterend','<button type="button" data-show-metrics>经营指标</button>');
     statusOptions(scope);
     let timer;
     root.querySelector('form').addEventListener('submit',e=>e.preventDefault());
@@ -66,6 +66,7 @@
     root.addEventListener('click',async e=>{
       const b=e.target.closest('button');if(!b)return;
       if(b.hasAttribute('data-refresh')) load(scope);
+      else if(b.hasAttribute('data-show-metrics'))showMetrics();
       else if(b.hasAttribute('data-trash')){p.filters.trash=p.filters.trash==='1'?'0':'1';p.filters.state='';p.filters.task='';p.filters.page=1;statusOptions(scope);load(scope);}
       else if(b.hasAttribute('data-cleanup'))showCleanup();
       else if(b.hasAttribute('data-timeout'))showTimeout();
@@ -115,7 +116,6 @@
       if(p.filters.trash==='1')p.list.querySelectorAll('.oc-card').forEach((card,i)=>{const o=p.rows[i];card.insertAdjacentHTML('beforeend',`<p class="oc-trash-expiry">${o.retention_protected?"核对删除：原始记录长期保留，不自动永久删除":"14天清理期限："+esc(time(o.purge_after||new Date(new Date(o.removed_at).getTime()+14*86400000)))}</p>`);});
       const totalPages=Math.max(1,Math.ceil(data.total/25));const paging=p.root.querySelector('.oc-paging');paging.querySelector('span').textContent=`共 ${data.total} 条 · 第 ${p.filters.page} / ${totalPages} 页`;paging.querySelector('[data-page="-1"]').disabled=p.filters.page<=1;paging.querySelector('[data-page="1"]').disabled=p.filters.page>=totalPages;
       if(scope==='admin'){p.list.querySelectorAll('.oc-card').forEach((card,i)=>{const o=p.rows[i];if(o.actions.includes(p.filters.trash==='1'?'restore':'remove'))card.insertAdjacentHTML('afterbegin',`<label class="oc-select"><input type="checkbox" data-select="${esc(o.order_type+':'+o.order_ref)}" aria-label="选择订单 ${esc(o.order_ref)}">选择</label>`);});updateSelection(p);}
-      if(scope==='admin') loadMetrics(p,generation,token);
       const summary=p.root.querySelector('.oc-summary');
       if(scope==='admin'){const counts={todo:0,review:0,payment:0,acceptance:0,exception:0,refund:0,assignment:0,activation:0,deletion:0,all:0};data.summary.forEach(s=>{counts.all+=Number(s.total);if(s.admin_task){counts.todo+=Number(s.total);counts[s.admin_task]+=Number(s.total);}});summary.innerHTML=Object.entries({todo:'全部待办',deletion:'删除申请',review:'审核 / 派单',assignment:'已收款无人接单',activation:'待出租方确认',payment:'核实收款',acceptance:'验收',exception:'到账异常',refund:'争议 / 退款',all:'所有记录'}).map(([k,v])=>`<button type="button" data-task="${k}" class="${(p.filters.task|| (p.filters.state==='todo'?'todo':'all'))===k?'active':''}">${v} <b>${counts[k]}</b></button>`).join('');}
       else summary.innerHTML='<span>充值、代练、租号与商城兑换均在这里查看。付款和到账以服务器核实结果为准。</span>';
@@ -123,12 +123,16 @@
     }catch(err){if(generation===p.generation)p.list.innerHTML=`<p role="alert">${esc(err.message)}，请点击刷新重试。</p>`;}finally{if(generation===p.generation)p.list.removeAttribute('aria-busy');}
   }
   function waitTime(hours){if(hours==null)return '时间未记录';const minutes=Math.max(0,Math.floor(Number(hours)*60));return minutes<60?minutes+' 分钟':Math.floor(minutes/60)+' 小时 '+minutes%60+' 分钟';}
-  async function loadMetrics(p,generation,token){
-    const target=p.root.querySelector('[data-metrics]');
-    try{const m=await request('/order-center/metrics?scope=admin');if(generation!==p.generation||token!==config.getToken())return;
+  async function showMetrics(){
+    if(config.getRole()!=='admin')return;
+    modal.style.display='flex';detail=null;detailScope='admin';const generation=++detailGeneration,token=config.getToken();
+    $('ocDetailTitle').textContent='近90天经营指标';$('ocDetailActions').innerHTML='<button type="button" data-show-metrics>刷新指标</button>';
+    $('ocDetailBody').innerHTML='<section class="oc-operating-metrics" aria-label="经营指标"><div data-metrics>正在加载指标…</div></section>';
+    const target=$('ocDetailBody').querySelector('[data-metrics]');
+    try{const m=await request('/order-center/metrics?scope=admin');if(generation!==detailGeneration||token!==config.getToken())return;
       const duration=v=>v==null?'暂无有效样本':v+' 小时',percent=v=>v==null?'暂无有效样本':v+'%';
       target.innerHTML=`<div class="oc-metric-grid"><div>收款至接单平均<strong>${esc(duration(m.assignment_hours))}</strong><small>${m.assignment_samples||0} 单有时间记录</small></div><div>接单至完成平均<strong>${esc(duration(m.completion_hours))}</strong><small>${m.completion_samples||0} 单有时间记录</small></div><div>租号争议比例<strong>${esc(percent(m.dispute_rate))}</strong><small>${m.disputed_rentals||0} / ${m.paid_rentals||0} 个已核实付款租单</small></div><div>代练 / 租号复购率<strong>${esc(percent(m.repeat_rate))}</strong><small>${m.repeat_customers||0} / ${m.paying_customers||0} 位已核实付款用户</small></div></div><p class="oc-muted">统计按近90天创建的代练与租号订单；复购指期间至少2个已核实付款服务订单。耗时仅使用实际收款、接单与完成记录，缺少时间的历史订单不纳入平均值。等待提醒为内部跟进阈值，不是服务时限。</p><p>${m.assignment_hours!=null&&m.assignment_hours>=8?'优先排查派单与打手供给，收款到接单平均等待较长。':m.dispute_rate!=null&&m.dispute_rate>=10?'优先排查租号交接和规则说明，争议比例较高。':'结合等待最久的待办与服务类型判断瓶颈；完成耗时受服务内容影响，避免直接比较不同项目。'}</p>`;
-    }catch(err){if(generation===p.generation)target.textContent=err.message+'，刷新订单可重试。';}
+    }catch(err){if(generation===detailGeneration&&token===config.getToken())target.textContent=err.message+'，请点击刷新指标重试。';}
   }
   async function copySummary(){const text=`订单号：${detail.order_ref}\n类型：${types[detail.order_type]}\n内容：${detail.order_type==='third_party'?'三方订单（交付内容请在站内查看）':detail.title}\n当前状态：${detail.state_label}\n金额：${amount(detail)}`;try{
     if(navigator.clipboard&&window.isSecureContext)await navigator.clipboard.writeText(text);
@@ -226,7 +230,7 @@
     if(config)return;config=options;setupPanel('user');setupPanel('admin');
     document.body.insertAdjacentHTML('beforeend','<div id="orderCenterModal" class="modal-overlay" style="display:none"><div class="modal-card oc-modal-card" role="dialog" aria-modal="true" aria-labelledby="ocDetailTitle"><header class="oc-modal-header"><h3 id="ocDetailTitle">订单详情</h3><button type="button" id="ocClose" class="modal-close" aria-label="关闭订单详情">×</button></header><div id="ocDetailBody" class="oc-modal-body"></div><footer id="ocDetailActions" class="oc-modal-footer"></footer></div></div>');modal=$('orderCenterModal');
     global.UIRuntime?.enhanceModals({querySelectorAll:()=>[modal],get activeElement(){return document.activeElement;}});
-    modal.addEventListener('click',e=>{if(e.target===modal||e.target.closest('#ocClose')){if(!busy)close();return;}const b=e.target.closest('button');if(!b||busy)return;if(e.target.id==='ocDetailRetry')showDetail(detail,detailScope);if(b.hasAttribute('data-save-cleanup')){cleanupAction(false);return;}if(b.hasAttribute('data-run-cleanup')){cleanupAction(true);return;}if(b.hasAttribute('data-save-timeout')){timeoutAction(false);return;}if(b.hasAttribute('data-run-timeout')){timeoutAction(true);return;}if(b.hasAttribute('data-copy-summary')){copySummary();return;}const action=b.dataset.action||b.dataset.guidanceAction;if(action){if(['reconcile','boost_confirm_payment','boost_dispatch','archive','unarchive','remove','restore','cancel_unpaid','resolve_recharge','request_deletion','review_deletion','reviewed_remove'].includes(action))reasonForm(action);else perform(action);}if(b.dataset.confirm)perform(b.dataset.confirm);if(b.hasAttribute('data-cancel-reason'))$('ocActionForm').innerHTML='';});
+    modal.addEventListener('click',e=>{if(e.target===modal||e.target.closest('#ocClose')){if(!busy)close();return;}const b=e.target.closest('button');if(!b||busy)return;if(e.target.id==='ocDetailRetry')showDetail(detail,detailScope);if(b.hasAttribute('data-show-metrics')){showMetrics();return;}if(b.hasAttribute('data-save-cleanup')){cleanupAction(false);return;}if(b.hasAttribute('data-run-cleanup')){cleanupAction(true);return;}if(b.hasAttribute('data-save-timeout')){timeoutAction(false);return;}if(b.hasAttribute('data-run-timeout')){timeoutAction(true);return;}if(b.hasAttribute('data-copy-summary')){copySummary();return;}const action=b.dataset.action||b.dataset.guidanceAction;if(action){if(['reconcile','boost_confirm_payment','boost_dispatch','archive','unarchive','remove','restore','cancel_unpaid','resolve_recharge','request_deletion','review_deletion','reviewed_remove'].includes(action))reasonForm(action);else perform(action);}if(b.dataset.confirm)perform(b.dataset.confirm);if(b.hasAttribute('data-cancel-reason'))$('ocActionForm').innerHTML='';});
     $('rechargeOrdersBtn')?.addEventListener('click',()=>{config.onOpenOrders();selectType('recharge');});
     const returned=new URLSearchParams(location.search).get('out_trade_no');
     if(config.getToken()&&/^RC\d{13}[a-f0-9]{10}$/i.test(returned||'')){config.onOpenOrders();selectType('recharge');showDetail({order_type:'recharge',order_ref:returned});}

@@ -13,9 +13,11 @@
     <link rel="stylesheet" href="order-notifications.css?v=20260916-notify1">
     <link rel="stylesheet" href="booster-availability.css?v=20260916-b18">
     <link rel="stylesheet" href="customer-workflow.css?v=20260916-b16">
-    <link rel="stylesheet" href="ui-foundation.css?v=20260916-b18">
-    <link rel="stylesheet" href="light-theme.css?v=20260916-b18">
-    <link rel="stylesheet" href="theme-components.css?v=20260916-b18">
+    <link rel="stylesheet" href="ui-foundation.css?v=20260917-b19">
+    <link rel="stylesheet" href="light-theme.css?v=20260917-b19">
+    <link rel="stylesheet" href="theme-components.css?v=20260917-b19">
+    <link rel="stylesheet" href="service-content.css?v=20260917-b19">
+    <link rel="stylesheet" href="dark-theme.css?v=20260917-b19">
 </head>
 <body>
     <script>document.body.classList.toggle('theme-light', document.documentElement.dataset.theme === 'light');</script>
@@ -85,6 +87,7 @@
             </div>
         </section>
 
+        <details id="homeActivities" class="activities-strip" hidden><summary>当前活动</summary></details>
         <section class="home-section" aria-labelledby="coreServicesTitle">
             <div class="home-section-heading">
                 <div><span>核心服务</span><h2 id="coreServicesTitle">今天想完成什么？</h2></div>
@@ -119,6 +122,8 @@
             <h2 class="section-heading">⚡ 代练下单</h2>
         </div>
         <div class="container boost-container">
+            <details id="boostActivities" class="activities-strip" hidden><summary>当前活动</summary></details>
+            <p id="boostActivitySelection" class="service-status" hidden></p>
             <div class="boost-progress" aria-label="下单流程">
                 <span class="active"><b>1</b>选择服务</span><i></i><span><b>2</b>填写信息</span><i></i><span><b>3</b>确认提交</span>
             </div>
@@ -126,7 +131,8 @@
                 <div class="boost-form">
             <!-- 代练项目 -->
             <section class="card">
-                <div class="card-header"><span class="card-num">01</span><h3>选择代练项目</h3><span class="badge-required">必选</span></div>
+                <div class="card-header"><span class="card-num">01</span><h3>选择代练项目</h3><span class="badge-required">必选</span><button type="button" id="boostEditProjects" hidden>编辑项目</button></div>
+                <p id="boostServiceStatus" class="service-status" role="status">正在加载项目与价格…</p>
                 <div class="project-grid" id="projectGrid">
                     <label class="project-card" data-project="silver"><input type="radio" name="project" value="silver" checked><div class="card-inner"><span class="card-icon">🪙</span><span class="card-name">银币</span><span class="card-desc">刷取游戏银币</span></div></label>
                     <label class="project-card" data-project="exp"><input type="radio" name="project" value="exp"><div class="card-inner"><span class="card-icon">⭐</span><span class="card-name">单车经验</span><span class="card-desc">单辆坦克经验</span></div></label>
@@ -556,6 +562,8 @@
                 <div class="content-manager-tabs" style="display:flex; gap:10px; margin-bottom:16px;">
                     <button class="content-mgr-tab active" data-ctype="announcements">📢 站内公告</button>
                     <button class="content-mgr-tab" data-ctype="game-news">📰 游戏新闻</button>
+                    <button class="content-mgr-tab" data-ctype="projects">⚡ 代练项目</button>
+                    <button class="content-mgr-tab" data-ctype="activities">🎉 活动管理</button>
                 </div>
                 <div id="contentManagerView" style="margin-top:12px;"></div>
             </div>
@@ -589,7 +597,6 @@
             </nav>
         </div>
         <div class="container">
-            <section class="card availability-card" id="boosterAvailabilityCard" aria-live="polite">正在读取工作状态…</section>
             <div class="booster-tab-content active" id="booster-hall">
                 <div id="hallOrderList" class="order-list">正在加载…</div>
             </div>
@@ -599,7 +606,10 @@
             <div class="booster-tab-content" id="booster-earnings" style="display:none;">
                 <div id="earningsDisplay">正在加载…</div>
             </div>
-            <div class="booster-tab-content" id="booster-availability" style="display:none;"></div>
+            <div class="booster-tab-content" id="booster-availability" style="display:none;">
+                <section class="card availability-card" id="boosterAvailabilityCard" aria-live="polite">正在读取工作状态…</section>
+                <div id="boosterScheduleContent"></div>
+            </div>
         </div>
     </div>
 
@@ -1003,12 +1013,14 @@
     </div>
 </div>
     <script src="ui-runtime.js"></script>
-    <script src="booster-availability.js?v=20260916-b13"></script>
+    <script src="booster-availability.js?v=20260917-b20"></script>
     <script src="rental-client.js"></script>
-    <script src="order-center.js?v=20260916-b18"></script>
+    <script src="order-center.js?v=20260917-b20"></script>
     <script src="order-notifications.js?v=20260916-notify1"></script>
-    <script src="boost-checkout.js?v=20260916-b16"></script>
+    <script src="boost-checkout.js?v=20260917-b19"></script>
     <script src="rental-discovery.js?v=20260916-b16"></script>
-    <script src="script.js?v=20260916-b18"></script>
+    <script src="service-defaults.js?v=20260917-b19"></script>
+    <script src="service-content.js?v=20260917-b19"></script>
+    <script src="script.js?v=20260917-b20"></script>
 </body>
 </html>

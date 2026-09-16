@@ -23,7 +23,7 @@
   }
   async function refresh(){
     if(!config)return;const version=++generation,token=config.getToken();
-    if(token!==sessionToken){sessionToken=token;state=null;dirty=false;$('booster-availability').innerHTML='';}
+    if(token!==sessionToken){sessionToken=token;state=null;dirty=false;$('boosterScheduleContent').innerHTML='';}
     try{const value=await api('/booster/availability');if(version!==generation||token!==config.getToken())return;state=value;renderCard();
       if(!$('boosterScheduleForm')&&$('booster-availability').style.display!=='none')renderSchedule();
     }catch(err){if(version===generation)$('boosterAvailabilityCard').innerHTML=`<p role="alert">${esc(err.message)}</p><button type="button" data-availability="refresh">重试</button>`;}
@@ -38,7 +38,7 @@
   function slotHTML(slot={start:'18:00',end:'23:00'}){return `<div class="availability-slot"><label>上线 <input type="time" data-slot="start" value="${esc(slot.start)}" required></label><span>—</span><label>下线 <input type="time" data-slot="end" value="${esc(slot.end)}" required></label><button type="button" data-remove-slot aria-label="删除此时段">×</button></div>`;}
   function renderSchedule(){
     if(!state)return;
-    $('booster-availability').innerHTML=`<form id="boosterScheduleForm" class="availability-schedule card"><div><h3>上下线设置</h3><p class="field-help">北京时间；最多每天四个时段。结束时间早于开始时间表示次日下线，重叠时段会合并。</p></div><div class="availability-mode"><label>控制方式 <select name="mode"><option value="manual" ${state.mode==='manual'?'selected':''}>手动模式</option><option value="auto" ${state.mode==='auto'?'selected':''}>自动排班</option></select></label><label><input type="checkbox" name="manual_online" ${state.manual_online?'checked':''}> 手动模式默认上线</label></div><div class="availability-copy"><button type="button" data-copy="all">周一时段应用到每天</button><button type="button" data-copy="weekdays">应用到工作日，周末休息</button></div><div id="availabilityWeek">${days.map((day,i)=>`<div class="availability-day" data-day="${i}"><strong>${day}</strong><div class="availability-slots">${state.weekly_schedule[i].map(slotHTML).join('')}</div><button type="button" data-add-slot>+ 时段</button></div>`).join('')}</div><p class="field-help">未设置时段的日期为休息日。保存后结束当前临时状态，按新的设置工作；管理员暂停仍然有效。</p><p id="availabilityFormMessage" role="status"></p><button type="submit" class="submit-btn">保存工作设置</button></form><details class="availability-history"><summary>最近状态操作记录</summary><div id="ownAvailabilityEvents"></div></details>`;
+    $('boosterScheduleContent').innerHTML=`<form id="boosterScheduleForm" class="availability-schedule card"><div><h3>上下线设置</h3><p class="field-help">北京时间；最多每天四个时段。结束时间早于开始时间表示次日下线，重叠时段会合并。</p></div><div class="availability-mode"><label>控制方式 <select name="mode"><option value="manual" ${state.mode==='manual'?'selected':''}>手动模式</option><option value="auto" ${state.mode==='auto'?'selected':''}>自动排班</option></select></label><label><input type="checkbox" name="manual_online" ${state.manual_online?'checked':''}> 手动模式默认上线</label></div><div class="availability-copy"><button type="button" data-copy="all">周一时段应用到每天</button><button type="button" data-copy="weekdays">应用到工作日，周末休息</button></div><div id="availabilityWeek">${days.map((day,i)=>`<div class="availability-day" data-day="${i}"><strong>${day}</strong><div class="availability-slots">${state.weekly_schedule[i].map(slotHTML).join('')}</div><button type="button" data-add-slot>+ 时段</button></div>`).join('')}</div><p class="field-help">未设置时段的日期为休息日。保存后结束当前临时状态，按新的设置工作；管理员暂停仍然有效。</p><p id="availabilityFormMessage" role="status"></p><button type="submit" class="submit-btn">保存工作设置</button></form><details class="availability-history"><summary>最近状态操作记录</summary><div id="ownAvailabilityEvents"></div></details>`;
     const form=$('boosterScheduleForm');
     form.addEventListener('input',()=>dirty=true);
     form.addEventListener('click',event=>{
@@ -51,7 +51,7 @@
       if(form.elements.mode.value==='auto'&&!weekly.some(day=>day.length)){$('availabilityFormMessage').textContent='自动模式至少设置一个上线时段';return;}
       update({action:'configure',mode:form.elements.mode.value,manual_online:form.elements.manual_online.checked,weekly_schedule:weekly});
     });
-    $('booster-availability').querySelector('details').addEventListener('toggle',async event=>{if(event.target.open)await renderEvents('/booster/availability/events',$('ownAvailabilityEvents'));});
+    $('boosterScheduleContent').querySelector('details').addEventListener('toggle',async event=>{if(event.target.open)await renderEvents('/booster/availability/events',$('ownAvailabilityEvents'));});
   }
   function collectSchedule(){return Array.from(document.querySelectorAll('#availabilityWeek [data-day]')).map(day=>Array.from(day.querySelectorAll('.availability-slot')).map(slot=>({start:slot.querySelector('[data-slot="start"]').value,end:slot.querySelector('[data-slot="end"]').value})));}
   async function showSchedule(){if(!state)await refresh();if(!$('boosterScheduleForm'))renderSchedule();}
@@ -100,6 +100,6 @@
     global.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
   }
   function canLeave(){return !dirty||confirm('上下线排班尚未保存，确定离开？');}
-  function leave(){if(dirty){dirty=false;$('booster-availability').innerHTML='';}}
+  function leave(){if(dirty){dirty=false;$('boosterScheduleContent').innerHTML='';}}
   global.BoosterAvailability={init,refresh,showSchedule,loadAdmin,prepareTake,canLeave,leave};
 })(window);
