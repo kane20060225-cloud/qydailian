@@ -6,6 +6,7 @@ const conn={beginTransaction:async()=>{snapshot=row?{...row}:null;},commit:async
   if(sql.startsWith('SELECT id,status,payment_status,booster_id,hall_status'))return [row?[{...row}]:[]];
   if(sql.startsWith('UPDATE orders SET hall_status')){row.hall_status=p[0];updates++;return [{affectedRows:1}];}
   if(sql.startsWith('INSERT INTO operation_audit')){if(failAudit)throw Error('audit unavailable');audits++;return [{affectedRows:1}];}
+  if(sql.startsWith('INSERT IGNORE INTO order_notifications') || sql.startsWith('INSERT IGNORE INTO notification_deliveries'))return [{affectedRows:1}];
   throw Error(sql);
 }};
 const pool={getConnection:async()=>conn,execute:async sql=>{if(sql.startsWith('SELECT token_version'))return [[{token_version:0}]];if(sql.startsWith('SELECT role'))return [[{role:'admin'}]];throw Error(sql);}};

@@ -30,6 +30,9 @@ const { createRentalAccountRouter } = require('./routes/rental-accounts');
 const { createOrderCenterRouter } = require('./routes/order-center');
 const {createCleanupService}=require('./lib/order-cleanup');
 const {visibleOrdersSql}=require('./lib/order-center');
+const {createWecomClient}=require('./lib/wecom-client');
+const {createNotificationSystem,enqueueHall,enqueueUser}=require('./lib/order-notifications');
+const {createNotificationRouter}=require('./routes/order-notifications');
 const { paymentFormParams, createRechargeOrder, processTrackedRecharge,
   refreshRecharge, canResumeRecharge } = require('./lib/recharge-orders');
 const {
@@ -105,6 +108,10 @@ const pool = mysql.createPool({
   decimalNumbers: true
 });
 const orderCleanup=createCleanupService({pool,recordOperation});
+const notificationSiteUrl=new URL(process.env.SITE_URL || 'https://wotbqydailian.vip').origin;
+if(!notificationSiteUrl.startsWith('https://'))throw Error('SITE_URL 必须使用 HTTPS');
+const wecomClient=createWecomClient();
+const notificationSystem=createNotificationSystem({pool,cipher:sensitiveFieldCipher,wecomClient,siteUrl:notificationSiteUrl});
 
 // ---------- 支付宝 SDK ----------
 const ALIPAY_ENABLED = process.env.ALIPAY_ENABLED === 'true';
@@ -184,12 +191,10 @@ function recordLoginFailure(key) {
 }
 
 // ---------- 站内信辅助函数 ----------
-async function sendMessage(userId, title, content) {
-  try {
-    await pool.execute('INSERT INTO user_messages (user_id, title, content) VALUES (?, ?, ?)', [userId, title, content]);
-  } catch (err) {
-    console.error('发送站内信失败:', err);
-  }
+async function sendMessage(userId, title, content, conn, key) {
+  await conn.execute('INSERT INTO user_messages (user_id, title, content) VALUES (?, ?, ?)', [userId, title, content]);
+  const ref=/订单\s+([A-Za-z0-9_-]{1,30})/.exec(content)?.[1] || '';
+  await enqueueUser(conn,{userId,key,ref,title,body:content});
 }
 
 // ---------- 初始化数据库 ----------
@@ -812,6 +817,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 // ---------- JWT 中间件 ----------
 const authMiddleware = createAuthMiddleware(pool, JWT_SECRET);
+app.use('/api/notifications',createNotificationRouter({pool,authMiddleware,system:notificationSystem,cipher:sensitiveFieldCipher,wecomClient,siteUrl:notificationSiteUrl,recordOperation}));
 function adminMiddleware(req, res, next) {
   authMiddleware(req, res, async () => {
     try {
@@ -998,7 +1004,7 @@ app.post('/api/auth/two-factor/disable', authMiddleware, async (req, res) => {
 
 const identityWeights = { gold: 4, silver: 3, standard: 2, budget: 1 };
 function canTakeOrder(boosterIdentity, requiredIdentity) {
-  return (identityWeights[boosterIdentity] || 0) >= (identityWeights[requiredIdentity] || 0);
+  return Boolean(identityWeights[boosterIdentity] && identityWeights[requiredIdentity] && identityWeights[boosterIdentity] >= identityWeights[requiredIdentity]);
 }
 async function checkBoosterUpgrade(conn, userId) {
   const [rows] = await conn.execute('SELECT booster_identity, booster_points FROM users WHERE id = ?', [userId]);
@@ -1391,8 +1397,8 @@ app.put('/api/admin/orders/:orderNo/confirm-payment', adminMiddleware, async (re
     });
     await conn.execute('INSERT INTO order_management_events (order_type,order_ref,actor_user_id,action,note) VALUES (?,?,?,?,?)',
       ['boost',orderNo,req.userId,'payment_confirmed',reason]);
-    await conn.commit();
-    await sendMessage(orders[0].user_id, '支付已确认', `您的订单 ${orderNo} 已确认收款，代练即将开始。`);
+    await sendMessage(orders[0].user_id, '支付已确认', `您的订单 ${orderNo} 已确认收款，代练即将开始。`,conn,`payment_confirmed:${orderNo}`);
+    await conn.commit();notificationSystem.poke();
     res.json({ success: true, message: '已确认支付' });
   } catch(err) {
     await conn.rollback();
@@ -1413,7 +1419,9 @@ app.put('/api/admin/orders/:orderNo/hall', adminMiddleware, async (req, res) => 
     await conn.execute('UPDATE orders SET hall_status=? WHERE id=?',['open',order.id]);
     await recordOperation(conn,{eventKey:`order:${req.params.orderNo}:hall_opened`,actorUserId:req.userId,
       action:'order_dispatched',targetType:'order',targetRef:req.params.orderNo});
+    await enqueueHall(conn,req.params.orderNo);
     await conn.commit();
+    notificationSystem.poke();
     res.json({ success: true, message: '已放入接单大厅' });
   } catch(err) { await conn.rollback(); res.status(500).json({ error: '服务器错误' }); }
   finally { conn.release(); }
@@ -1465,15 +1473,20 @@ app.post('/api/booster/take/:orderNo', boosterMiddleware, async (req, res) => {
   try {
     conn = await pool.getConnection();
     await conn.beginTransaction();
-    const [orderRows] = await conn.execute('SELECT required_identity FROM orders WHERE order_no = ? AND hall_status = ? AND booster_id IS NULL', [orderNo, 'open']);
+    const [orderRows] = await conn.execute("SELECT required_identity,user_id FROM orders WHERE order_no = ? AND hall_status = ? AND booster_id IS NULL AND status='pending' AND payment_status='paid' FOR UPDATE", [orderNo, 'open']);
     if (orderRows.length === 0) { await conn.rollback(); return res.status(400).json({ error: '订单不可接' }); }
     const [boosterRows] = await conn.execute('SELECT booster_identity FROM users WHERE id = ?', [boosterId]);
-    if (!canTakeOrder(boosterRows[0].booster_identity, orderRows[0].required_identity)) {
+    if (!boosterRows.length || !canTakeOrder(boosterRows[0].booster_identity, orderRows[0].required_identity)) {
       await conn.rollback();
       return res.status(400).json({ error: '您的身份组不满足该订单要求' });
     }
-    await conn.execute('UPDATE orders SET booster_id = ?, hall_status = ?, status = ? WHERE order_no = ?', [boosterId, 'taken', 'playing', orderNo]);
+    const [taken]=await conn.execute("UPDATE orders SET booster_id = ?, hall_status = ?, status = ? WHERE order_no = ? AND booster_id IS NULL AND hall_status='open' AND status='pending' AND payment_status='paid'", [boosterId, 'taken', 'playing', orderNo]);
+    if(taken.affectedRows!==1){await conn.rollback();return res.status(409).json({error:'订单已被接走，请刷新大厅'});}
+    await recordOperation(conn,{eventKey:`order:${orderNo}:taken`,actorUserId:boosterId,action:'order_taken',targetType:'order',targetRef:orderNo});
+    await enqueueUser(conn,{userId:orderRows[0].user_id,key:`taken:${orderNo}`,ref:orderNo,title:'订单已接单',body:`订单 ${orderNo} 已有打手接单，可在个人中心查看进度。`});
+    await enqueueUser(conn,{userId:boosterId,key:`take_confirmed:${orderNo}`,kind:'take_confirmed',ref:orderNo,title:'接单成功',body:`订单 ${orderNo} 已分配给你，请在打手面板查看并开始处理。`});
     await conn.commit();
+    notificationSystem.poke();
     res.json({ success: true, message: '接单成功' });
   } catch(err) { if (conn) await conn.rollback(); res.status(500).json({ error: '服务器错误' }); }
   finally { if (conn) conn.release(); }
@@ -1550,10 +1563,11 @@ app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) =
       action: 'order_completed', targetType: 'order', targetRef: orderNo
     });
 
-    await sendMessage(order.user_id, '订单已完成', `您的订单 ${orderNo} 已代练完成，感谢您的信任！`);
+    await sendMessage(order.user_id, '订单已完成', `您的订单 ${orderNo} 已代练完成，感谢您的信任！`,conn,`completed:${orderNo}`);
 
     await conn.commit();
     res.json({ success: true, message: '订单已完成', earnings });
+    notificationSystem.poke();
   } catch(err) { if (conn) await conn.rollback(); res.status(500).json({ error: '服务器错误' }); }
   finally { if (conn) conn.release(); }
 });
@@ -3178,7 +3192,9 @@ function startServer(port = PORT) {
   });
   const tick=()=>orderCleanup.run().catch(err=>console.error('订单自动清理失败:',err.code || 'INTERNAL_ERROR'));
   const timer=setInterval(tick,60*60*1000);timer.unref();
-  server.once('listening',tick);server.once('close',()=>clearInterval(timer));return server;
+  const notificationTick=()=>notificationSystem.deliver().catch(err=>console.error('企业微信通知任务失败:',err.code || 'INTERNAL_ERROR'));
+  const notificationTimer=setInterval(notificationTick,5000);notificationTimer.unref();
+  server.once('listening',()=>{tick();notificationTick();});server.once('close',()=>{clearInterval(timer);clearInterval(notificationTimer);});return server;
 }
 
 if (require.main === module) {

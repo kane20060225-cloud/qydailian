@@ -56,6 +56,7 @@ const conn = {
       state.audit.push(params);
       return [{ affectedRows: 1 }];
     }
+    if(q.startsWith('INSERT INTO user_messages') || q.startsWith('INSERT IGNORE INTO order_notifications') || q.startsWith('INSERT IGNORE INTO notification_deliveries'))return [{affectedRows:1}];
     if (q.startsWith('INSERT INTO orders')) {
       state.orders.push({ order_no: params[0], user_id: params[1],
         total_price: params[8], status: 'pending', payment_status: 'unpaid' });

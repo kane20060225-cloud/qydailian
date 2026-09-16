@@ -231,6 +231,16 @@ const boosterPanelBtn = getEl('boosterPanelBtn');
 const settingsBtn = getEl('settingsBtn');
 
 // ==================== 初始化 ====================
+function initOrderNotifications() {
+    OrderNotifications.init({apiBase:API_BASE,getToken:()=>safeGetItem('token'),getRole:()=>safeGetItem('role'),onToast:showToast,onAuthExpired:promptLoginExpired,
+      onOpenOrder:n=>{
+        if(n.kind==='new_order' && ['booster','admin'].includes(safeGetItem('role'))){showSection('booster');document.querySelector('.booster-tab[data-tab="booster-hall"]')?.click();}
+        else if(n.kind==='take_confirmed' && ['booster','admin'].includes(safeGetItem('role'))){showSection('booster');document.querySelector('.booster-tab[data-tab="booster-my"]')?.click();}
+        else {showSection('profile');OrderCenter.showDetail({order_type:n.order_type,order_ref:n.order_ref});}
+      },
+      onOrderUpdate:()=>{const section=document.body.dataset.currentSection;if(section==='profile')OrderCenter.load('user');if(section==='booster'){loadHallOrders();loadMyBoosterOrders();}},
+      onPoll:()=>{if(document.body.dataset.currentSection==='booster')loadHallOrders();}});
+}
 function init() {
     OrderCenter.init({apiBase:API_BASE,getToken:()=>safeGetItem('token'),getRole:()=>safeGetItem('role'),onToast:showToast,
       onBoostPayment:openBoostPayment,onTicketRefresh:updateTicketDisplay,onOpenOrders:()=>showSection('profile'),
@@ -248,6 +258,7 @@ function init() {
           document.querySelector(`.rental-tab[data-rentaltab="${tab}"]`)?.click();
         }
       }});
+    initOrderNotifications();
     updateDetailCards();
     refreshPrice();
     generatePlayers();
@@ -552,6 +563,7 @@ getEl('calcBtn')?.addEventListener('click', () => {
 
 // ==================== 用户登录状态管理 ====================
 function checkLoginStatus() {
+    window.OrderNotifications?.syncSession();
     const token = safeGetItem('token');
     const username = safeGetItem('username');
     const role = safeGetItem('role');
@@ -2028,7 +2040,8 @@ function renderNotifications() {
                 <span class="toggle-label">营销消息</span>
             </label>
             <button id="saveNotifyBtn" class="submit-btn" style="margin-top:12px;">保存</button>
-        </div>`;
+        </div><div id="wecomUserSettings"></div>${safeGetItem('role')==='admin'?'<div id="wecomAdminSettings"></div>':''}`;
+    OrderNotifications.attachSettings();
     getEl('saveNotifyBtn')?.addEventListener('click', async () => {
         const notify_order_update = getEl('notifyOrderUpdate').checked ? 1 : 0;
         const notify_promotion = getEl('notifyPromotion').checked ? 1 : 0;

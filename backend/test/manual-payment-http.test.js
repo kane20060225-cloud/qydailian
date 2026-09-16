@@ -64,6 +64,7 @@ const conn = {
       return [{ affectedRows: 1 }];
     }
     if (q.startsWith('INSERT INTO order_management_events')) return [{ affectedRows: 1 }];
+    if (q.startsWith('INSERT INTO user_messages') || q.startsWith('INSERT IGNORE INTO order_notifications') || q.startsWith('INSERT IGNORE INTO notification_deliveries')) return [{affectedRows:1}];
     throw new Error(`Unexpected SQL: ${q}`);
   }
 };
