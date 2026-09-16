@@ -6,7 +6,7 @@ const TERMINAL = ['completed','credited','closed'];
 const TRASH_RETENTION_DAYS = 14;
 function purgeEligibility(order) {
   if (order.payment_status === 'paid' || order.payment_status === 'pending' || order.payment_status === 'submitted') return false;
-  return (order.order_type === 'boost' && order.state === 'pending_payment' && order.payment_status === 'unpaid') ||
+  return (order.order_type === 'boost' && ['pending_payment','closed'].includes(order.state) && order.payment_status === 'unpaid') ||
     (order.order_type === 'rental' && order.state === 'closed') ||
     (order.order_type === 'third_party' && ['pending','rejected'].includes(order.state) && order.payment_status === 'unpaid') ||
     (order.order_type === 'recharge' && order.state === 'closed' && order.provider_status === 'TRADE_CLOSED');
@@ -59,7 +59,7 @@ async function purgeOrder({pool,recordOperation,type,ref}) {
 async function purgeExpiredTrash(deps) {
   const [rows]=await deps.pool.execute(`SELECT c.order_type,c.order_ref FROM (${READ_MODEL_SQL}) c
     WHERE c.removed_at<=DATE_SUB(NOW(),INTERVAL 14 DAY)
-    AND ((c.order_type='boost' AND c.state='pending_payment' AND c.payment_status='unpaid') OR
+    AND ((c.order_type='boost' AND c.state IN ('pending_payment','closed') AND c.payment_status='unpaid') OR
       (c.order_type='rental' AND c.state='closed' AND c.payment_status NOT IN ('paid','submitted','pending')) OR
       (c.order_type='third_party' AND c.state IN ('pending','rejected') AND c.payment_status='unpaid') OR
       (c.order_type='recharge' AND c.state='closed' AND c.provider_status='TRADE_CLOSED'))
@@ -122,7 +122,7 @@ async function changeRemoval({pool,recordOperation,type,ref,actor,reason,restore
       }
       if(automatic) {
         if(!['boost','rental','recharge','third_party'].includes(type) || order.payment_status==='paid' ||
-          !((type==='boost' && order.state==='pending_payment') || (type==='rental' && order.state==='closed') ||
+          !((type==='boost' && ['pending_payment','closed'].includes(order.state)) || (type==='rental' && order.state==='closed') ||
             (type==='recharge' && order.state==='closed' && order.provider_status==='TRADE_CLOSED') || (type==='third_party' && order.state==='rejected')))
           failure('订单不符合自动清理规则');
         const [age]=await conn.execute(`SELECT c.order_ref FROM (${READ_MODEL_SQL}) c WHERE c.order_type=? AND c.order_ref=? AND c.created_at<DATE_SUB(NOW(),INTERVAL ? DAY)`,[type,ref,days]);
@@ -144,7 +144,7 @@ async function getSettings(pool) {
 }
 async function candidates(pool,days) {
   const [rows]=await pool.execute(`SELECT c.* FROM (${READ_MODEL_SQL}) c WHERE c.removed_at IS NULL AND c.created_at<DATE_SUB(NOW(),INTERVAL ? DAY)
-    AND ((c.order_type='boost' AND c.state='pending_payment') OR (c.order_type='rental' AND c.state='closed' AND c.payment_status!='paid')
+    AND ((c.order_type='boost' AND c.state IN ('pending_payment','closed') AND c.payment_status='unpaid') OR (c.order_type='rental' AND c.state='closed' AND c.payment_status!='paid')
       OR (c.order_type='recharge' AND c.state='closed' AND c.provider_status='TRADE_CLOSED') OR (c.order_type='third_party' AND c.state='rejected' AND c.payment_status='unpaid'))
     AND NOT EXISTS (SELECT 1 FROM account_ledger l WHERE l.source_ref=c.order_ref AND l.source_type=CASE c.order_type WHEN 'boost' THEN 'order' WHEN 'rental' THEN 'rental_order' WHEN 'recharge' THEN 'payment_order' ELSE 'third_party_order' END)
     AND NOT EXISTS (SELECT 1 FROM manual_payment_evidence e WHERE e.business_ref=c.order_ref AND e.business_type=CASE c.order_type WHEN 'boost' THEN 'order' WHEN 'rental' THEN 'rental_order' WHEN 'recharge' THEN 'payment_order' ELSE 'third_party_order' END)

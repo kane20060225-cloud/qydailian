@@ -15,7 +15,7 @@ process.env.DB_NAME = 'test-db';
 process.env.ALIPAY_ENABLED = 'false';
 
 const state = { exists: true, paymentStatus: 'unpaid', screenshot: null,
-  evidence: [], audit: [], files: [], failEvidence: false };
+  evidence: [], audit: [], files: [], failEvidence: false, orderStatus: 'pending' };
 const conn = {
   saved: null,
   async beginTransaction() {
@@ -30,8 +30,9 @@ const conn = {
   release() {},
   async execute(sql, params) {
     const q = sql.replace(/\s+/g, ' ').trim();
-    if (q.startsWith('SELECT id, total_price, payment_status FROM orders')) {
-      return [state.exists ? [{ id: 1, total_price: 4.5, payment_status: state.paymentStatus }] : []];
+    if (q.startsWith('SELECT id, total_price, payment_status, status FROM orders')) {
+      if(state.closeOnLock)state.orderStatus='cancelled';
+      return [state.exists ? [{ id: 1, total_price: 4.5, payment_status: state.paymentStatus, status: state.orderStatus }] : []];
     }
     if (q.startsWith('UPDATE orders SET payment_screenshot')) {
       state.screenshot = params[0];
@@ -74,9 +75,9 @@ const fakePool = {
     const q = sql.replace(/\s+/g, ' ').trim();
     if (q === 'SELECT token_version FROM users WHERE id = ?') return [[{ token_version: 0 }]];
     if (q === 'SELECT role FROM users WHERE id = ?') return [[{ role: 'admin' }]];
-    if (q.startsWith('SELECT id, payment_status FROM orders')) {
+    if (q.startsWith('SELECT id, payment_status, status FROM orders')) {
       return [state.exists && params[1] === 3
-        ? [{ id: 1, payment_status: state.paymentStatus }] : []];
+        ? [{ id: 1, payment_status: state.paymentStatus, status: state.orderStatus }] : []];
     }
     if (q.startsWith('INSERT INTO user_messages')) return [{ affectedRows: 1 }];
     throw new Error(`Unexpected pool SQL: ${q}`);
@@ -171,4 +172,24 @@ test('failed evidence transaction removes only its new uncommitted screenshot', 
   assert.equal(state.paymentStatus, 'unpaid');
   assert.equal(state.screenshot, null);
   assert.equal(state.files.length, 0);
+});
+
+test('closed orders reject payment screenshots before creating a file', async t => {
+  state.exists=true;state.orderStatus='cancelled';state.paymentStatus='unpaid';
+  const originalWrite=fs.writeFileSync;let writes=0;fs.writeFileSync=()=>{writes++;};
+  t.after(()=>{fs.writeFileSync=originalWrite;state.orderStatus='pending';});
+  const base=await serve(t);const token=issueSessionToken(3,0,process.env.JWT_SECRET);
+  const response=await fetch(`${base}/api/orders/WOT-TEST/payment`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({screenshot:'data:image/png;base64,dGVzdA=='})});
+  assert.equal(response.status,409);assert.equal(writes,0);
+});
+
+test('cancellation winning the source-row lock prevents late screenshot submission and removes its new file', async t => {
+  state.exists=true;state.orderStatus='pending';state.paymentStatus='unpaid';state.closeOnLock=true;state.evidence=[];state.files=[];state.failEvidence=false;
+  const originalExists=fs.existsSync,originalWrite=fs.writeFileSync,originalUnlink=fs.unlinkSync;
+  fs.existsSync=p=>p.endsWith('uploads')||originalExists(p);
+  fs.writeFileSync=p=>state.files.push(p);fs.unlinkSync=p=>{assert.ok(state.files.includes(p));state.files=state.files.filter(x=>x!==p);};
+  t.after(()=>{fs.existsSync=originalExists;fs.writeFileSync=originalWrite;fs.unlinkSync=originalUnlink;state.closeOnLock=false;state.orderStatus='pending';});
+  const base=await serve(t);const token=issueSessionToken(3,0,process.env.JWT_SECRET);
+  const response=await fetch(`${base}/api/orders/WOT-TEST/payment`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({screenshot:'data:image/png;base64,dGVzdA=='})});
+  assert.equal(response.status,409);assert.equal(state.files.length,0);assert.equal(state.evidence.length,0);assert.equal(state.paymentStatus,'unpaid');
 });

@@ -2,18 +2,21 @@
   'use strict';
   const types = { boost:'代练', rental:'租号', recharge:'充值', shop:'商城兑换', third_party:'三方订单' };
   const states = {
-    boost:{pending_payment:'待支付',payment_review:'待核实收款',awaiting_assignment:'待接单',in_progress:'代练中',completed:'已完成',exception:'状态待核对'},
+    boost:{pending_payment:'待支付',payment_review:'待核实收款',awaiting_assignment:'待接单',in_progress:'代练中',completed:'已完成',closed:'已取消',exception:'状态待核对'},
     rental:{pending_payment:'待支付',payment_review:'待核实收款',awaiting_activation:'待确认租用',in_progress:'租用中',awaiting_acceptance:'待确认完成',dispute:'争议处理中',completed:'已完成',closed:'已取消'},
     recharge:{pending_payment:'待支付',credit_pending:'到账处理中',credited:'已到账',closed:'已关闭',exception:'到账待核对'},
     shop:{completed:'已兑换'},third_party:{pending:'待审核',in_progress:'进行中',awaiting_acceptance:'待验收',completed:'已完成',rejected:'已驳回'}
   };
   const actionNames = {pay:'继续支付',refresh:'刷新到账状态',provider:'查询支付宝',reconcile:'重试到账',boost_payment:'上传付款凭证',boost_confirm_payment:'核实收款',boost_dispatch:'放入接单大厅',rental_manage:'处理租号订单',third_party_manage:'处理三方订单',archive:'归档',unarchive:'恢复归档'};
   Object.assign(actionNames,{remove:'删除订单',restore:'恢复订单'});
+  Object.assign(actionNames,{cancel_unpaid:'取消未付款订单',resolve_recharge:'核销历史到账异常'});
   const eventNames = {created:'订单创建',payment_credited:'充值到账',payment_confirmed:'确认收款',manual_payment_confirmed:'确认付款凭证',manual_payment_confirmed_without_evidence:'核实实际收款',order_dispatched:'放入接单大厅',reconcile_requested:'申请重新核对到账',archive:'归档',unarchive:'恢复归档',order_archived:'订单归档',order_unarchived:'恢复订单',payment_evidence_submitted:'提交付款凭证',rental_payment_confirmed:'租号收款确认',rental_completed:'租号完成',third_party_completed:'三方订单完成'};
   Object.assign(eventNames,{remove:'删除到回收站',restore:'从回收站恢复',auto_remove:'自动清理到回收站',order_remove:'删除到回收站',order_restore:'恢复订单',order_auto_remove:'自动清理'});
+  Object.assign(eventNames,{unpaid_cancelled:'取消未付款订单',unpaid_timeout_closed:'24小时未付款关闭',recharge_test_closed:'测试充值订单核销关闭',recharge_historical_credited:'确认历史已到账（余额未变）',recharge_tickets_backfilled:'核实支付后补发军需券'});
   Object.assign(eventNames,{order_created:'订单创建',order_completed:'代练完成',manual_payment_submitted:'提交付款凭证',payment_closed:'充值订单关闭',payment_reference_backfilled:'核对交易号',shop_purchased:'商城兑换',rental_created:'租号订单创建',rental_payment_submitted:'提交租号付款凭证',rental_payment_rejected:'付款凭证已驳回',rental_activated:'确认租用',rental_completion_requested:'出租方申请完成',rental_completed_by_renter:'租用方确认完成',rental_cancelled:'租号订单取消',rental_disputed:'发起租号争议',rental_refund_confirmed:'核实退款并取消',rental_dispute_resolved_completed:'争议裁决完成',third_party_finalized:'三方订单验收完成',approved:'审核通过',rejected:'审核驳回',resubmitted:'修改后重新提交',completion_requested:'申请验收',completion_returned:'验收退回',completed:'订单完成'});
   let config, modal, detail, detailScope='user', detailGeneration=0, busy=false, createBusy=false;
   const panels = {};
+  let timeoutPreview=[];
   const $ = id => document.getElementById(id);
   const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const time = value => value ? new Date(value).toLocaleString('zh-CN') : '—';
@@ -42,7 +45,7 @@
       <label>订单状态<select name="state"></select></label><label class="oc-search">搜索<input name="search" type="search" maxlength="100" placeholder="订单号、交易号、用户或内容"></label>
       <button type="button" data-refresh>刷新</button><details class="oc-more"><summary>更多筛选</summary><div class="oc-filter-extra"><label>起始日期<input name="from" type="date"></label><label>结束日期<input name="to" type="date"></label><label>支付渠道<select name="channel"><option value="">全部渠道</option><option>支付宝</option><option>人工核实</option><option>情谊积分</option></select></label>${admin?'<label>归档记录<select name="archived"><option value="0">未归档</option><option value="1">已归档</option></select></label><button type="button" data-export>导出当前结果</button>':''}<button type="button" data-reset>重置筛选</button></div></details></form>`);
     root.insertAdjacentHTML('beforeend','<div class="oc-paging"><button type="button" data-page="-1">上一页</button><span aria-live="polite"></span><button type="button" data-page="1">下一页</button></div>');
-    if(admin)root.querySelector('form').insertAdjacentHTML('afterend','<div class="oc-bulk"><label><input type="checkbox" data-select-all> 选择本页可操作订单</label><button type="button" data-bulk disabled>删除选中（0）</button><button type="button" data-trash>回收站</button><button type="button" data-cleanup>自动清理设置</button><span class="oc-muted">回收站保留14天；无资金订单到期永久删除，付款及凭证记录保留。</span></div>');
+    if(admin)root.querySelector('form').insertAdjacentHTML('afterend','<div class="oc-bulk"><label><input type="checkbox" data-select-all> 选择本页可操作订单</label><button type="button" data-bulk disabled>删除选中（0）</button><button type="button" data-trash>回收站</button><button type="button" data-cleanup>自动清理设置</button><button type="button" data-timeout>24小时超时关闭</button><span class="oc-muted">回收站保留14天；无资金订单到期永久删除，付款及凭证记录保留。</span></div>');
     statusOptions(scope);
     let timer;
     root.querySelector('form').addEventListener('submit',e=>e.preventDefault());
@@ -62,6 +65,7 @@
       if(b.hasAttribute('data-refresh')) load(scope);
       else if(b.hasAttribute('data-trash')){p.filters.trash=p.filters.trash==='1'?'0':'1';p.filters.state='';p.filters.task='';p.filters.page=1;statusOptions(scope);load(scope);}
       else if(b.hasAttribute('data-cleanup'))showCleanup();
+      else if(b.hasAttribute('data-timeout'))showTimeout();
       else if(b.hasAttribute('data-bulk')){const action=p.filters.trash==='1'?'restore':'remove';detail={batch:p.rows.filter(o=>p.selected.has(o.order_type+':'+o.order_ref))};detailScope='admin';++detailGeneration;modal.style.display='flex';$('ocDetailTitle').textContent=`${actionNames[action]} · ${detail.batch.length} 条`;$('ocDetailBody').innerHTML='<div id="ocActionForm"></div><p id="ocActionMessage" role="status"></p>';$('ocDetailActions').innerHTML='';reasonForm(action);}
       else if(b.hasAttribute('data-reset')) {p.filters={type:'',state:admin?'todo':'',task:'',search:'',from:'',to:'',channel:'',archived:'0',trash:'0',page:1};root.querySelector('form').reset();statusOptions(scope);load(scope);}
       else if(b.dataset.task!==undefined){p.filters.state=b.dataset.task==='all'?'':'todo';p.filters.task=['all','todo'].includes(b.dataset.task)?'':b.dataset.task;p.filters.page=1;statusOptions(scope);load(scope);}
@@ -81,6 +85,14 @@
     if(run){const current=await request('/order-center/cleanup?scope=admin');if(current.settings.enabled!==enabled||current.settings.retention_days!==days)throw new Error('规则已修改，请先保存并刷新预览');const result=await request('/order-center/cleanup/run?scope=admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmation:'MOVE_INVALID_ORDERS_TO_TRASH'})});config.onToast(`已清理 ${result.removed} 条，跳过 ${result.skipped} 条`);load('admin');load('user');}
     else{await request('/order-center/cleanup?scope=admin',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled,retention_days:days})});config.onToast('清理规则已保存');}
     await showCleanup();
+  }catch(err){$('ocActionMessage').textContent=err.message;}finally{busy=false;}}
+  async function showTimeout(){modal.style.display='flex';const generation=++detailGeneration;detailScope='admin';timeoutPreview=[];$('ocDetailTitle').textContent='24小时未付款订单关闭';$('ocDetailActions').innerHTML='';$('ocDetailBody').innerHTML='<p>正在核对候选订单及积分流水…</p>';
+    try{const data=await request('/order-center/timeout?scope=admin');if(generation!==detailGeneration)return;timeoutPreview=data.candidates;
+      $('ocDetailBody').innerHTML=`<p>关闭超过24小时未提交付款凭证、未接单的代练及租号订单。按匹配的原始扣减流水退回积分；付款审核、凭证、其他资金流水及历史积分不一致的订单保留。关闭后可归档或删除到回收站，资金流水始终保留。</p><label><input id="ocTimeoutEnabled" type="checkbox" ${data.settings.enabled?'checked':''}> 开启每小时自动检查（默认关闭；开启后也会处理历史候选订单）</label><button type="button" data-save-timeout>保存超时关闭开关</button><h4>本次可关闭 ${timeoutPreview.length} 条${timeoutPreview.length===data.limit?'（本次上限200条）':''}</h4><ul class="oc-cleanup-preview">${timeoutPreview.map(o=>`<li>${esc(types[o.type])} · ${esc(o.ref)} · ${time(o.created_at)}</li>`).join('')||'<li>没有符合条件的订单</li>'}</ul><label><input id="ocTimeoutConfirm" type="checkbox"> 已核对上方订单，立即关闭本次预览订单并退回匹配积分</label><button type="button" data-run-timeout ${timeoutPreview.length?'':'disabled'}>关闭本次预览订单</button><p id="ocActionMessage" role="status"></p>`;
+    }catch(err){if(generation===detailGeneration)$('ocDetailBody').innerHTML=`<p role="alert">${esc(err.message)}</p>`;}}
+  async function timeoutAction(run){if(busy)return;if(run&&!$('ocTimeoutConfirm').checked){$('ocActionMessage').textContent='请先确认已核对预览订单';return;}busy=true;try{
+    const result=await request(`/order-center/timeout${run?'/run':''}?scope=admin`,{method:run?'POST':'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(run?{confirmation:'CLOSE_PREVIEWED_UNPAID_ORDERS',orders:timeoutPreview.map(o=>({type:o.type,ref:o.ref}))}:{enabled:$('ocTimeoutEnabled').checked})});
+    config.onToast(run?`已关闭 ${result.closed} 条，跳过 ${result.skipped} 条`:'超时关闭设置已保存');if(run){load('admin');load('user');config.onBalanceRefresh?.();}await showTimeout();
   }catch(err){$('ocActionMessage').textContent=err.message;}finally{busy=false;}}
   async function load(scope='user') {
     const p=panels[scope];if(!p)return;
@@ -118,7 +130,11 @@
     }catch(err){if(generation===detailGeneration)$('ocDetailBody').innerHTML=`<p role="alert">${esc(err.message)}</p><button type="button" id="ocDetailRetry">重试</button>`;}
   }
   function reasonForm(action) {
+    if(action==='resolve_recharge'){
+      $('ocActionForm').innerHTML='<div class="oc-reason"><p>逐笔核对实际付款和历史发券记录后选择结果。确认历史已到账仅登记核对结论，不修改余额、不补造流水；补发会查询支付宝确认真实支付成功，并使用唯一流水防止重复发券。</p><label>核对结果<select id="ocResolutionOutcome"><option value="">请选择核对结果</option><option value="test_closed">纯测试：无真实付款，且从未发券，核销关闭</option><option value="historical_credited">历史已到账：确认已经发券，只登记核对结论</option><option value="tickets_backfilled">真实已支付：确认从未发券，补发军需券</option></select></label><label>核对依据<input id="ocResolutionReference" maxlength="200" placeholder="交易记录、历史发券记录或测试记录的编号与说明"></label><label>处理原因<textarea id="ocReason" maxlength="500" rows="3"></textarea></label><label><input id="ocResolutionConfirm" type="checkbox"> 已逐笔核对付款和发券记录，确认所选结果；补发时已确认从未发券</label><button type="button" data-confirm="resolve_recharge">确认核销</button><button type="button" data-cancel-reason>取消</button></div>';$('ocResolutionOutcome').focus();$('ocActionForm').scrollIntoView({block:'nearest'});return;
+    }
     const labels={reconcile:'已查询支付宝成功，请填写重试到账说明。',boost_confirm_payment:'请核对真实收款及凭证后填写说明。',boost_dispatch:'确认将已收款订单放入接单大厅？',archive:'归档后管理员默认列表隐藏，用户仍能查看订单。',unarchive:'请填写恢复归档的原因。'};
+    labels.cancel_unpaid='取消尚未付款、未提交凭证且未接单的订单；按原始扣减流水退回积分。含其他资金或付款记录的订单不会取消。';
     Object.assign(labels,{remove:'确认将订单移入回收站？普通无资金订单满14天后永久删除，无法恢复，请及时恢复需要保留的订单。付款、资金流水、凭证和支付状态未确定的充值记录保留。未完成的租号订单须先取消。',restore:'确认恢复到订单中心？请填写恢复原因。'});
     $('ocActionForm').innerHTML=`<div class="oc-reason"><p>${labels[action]}</p>${action==='boost_dispatch'?'':'<label>操作说明<textarea id="ocReason" maxlength="500" rows="3" placeholder="填写核对结果或操作原因"></textarea></label>'}<button type="button" data-confirm="${action}">确认${actionNames[action]}</button><button type="button" data-cancel-reason>取消</button></div>`;$('ocReason')?.focus();$('ocActionForm').scrollIntoView({block:'nearest'});
   }
@@ -140,7 +156,7 @@
         const form=document.createElement('form');form.action=url.href;form.method='POST';form.target=paymentWindow?'ocPayment':'_self';original.querySelectorAll('input[name]').forEach(input=>{const field=document.createElement('input');field.type='hidden';field.name=input.name;field.value=input.value;form.appendChild(field);});document.body.appendChild(form);form.submit();form.remove();config.onToast('支付后回到订单详情，点击刷新到账状态');
       }else{
         const reason=$('ocReason')?.value.trim()||'';
-        if(['reconcile','boost_confirm_payment','archive','unarchive','remove','restore'].includes(action)&&!reason)throw new Error('请填写操作说明');
+        if(['reconcile','boost_confirm_payment','archive','unarchive','remove','restore','cancel_unpaid','resolve_recharge'].includes(action)&&!reason)throw new Error('请填写操作说明');
         if(['remove','restore'].includes(action)){const orders=(order.batch||[order]).map(o=>({type:o.order_type,ref:o.order_ref}));const result=await request('/order-center/removals?scope=admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orders,reason,action})});const failures=result.results.filter(r=>!r.success);config.onToast(`已${action==='remove'?'删除':'恢复'} ${result.success_count} 条${failures.length?'，失败 '+failures.length+' 条':''}`);load(scope);load('user');if(failures.length){$('ocActionMessage').textContent=failures.map(r=>`${r.ref}：${r.error}`).join('；');}else close();return;}
         let path,method='POST',body;
         if(action==='refresh')path=`/chest/payments/${ref}/refresh`;
@@ -149,9 +165,11 @@
         if(action==='boost_confirm_payment'){path=`/admin/orders/${ref}/confirm-payment`;method='PUT';body={reason};}
         if(action==='boost_dispatch'){path=`/admin/orders/${ref}/hall`;method='PUT';}
         if(['archive','unarchive'].includes(action)){path=`/order-center/${order.order_type}/${ref}/archive?scope=admin`;body={action,reason};}
+        if(action==='cancel_unpaid'){path=`/order-center/${order.order_type}/${ref}/cancel-unpaid`;body={reason};}
+        if(action==='resolve_recharge'){if(!$('ocResolutionConfirm').checked)throw new Error('请确认已核对付款和发券记录');path=`/order-center/recharge/${ref}/resolve?scope=admin`;body={reason,outcome:$('ocResolutionOutcome').value,reference:$('ocResolutionReference').value.trim(),confirmation:'REVIEWED_PAYMENT_AND_TICKETS'};}
         const result=await request(path,{method,...(body?{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});
-        config.onToast(result.found===false?'支付平台尚未查到成功交易，请稍后刷新':'订单已重新核实');
-        await showDetail(order,scope);load(scope);config.onTicketRefresh();
+        config.onToast(action==='cancel_unpaid'?`订单已取消${result.refunded_credits?'，退回 '+result.refunded_credits+' 积分':''}`:action==='resolve_recharge'?'历史异常已核销，请查看核对结果':result.found===false?'支付平台尚未查到成功交易，请稍后刷新':'订单已重新核实');
+        await showDetail(order,scope);load(scope);config.onTicketRefresh();if(action==='cancel_unpaid')config.onBalanceRefresh?.();
       }
     }catch(err){if(paymentWindow)paymentWindow.close();const msg=$('ocActionMessage');if(msg)msg.textContent=err.message;else config.onToast(err.message);}
     finally{busy=false;$('ocDetailActions').querySelectorAll('button').forEach(b=>b.disabled=false);}
@@ -166,7 +184,7 @@
     if(config)return;config=options;setupPanel('user');setupPanel('admin');
     document.body.insertAdjacentHTML('beforeend','<div id="orderCenterModal" class="modal-overlay" style="display:none"><div class="modal-card oc-modal-card" role="dialog" aria-modal="true" aria-labelledby="ocDetailTitle"><header class="oc-modal-header"><h3 id="ocDetailTitle">订单详情</h3><button type="button" id="ocClose" class="modal-close" aria-label="关闭订单详情">×</button></header><div id="ocDetailBody" class="oc-modal-body"></div><footer id="ocDetailActions" class="oc-modal-footer"></footer></div></div>');modal=$('orderCenterModal');
     global.UIRuntime?.enhanceModals({querySelectorAll:()=>[modal],get activeElement(){return document.activeElement;}});
-    modal.addEventListener('click',e=>{if(e.target===modal||e.target.closest('#ocClose')){if(!busy)close();return;}if(e.target.id==='ocDetailRetry')showDetail(detail,detailScope);const b=e.target.closest('button');if(!b)return;if(b.hasAttribute('data-save-cleanup')){cleanupAction(false);return;}if(b.hasAttribute('data-run-cleanup')){cleanupAction(true);return;}if(b.dataset.action){if(['reconcile','boost_confirm_payment','boost_dispatch','archive','unarchive','remove','restore'].includes(b.dataset.action))reasonForm(b.dataset.action);else perform(b.dataset.action);}if(b.dataset.confirm)perform(b.dataset.confirm);if(b.hasAttribute('data-cancel-reason'))$('ocActionForm').innerHTML='';});
+    modal.addEventListener('click',e=>{if(e.target===modal||e.target.closest('#ocClose')){if(!busy)close();return;}const b=e.target.closest('button');if(!b||busy)return;if(e.target.id==='ocDetailRetry')showDetail(detail,detailScope);if(b.hasAttribute('data-save-cleanup')){cleanupAction(false);return;}if(b.hasAttribute('data-run-cleanup')){cleanupAction(true);return;}if(b.hasAttribute('data-save-timeout')){timeoutAction(false);return;}if(b.hasAttribute('data-run-timeout')){timeoutAction(true);return;}if(b.dataset.action){if(['reconcile','boost_confirm_payment','boost_dispatch','archive','unarchive','remove','restore','cancel_unpaid','resolve_recharge'].includes(b.dataset.action))reasonForm(b.dataset.action);else perform(b.dataset.action);}if(b.dataset.confirm)perform(b.dataset.confirm);if(b.hasAttribute('data-cancel-reason'))$('ocActionForm').innerHTML='';});
     $('rechargeOrdersBtn')?.addEventListener('click',()=>{config.onOpenOrders();selectType('recharge');});
     const returned=new URLSearchParams(location.search).get('out_trade_no');
     if(config.getToken()&&/^RC\d{13}[a-f0-9]{10}$/i.test(returned||'')){config.onOpenOrders();selectType('recharge');showDetail({order_type:'recharge',order_ref:returned});}

@@ -29,6 +29,7 @@ const {
 const { createRentalAccountRouter } = require('./routes/rental-accounts');
 const { createOrderCenterRouter } = require('./routes/order-center');
 const {createCleanupService}=require('./lib/order-cleanup');
+const {closeExpired}=require('./lib/order-lifecycle');
 const {visibleOrdersSql}=require('./lib/order-center');
 const {createWecomClient}=require('./lib/wecom-client');
 const {createNotificationSystem,enqueueHall,enqueueUser}=require('./lib/order-notifications');
@@ -1272,13 +1273,14 @@ app.post('/api/orders/:orderNo/payment', authMiddleware, async (req, res) => {
   if (!screenshot) return res.status(400).json({ error: '请提供支付截图' });
   try {
     const [matchingOrders] = await pool.execute(
-      'SELECT id, payment_status FROM orders WHERE order_no = ? AND user_id = ?',
+      'SELECT id, payment_status, status FROM orders WHERE order_no = ? AND user_id = ?',
       [orderNo, req.userId]
     );
     if (!matchingOrders.length) return res.status(404).json({ error: '订单不存在' });
     if (matchingOrders[0].payment_status === 'paid') {
       return res.status(409).json({ error: '订单已经确认付款' });
     }
+    if(matchingOrders[0].status==='cancelled')return res.status(409).json({error:'订单已关闭，请重新下单'});
   } catch {
     return res.status(503).json({ error: '暂时无法验证订单' });
   }
@@ -1296,10 +1298,10 @@ app.post('/api/orders/:orderNo/payment', authMiddleware, async (req, res) => {
     conn = await pool.getConnection();
     await conn.beginTransaction();
     const [orders] = await conn.execute(
-      'SELECT id, total_price, payment_status FROM orders WHERE order_no = ? AND user_id = ? FOR UPDATE',
+      'SELECT id, total_price, payment_status, status FROM orders WHERE order_no = ? AND user_id = ? FOR UPDATE',
       [orderNo, req.userId]
     );
-    if (!orders.length || orders[0].payment_status === 'paid') {
+    if (!orders.length || orders[0].payment_status === 'paid' || orders[0].status === 'cancelled') {
       await conn.rollback();
       fs.unlinkSync(newFilePath);
       newFileWritten = false;
@@ -2406,7 +2408,7 @@ async function recordThirdPartyEvent(conn, orderNo, eventType, actorUserId, note
 }
 
 app.use('/api/order-center', createOrderCenterRouter({
-  pool, authMiddleware, recordOperation, revealOrderCredentials, cleanupService:orderCleanup
+  pool, authMiddleware, recordOperation, revealOrderCredentials, cleanupService:orderCleanup, alipaySdk
 }));
 
 app.get('/api/third-party-orders/platforms', authMiddleware, (req, res) => {
@@ -3195,7 +3197,7 @@ function startServer(port = PORT) {
   const server=app.listen(port, () => {
     console.log(`🚀 后端服务运行在 http://localhost:${port}`);
   });
-  const tick=()=>orderCleanup.run().catch(err=>console.error('订单自动清理失败:',err.code || 'INTERNAL_ERROR'));
+  const tick=async()=>{try{await closeExpired({pool,recordOperation});await orderCleanup.run();}catch(err){console.error('订单自动清理失败:',err.code || 'INTERNAL_ERROR');}};
   const timer=setInterval(tick,60*60*1000);timer.unref();
   const notificationTick=()=>notificationSystem.deliver().catch(err=>console.error('企业微信通知任务失败:',err.code || 'INTERNAL_ERROR'));
   const notificationTimer=setInterval(notificationTick,5000);notificationTimer.unref();

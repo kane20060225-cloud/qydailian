@@ -15,7 +15,8 @@
     "migration:b8:third-party": "node scripts/migrate-b8-third-party.js",
     "migration:b9:order-center": "node scripts/migrate-b9-order-center.js",
     "migration:b10:remove-league": "node scripts/migrate-b10-remove-league.js",
-    "report:b5": "node scripts/report-b5-anomalies.js --report"
+    "report:b5": "node scripts/report-b5-anomalies.js --report",
+    "migration:b14:lifecycle": "node scripts/migrate-b14-order-lifecycle.js"
   },
   "engines": {
     "node": ">=18.0.0"

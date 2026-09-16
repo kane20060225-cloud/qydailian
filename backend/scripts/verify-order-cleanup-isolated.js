@@ -14,6 +14,7 @@ if(!/^qydailian_b11_test_[a-z0-9_]+$/.test(database||'')){console.error('Explici
     assert.equal((await pool.execute('SELECT DATABASE() AS name'))[0][0].name,database);
     assert.equal(Number((await pool.execute('SELECT COUNT(*) AS total FROM users'))[0][0].total),0,'Requires an empty test database');
     const conn=await pool.getConnection();try{await runMigration(conn);await runMigration(conn,{apply:true});await runMigration(conn,{apply:true});}finally{conn.release();}
+    const lifecycleConn=await pool.getConnection();try{await require('../lib/b14-order-lifecycle-migration').runMigration(lifecycleConn,{apply:true});}finally{lifecycleConn.release();}
     await pool.execute("INSERT INTO users (id,username,password_hash,role) VALUES (1,'b11-customer','test','user'),(2,'b11-admin','test','admin'),(3,'b11-booster','test','booster')");
     for(const ref of ['OLD','FUNDED','ASSIGNED','REVIEW','YOUNG','ROLLBACK','RACE','EVIDENCE'])await pool.execute("INSERT INTO orders (order_no,user_id,project,detail,total_price,payment_status,created_at) VALUES (?,1,'test','cleanup',6,'unpaid',DATE_SUB(NOW(),INTERVAL 10 DAY))",[ref]);
     await pool.execute("UPDATE orders SET created_at=NOW() WHERE order_no='YOUNG'");

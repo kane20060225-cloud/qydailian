@@ -4,6 +4,7 @@ const express = require('express');
 const crypto = require('node:crypto');
 const { TYPES, READ_MODEL_SQL, parseFilters, filterClause, decorateOrder, csvCell } = require('../lib/order-center');
 const {changeRemoval,getSettings,settingsInput,candidates,createCleanupService,TRASH_RETENTION_DAYS}=require('../lib/order-cleanup');
+const {cancelUnpaid,timeoutSettings,timeoutCandidates,resolveRecharge}=require('../lib/order-lifecycle');
 
 const SOURCES = {
   boost: ['order','orders','order_no'], rental: ['rental_order','rental_orders','order_no'],
@@ -15,7 +16,7 @@ function sourceRef(type, ref) {
   return type === 'shop' ? ref.replace(/^SHOP/, '') : ref;
 }
 
-function createOrderCenterRouter({ pool, authMiddleware, recordOperation, revealOrderCredentials, cleanupService }) {
+function createOrderCenterRouter({ pool, authMiddleware, recordOperation, revealOrderCredentials, cleanupService, alipaySdk }) {
   const router = express.Router();
   router.use(authMiddleware);
   router.use(async (req, res, next) => {
@@ -31,6 +32,44 @@ function createOrderCenterRouter({ pool, authMiddleware, recordOperation, reveal
   });
 
   const cleanup=cleanupService || createCleanupService({pool,recordOperation});
+  router.get('/timeout',async(req,res)=>{
+    if(req.orderRole!=='admin')return res.status(403).json({error:'无管理员权限'});
+    try{res.json({settings:await timeoutSettings(pool),candidates:await timeoutCandidates(pool),limit:200});}
+    catch{res.status(500).json({error:'超时关闭预览加载失败'});}
+  });
+  router.put('/timeout',async(req,res)=>{
+    if(req.orderRole!=='admin')return res.status(403).json({error:'无管理员权限'});
+    if(typeof req.body?.enabled!=='boolean')return res.status(400).json({error:'请明确选择是否开启24小时超时关闭'});
+    let conn;
+    try{conn=await pool.getConnection();await conn.beginTransaction();await conn.execute(`INSERT INTO order_lifecycle_settings (id,timeout_enabled,updated_by) VALUES (1,?,?)
+      ON DUPLICATE KEY UPDATE timeout_enabled=VALUES(timeout_enabled),updated_by=VALUES(updated_by)`,[req.body.enabled?1:0,req.userId]);
+      await recordOperation(conn,{eventKey:`timeout_settings:${crypto.randomUUID()}`,actorUserId:req.userId,action:'unpaid_timeout_settings_changed',targetType:'order_cleanup',targetRef:'timeout'});
+      await conn.commit();res.json({success:true});
+    }catch{if(conn)await conn.rollback();res.status(500).json({error:'超时关闭设置保存失败'});}finally{conn?.release();}
+  });
+  router.post('/timeout/run',async(req,res)=>{
+    if(req.orderRole!=='admin')return res.status(403).json({error:'无管理员权限'});
+    if(req.body?.confirmation!=='CLOSE_PREVIEWED_UNPAID_ORDERS')return res.status(400).json({error:'请先预览并确认超时关闭'});
+    const orders=req.body?.orders;
+    if(!Array.isArray(orders)||orders.length<1||orders.length>200||orders.some(o=>!o||!['boost','rental'].includes(o.type)||typeof o.ref!=='string'||!o.ref||o.ref.length>64)||new Set(orders.map(o=>o.type+':'+o.ref)).size!==orders.length)
+      return res.status(400).json({error:'请选择本次预览中的1–200个订单'});
+    try{let closed=0,skipped=0;const results=[];for(const o of orders){try{
+      const result=await cancelUnpaid({pool,recordOperation,type:o.type,ref:o.ref,actor:req.userId,admin:true,timeout:true,reason:'管理员确认预览：超过24小时未提交付款凭证，关闭未付款订单'});
+      if(!result.already_closed)closed++;results.push({...o,...result});
+    }catch(err){if(![404,409].includes(err.status))throw err;skipped++;results.push({...o,error:err.message});}}
+      res.json({closed,skipped,results});}
+    catch(err){res.status(err.status||500).json({error:err.status?err.message:'超时关闭失败，请刷新检查结果'});}
+  });
+  router.post('/:type/:ref/cancel-unpaid',async(req,res)=>{
+    try{res.json(await cancelUnpaid({pool,recordOperation,type:req.params.type,ref:req.params.ref,actor:req.userId,admin:req.orderRole==='admin',reason:req.body?.reason}));}
+    catch(err){res.status(err.status||500).json({error:err.status?err.message:'取消失败，请刷新后重试'});}
+  });
+  router.post('/recharge/:ref/resolve',async(req,res)=>{
+    if(req.orderRole!=='admin')return res.status(403).json({error:'无管理员权限'});
+    try{res.json(await resolveRecharge({pool,recordOperation,alipaySdk,ref:req.params.ref,actor:req.userId,
+      outcome:req.body?.outcome,reason:req.body?.reason,reference:req.body?.reference,confirmation:req.body?.confirmation}));}
+    catch(err){res.status(err.status||500).json({error:err.status?err.message:'核销失败，未执行余额变更，请刷新重试'});}
+  });
   router.get('/cleanup',async(req,res)=>{
     if(req.orderRole!=='admin')return res.status(403).json({error:'无管理员权限'});
     try {const settings=await getSettings(pool);const rows=await candidates(pool,settings.retention_days);
@@ -132,6 +171,14 @@ function createOrderCenterRouter({ pool, authMiddleware, recordOperation, reveal
         add('支付时间', raw.paid_at); add('到账时间', order.credited_at);
         add('支付宝交易号', raw.alipay_trade_no); add('最近支付查询', w.provider_checked_at);
         add('支付平台状态', w.provider_status); add('关闭时间', raw.closed_at);
+        const [resolutions]=await pool.execute('SELECT * FROM recharge_order_resolutions WHERE out_trade_no=?',[ref]);
+        const resolution=resolutions[0];
+        if(resolution){
+          add('历史核销结果',({test_closed:'无真实付款、未发券的测试订单，已核销关闭',historical_credited:'人工确认历史已到账（未改变余额，未补造到账流水）',tickets_backfilled:'核实真实付款后已补发军需券'})[resolution.outcome]);
+          add('核销时间',resolution.reviewed_at);add('核销原因',resolution.reason);add('核对依据',resolution.evidence_reference);
+          if(order.state==='credited' && resolution.outcome==='historical_credited')warning='管理员已确认历史发券。此核对记录未改变余额，历史发券时间以核对依据为准。';
+          if(order.state==='closed' && resolution.outcome==='test_closed')warning='测试订单已人工核销关闭；保留原支付记录和核对依据，不会修改券余额。';
+        }
         if (order.state === 'credit_pending') warning = '已核实支付成功，到账事务尚未完成。请刷新状态或由管理员重试到账，无需再次付款。';
         if (order.state === 'exception') warning = raw.status === 'paid'
           ? '历史已支付订单缺少对应到账流水，需人工核对。系统不会重复发放军需券。'

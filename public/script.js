@@ -244,6 +244,7 @@ function initOrderNotifications() {
 function init() {
     OrderCenter.init({apiBase:API_BASE,getToken:()=>safeGetItem('token'),getRole:()=>safeGetItem('role'),onToast:showToast,
       onBoostPayment:openBoostPayment,onTicketRefresh:updateTicketDisplay,onOpenOrders:()=>showSection('profile'),
+      onBalanceRefresh:()=>{loadUserCreditsForBoost();if(document.body.dataset.currentSection==='profile')loadProfile();},
       onManage:(order,scope)=>{
         focusedRentalOrder=order.order_type==='rental'?order.order_ref:null;
         if(order.order_type==='third_party') {

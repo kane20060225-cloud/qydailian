@@ -27,3 +27,5 @@
 - `npm test`：运行基础启动和静态页面测试。
 
 更完整的架构和风险说明见 `PROJECT_ANALYSIS.md`。
+
+订单取消、24小时未付款关闭及历史充值核销的部署与使用说明见 [B14_ORDER_LIFECYCLE_RUNBOOK.md](backend/migrations/B14_ORDER_LIFECYCLE_RUNBOOK.md)。发布此版本前需先执行 B14 增量迁移；超时关闭默认关闭。

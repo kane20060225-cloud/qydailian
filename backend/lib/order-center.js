@@ -2,7 +2,7 @@
 
 const TYPES = Object.freeze(['boost', 'rental', 'recharge', 'shop', 'third_party']);
 const STATES = Object.freeze({
-  boost: { pending_payment: '待支付', payment_review: '待核实收款', awaiting_assignment: '待接单', in_progress: '代练中', completed: '已完成', exception: '状态待核对' },
+  boost: { pending_payment: '待支付', payment_review: '待核实收款', awaiting_assignment: '待接单', in_progress: '代练中', completed: '已完成', closed: '已取消', exception: '状态待核对' },
   rental: { pending_payment: '待支付', payment_review: '待核实收款', awaiting_activation: '待确认租用', in_progress: '租用中', awaiting_acceptance: '待确认完成', dispute: '争议处理中', completed: '已完成', closed: '已取消' },
   recharge: { pending_payment: '待支付', credit_pending: '到账处理中', credited: '已到账', closed: '已关闭', exception: '到账待核对' },
   shop: { completed: '已兑换' },
@@ -15,7 +15,8 @@ SELECT 'boost' AS order_type, o.order_no AS order_ref, CONCAT(o.project,' · ',o
  o.user_id AS customer_id, o.booster_id AS related_user_id, o.total_price AS amount, 'money' AS amount_unit,
  o.status AS business_status, o.payment_status, o.created_at, '人工核实' AS payment_channel,
  NULL AS payment_reference, NULL AS ticket_quantity, NULL AS credited_at, NULL AS provider_status,
- CASE WHEN o.status='done' AND o.payment_status='paid' THEN 'completed'
+ CASE WHEN o.status='cancelled' AND o.payment_status='unpaid' THEN 'closed'
+ WHEN o.status='done' AND o.payment_status='paid' THEN 'completed'
  WHEN o.status IN ('done','playing') AND o.payment_status!='paid' THEN 'exception' WHEN o.status='playing' THEN 'in_progress'
  WHEN o.status='pending' AND o.payment_status='paid' THEN 'awaiting_assignment'
  WHEN o.status='pending' AND o.payment_status='pending' THEN 'payment_review'
@@ -45,15 +46,22 @@ SELECT 'recharge',p.out_trade_no,CONCAT('军需券充值 · ',COALESCE(w.ticket_
  p.user_id,NULL,p.amount,'money',p.status,IF(p.status='paid' OR w.provider_status IN ('TRADE_SUCCESS','TRADE_FINISHED'),'paid',IF(p.status='closed','closed','unpaid')),
  p.created_at,'支付宝',p.alipay_trade_no,w.ticket_quantity,l.created_at,w.provider_status,
  CASE WHEN p.status='paid' AND l.id IS NOT NULL THEN 'credited'
+ WHEN r.outcome='historical_credited' AND r.status_snapshot=p.status AND r.trade_snapshot<=>p.alipay_trade_no AND p.status='paid' THEN 'credited'
+ WHEN r.outcome='test_closed' AND r.status_snapshot=p.status AND r.trade_snapshot<=>p.alipay_trade_no
+   AND COALESCE(w.provider_status,'') NOT IN ('TRADE_SUCCESS','TRADE_FINISHED') AND l.id IS NULL THEN 'closed'
  WHEN p.status='paid' THEN 'exception'
  WHEN p.status='closed' AND w.provider_status IN ('TRADE_SUCCESS','TRADE_FINISHED') THEN 'exception'
  WHEN p.status='closed' THEN 'closed'
  WHEN w.provider_status IN ('TRADE_SUCCESS','TRADE_FINISHED') THEN 'credit_pending' ELSE 'pending_payment' END,
- CASE WHEN (p.status='paid' AND l.id IS NULL) OR
+ CASE WHEN r.outcome='historical_credited' AND r.status_snapshot=p.status AND r.trade_snapshot<=>p.alipay_trade_no AND p.status='paid' THEN NULL
+ WHEN r.outcome='test_closed' AND r.status_snapshot=p.status AND r.trade_snapshot<=>p.alipay_trade_no
+   AND COALESCE(w.provider_status,'') NOT IN ('TRADE_SUCCESS','TRADE_FINISHED') AND l.id IS NULL THEN NULL
+ WHEN (p.status='paid' AND l.id IS NULL) OR
  (w.provider_status IN ('TRADE_SUCCESS','TRADE_FINISHED') AND p.status!='paid') THEN 'exception' ELSE NULL END,
  u.username,NULL
 FROM payment_orders p JOIN users u ON u.id=p.user_id
  LEFT JOIN recharge_order_workflow w ON w.out_trade_no=p.out_trade_no
+ LEFT JOIN recharge_order_resolutions r ON r.out_trade_no=p.out_trade_no
  LEFT JOIN account_ledger l ON l.entry_key=CONCAT('payment:',p.out_trade_no,':tickets_credited')
  AND l.user_id=p.user_id AND l.account_type='chest_tickets' AND l.amount_delta>0
 UNION ALL
@@ -139,14 +147,16 @@ function decorateOrder(row, userId, admin) {
     if (admin) {
       actions.push('provider');
       if (row.business_status === 'pending' && row.state === 'credit_pending') actions.push('reconcile');
+      if (['exception','credit_pending'].includes(row.state)) actions.push('resolve_recharge');
     }
   } else if (row.order_type === 'boost') {
-    if (own && row.payment_status === 'unpaid' && row.state !== 'completed') actions.push('boost_payment');
+    if (own && row.payment_status === 'unpaid' && !['completed','closed'].includes(row.state)) actions.push('boost_payment');
     if (admin && row.state === 'payment_review') actions.push('boost_confirm_payment');
     if (admin && row.state === 'awaiting_assignment' && row.admin_task === 'review') actions.push('boost_dispatch');
   } else if (row.order_type === 'rental') {
     if (admin || own || related) actions.push('rental_manage');
   } else if (row.order_type === 'third_party') actions.push('third_party_manage');
+  if ((admin || own) && ['boost','rental'].includes(row.order_type) && row.state === 'pending_payment' && row.payment_status === 'unpaid') actions.push('cancel_unpaid');
   if (admin && ['completed','credited','closed'].includes(row.state)) actions.push(row.archived_at ? 'unarchive' : 'archive');
   if (admin && require('./order-cleanup').removable(row)) actions.push('remove');
   return { ...row, state_label: STATES[row.order_type]?.[row.state] || '状态待核对', actions };
