@@ -336,18 +336,44 @@ function restoreNavigation() {
 function layoutNavigation() {
     const header = document.querySelector('.top-bar');
     if (header) document.documentElement.style.setProperty('--site-header-height', `${header.offsetHeight}px`);
-    const more = getEl('adminNavMore');
-    if (!more) return;
-    const compact = window.innerWidth > 600 && window.innerWidth < 1400;
-    const menu = more.querySelector('.panel-more-menu');
-    ['roles', 'content', 'shop', 'chest'].forEach(target => {
-        const button = document.querySelector(`.admin-tab[data-admintab="${target}"]`);
-        if (!button) return;
-        if (compact) menu.appendChild(button);
-        else more.before(button);
+    [
+        {id: 'adminNavMore', selector: '.admin-tab', attribute: 'admintab', items: ['roles', 'content', 'shop', 'chest'], width: 1400},
+        {id: 'settingsNavMore', selector: '.settings-nav-btn', attribute: 'setting', items: ['order-defaults', 'language', 'messages', 'devices'], width: 1400}
+    ].forEach(group => {
+        const more = getEl(group.id);
+        if (!more) return;
+        const compact = window.innerWidth > 600 && window.innerWidth < group.width;
+        const menu = more.querySelector('.panel-more-menu');
+        group.items.forEach(target => {
+            const button = document.querySelector(`${group.selector}[data-${group.attribute}="${target}"]`);
+            if (!button) return;
+            if (compact) menu.appendChild(button);
+            else more.before(button);
+        });
+        more.hidden = !compact;
+        if (!compact) more.open = false;
     });
-    more.hidden = !compact;
-    if (!compact) more.open = false;
+}
+
+function selectPanelNavigation(button, selector) {
+    document.querySelectorAll(selector).forEach(item => {
+        const active = item === button;
+        item.classList.toggle('active', active);
+        if (active) item.setAttribute('aria-current', 'page');
+        else item.removeAttribute('aria-current');
+    });
+    const more = button.closest('.panel-more');
+    if (more?.open) {
+        more.open = false;
+        more.querySelector('summary')?.focus({preventScroll: true});
+    }
+    const nav = button.closest('.panel-nav');
+    if (nav && nav.scrollWidth > nav.clientWidth && !more) {
+        const bounds = nav.getBoundingClientRect();
+        const itemBounds = button.getBoundingClientRect();
+        if (itemBounds.left < bounds.left) nav.scrollLeft += itemBounds.left - bounds.left;
+        else if (itemBounds.right > bounds.right) nav.scrollLeft += itemBounds.right - bounds.right;
+    }
 }
 
 function showSection(target) {
@@ -404,9 +430,8 @@ function showSection(target) {
             const hallView = getEl('rentalHallView');
             if (hallView) hallView.style.display = 'block';
             // 高亮第一个选项卡（大厅）
-            document.querySelectorAll('.rental-tab').forEach(t => t.classList.remove('active'));
             const defaultTab = document.querySelector('.rental-tab[data-rentaltab="hall"]');
-            if (defaultTab) defaultTab.classList.add('active');
+            if (defaultTab) selectPanelNavigation(defaultTab, '.rental-tab');
             // 加载大厅数据
             loadRentalHall();
             break;
@@ -1681,10 +1706,8 @@ function switchTool(toolName) {
     if (!activePanel) return;
     activePanel.style.display = 'block';
 
-    toolTabs.forEach(tab => {
-        tab.classList.remove('active');
-        if (tab.dataset.tool === toolName) tab.classList.add('active');
-    });
+    const selectedTab = Array.from(toolTabs).find(tab => tab.dataset.tool === toolName);
+    if (selectedTab) selectPanelNavigation(selectedTab, '.tool-tab');
 
     if (toolName === 'chestsim') {
         updateTicketDisplay();
@@ -1709,10 +1732,8 @@ function resetToolsOnEnter() {
     hideAllToolPanels();
     const calcPanel = toolPanels.calculator;
     if (calcPanel) calcPanel.style.display = 'block';
-    toolTabs.forEach(tab => {
-        tab.classList.remove('active');
-        if (tab.dataset.tool === 'calculator') tab.classList.add('active');
-    });
+    const calculatorTab = Array.from(toolTabs).find(tab => tab.dataset.tool === 'calculator');
+    if (calculatorTab) selectPanelNavigation(calculatorTab, '.tool-tab');
 }
 
 toolTabs.forEach(tab => {
@@ -1841,7 +1862,9 @@ async function loadShopItems() {
 if (settingsBtn) settingsBtn.addEventListener('click', () => showSection('settings'));
 
 // 加载设置面板主框架
+let settingsLoadVersion = 0;
 async function loadSettingsPanel() {
+    const version = ++settingsLoadVersion;
     const content = getEl('settingsContent');
     if (!content) return;
     content.innerHTML = '<p>加载中...</p>';
@@ -1851,26 +1874,28 @@ async function loadSettingsPanel() {
         const res = await fetch(`${API_BASE}/user/settings`, { headers: { 'Authorization': `Bearer ${token}` } });
         if (!res.ok) throw new Error('获取设置失败');
         const settings = await res.json();
+        if (version !== settingsLoadVersion || document.body.dataset.currentSection !== 'settings') return;
         window._userSettings = settings;  // 缓存设置供子面板使用
         bindSettingsNav();
-        // 默认显示第一个（账号与安全）
-        const firstBtn = document.querySelector('.settings-nav-btn');
-        if (firstBtn) {
-            firstBtn.classList.add('active');
-            showSettingSection(firstBtn.dataset.setting);
+        const selectedBtn = document.querySelector('.settings-nav-btn.active') || document.querySelector('.settings-nav-btn');
+        if (selectedBtn) {
+            selectPanelNavigation(selectedBtn, '.settings-nav-btn');
+            showSettingSection(selectedBtn.dataset.setting);
         }
     } catch (e) {
+        if (version !== settingsLoadVersion || document.body.dataset.currentSection !== 'settings') return;
         content.innerHTML = '<p style="color:var(--red)">加载设置失败</p>';
     }
 }
 
-// 绑定左侧导航点击
+// 设置导航只绑定一次，重新进入页面时保留当前选项
 function bindSettingsNav() {
     const navBtns = document.querySelectorAll('.settings-nav-btn');
     navBtns.forEach(btn => {
+        if (btn.dataset.settingsBound) return;
+        btn.dataset.settingsBound = 'true';
         btn.addEventListener('click', () => {
-            navBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
+            selectPanelNavigation(btn, '.settings-nav-btn');
             showSettingSection(btn.dataset.setting);
         });
     });
@@ -2261,8 +2286,7 @@ async function loadDevices() {
 // 子标签切换
 document.querySelectorAll('.rental-tab').forEach(tab => {
     tab.addEventListener('click', () => {
-        document.querySelectorAll('.rental-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
+        selectPanelNavigation(tab, '.rental-tab');
         const target = tab.dataset.rentaltab;
         document.querySelectorAll('.rental-view').forEach(v => v.style.display = 'none');
         if (target === 'hall') { getEl('rentalHallView').style.display = 'block'; loadRentalHall(); }

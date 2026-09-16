@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blitz情谊工具站</title>
-    <link rel="stylesheet" href="style.css?v=20260916-nav1">
+    <link rel="stylesheet" href="style.css?v=20260916-nav2">
     <link rel="stylesheet" href="order-center.css?v=20260916-oc3">
     <link rel="stylesheet" href="order-notifications.css?v=20260916-notify1">
 </head>
@@ -16,10 +16,11 @@
             <span class="logo-text">Blitz情谊工具站</span>
         </a>
         <nav class="site-nav" aria-label="全站导航">
-            <a class="site-nav-link active" href="#mainMenu" data-nav-target="mainMenu" aria-current="page">首页</a>
             <a class="site-nav-link" href="#boost" data-nav-target="boost">代练下单</a>
             <a class="site-nav-link" href="#rental" data-nav-target="rental">账号租赁</a>
             <a class="site-nav-link" href="#tools" data-nav-target="tools">实用工具</a>
+            <a class="site-nav-link" href="#announcement" data-nav-target="announcement">站内公告</a>
+            <a class="site-nav-link" href="#news" data-nav-target="news">游戏新闻</a>
         </nav>
         <div class="user-actions" id="userActions">
             <button class="register-btn" id="openRegisterBtn">📝 注册</button>
@@ -258,17 +259,16 @@
 
     <!-- 板块二：独立工具（内部子菜单） -->
     <div id="sectionTools" class="content-section" style="display: none;">
-        <div class="section-top">
-            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+        <div class="section-top panel-top">
+            <button class="back-btn" data-back="mainMenu">← 返回首页</button>
             <h2 class="section-heading">🧮 独立工具</h2>
-        </div>
-        <div class="container">
-            <div class="tools-submenu">
+            <nav class="tools-submenu panel-nav" aria-label="独立工具功能">
                 <button class="tool-tab active" data-tool="calculator">📊 胜率/场均计算器</button>
                 <button class="tool-tab" data-tool="chestsim">🎁 开箱模拟器</button>
                 <button class="tool-tab" data-tool="randomtank">🎲 这把玩什么</button>
-            </div>
-
+            </nav>
+        </div>
+        <div class="container">
             <!-- 计算器面板 -->
             <div id="toolCalculator" class="tool-panel">
                 <section class="card">
@@ -344,18 +344,17 @@
 
     <!-- ==================== 板块六：账号租借 ==================== -->
     <div id="sectionRental" class="content-section" style="display: none;">
-        <div class="section-top">
-            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+        <div class="section-top panel-top">
+            <button class="back-btn" data-back="mainMenu">← 返回首页</button>
             <h2 class="section-heading">🎮 账号租借</h2>
-        </div>
-        <div class="container">
-            <div class="rental-tabs" style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+            <nav class="rental-tabs panel-nav" aria-label="账号租借功能">
                 <button class="rental-tab active" data-rentaltab="hall">🔍 租号大厅</button>
                 <button class="rental-tab" data-rentaltab="publish">📤 发布出租</button>
                 <button class="rental-tab" data-rentaltab="rented">📋 我的租用</button>
                 <button class="rental-tab" data-rentaltab="my">📊 我的出租</button>
-            </div>
-
+            </nav>
+        </div>
+        <div class="container">
             <!-- 租号大厅 -->
             <div id="rentalHallView" class="rental-view">
                 <button id="refreshRentalHallBtn" type="button" style="margin-bottom:12px;">刷新可租账号</button>
@@ -594,13 +593,10 @@
 
     <!-- ==================== 设置面板 ==================== -->
     <div id="sectionSettings" class="content-section" style="display: none;">
-        <div class="section-top">
-            <button class="back-btn" data-back="mainMenu">← 返回主菜单</button>
+        <div class="section-top panel-top">
+            <button class="back-btn" data-back="mainMenu">← 返回首页</button>
             <h2 class="section-heading">⚙️ 设置</h2>
-        </div>
-        <div class="container settings-layout">
-            <!-- 左侧导航 -->
-            <div class="settings-nav" id="settingsNav">
+            <nav class="settings-nav panel-nav" id="settingsNav" aria-label="设置功能">
                 <button class="settings-nav-btn active" data-setting="account-security">🔐 账号与安全</button>
                 <button class="settings-nav-btn" data-setting="appearance">🎨 站内风格</button>
                 <button class="settings-nav-btn" data-setting="notifications">🔔 通知与提醒</button>
@@ -609,8 +605,14 @@
                 <button class="settings-nav-btn" data-setting="language">🌐 语言 / 地区</button>
                 <button class="settings-nav-btn" data-setting="messages">📬 站内邮箱</button>
                 <button class="settings-nav-btn" data-setting="devices">📱 登录设备</button>
-            </div>
-            <!-- 右侧内容区 -->
+                <details class="panel-more" id="settingsNavMore" hidden>
+                    <summary>更多 <span aria-hidden="true">▾</span></summary>
+                    <div class="panel-more-menu"></div>
+                </details>
+            </nav>
+        </div>
+        <div class="container settings-layout">
+            <!-- 当前设置内容 -->
             <div class="settings-content" id="settingsContent">
                 <!-- 每个设置面板由JS动态渲染 -->
             </div>
@@ -980,6 +982,6 @@
     <script src="rental-client.js"></script>
     <script src="order-center.js?v=20260916-oc3"></script>
     <script src="order-notifications.js?v=20260916-notify1"></script>
-    <script src="script.js?v=20260916-nav1"></script>
+    <script src="script.js?v=20260916-nav2"></script>
 </body>
 </html>

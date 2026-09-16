@@ -1749,11 +1749,14 @@ body.theme-light .quick-card strong { color: var(--text); }
 }
 .panel-top > .back-btn, .panel-top > .section-heading { flex-shrink: 0; }
 .panel-top .panel-nav {
-    display: flex; align-items: center; flex: 1; min-width: 0; gap: 8px;
+    display: flex; flex-direction: row; align-items: center; flex: 1; min-width: 0; width: auto; gap: 8px;
     margin: 0; padding: 0 0 0 18px; flex-wrap: nowrap;
-    border: 0; border-left: 1px solid var(--border);
+    border: 0; border-left: 1px solid var(--border); border-radius: 0; background: transparent;
 }
-.panel-nav > button { min-height: 40px; padding: 8px 12px; flex-shrink: 0; }
+.panel-nav > button { min-height: 40px; padding: 8px 12px; width: auto; flex: 0 0 auto; }
+.settings-layout { align-items: stretch; }
+.settings-content { display: grid; gap: 20px; width: 100%; }
+.panel-top .settings-nav-btn { justify-content: center; }
 .panel-nav button.active { color: var(--accent); border-color: var(--accent); background: rgba(240,160,80,.12); box-shadow: none; }
 .panel-more { position: relative; flex-shrink: 0; }
 .panel-more[hidden] { display: none; }
@@ -1773,14 +1776,16 @@ body.theme-light .quick-card strong { color: var(--text); }
 .panel-more-menu button { display: flex; width: 100%; min-height: 44px; margin-bottom: 4px; }
 .panel-more-menu button:last-child { margin-bottom: 0; }
 body.theme-light .panel-top { background: rgba(255,255,255,.96); }
+body.theme-light .panel-top .panel-nav { background: transparent; border: 0; border-left: 1px solid var(--border); border-radius: 0; }
 @media (max-width: 1000px) {
     .top-bar { gap: 18px; }
     .site-nav { gap: 16px; }
     .site-nav-link { font-size: .82rem; }
     .panel-top { flex-wrap: wrap; }
     .panel-top .panel-nav { flex-basis: 100%; border-left: 0; padding-left: 0; }
+    body.theme-light .panel-top .panel-nav { border-left: 0; }
 }
-@media (min-width: 601px) and (max-width: 760px) {
+@media (min-width: 601px) and (max-width: 1000px) {
     .top-bar { flex-wrap: wrap; gap: 8px 16px; padding-top: 10px; padding-bottom: 8px; }
     .site-nav { order: 3; flex-basis: 100%; }
     .site-nav-link { min-height: 36px; }
