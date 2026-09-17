@@ -47,3 +47,5 @@ QY Blitz 品牌、Velnora 积分和租号折叠筛选的发布结果见 [B23_DEP
 Velnora 积分图标及浏览器 favicon 发布结果见 [B24_DEPLOYMENT_REPORT.md](docs/B24_DEPLOYMENT_REPORT.md)。B24 仅更新前端，无需数据库迁移或后端重启。
 
 顶部品牌图标与个人中心卡片化改版见 [B25_DEPLOYMENT_REPORT.md](docs/B25_DEPLOYMENT_REPORT.md)。B25 仅更新前端，无需数据库迁移或后端重启。
+
+打手工作台卡片、收益明细与测试收益核对冲正见 [B26_DEPLOYMENT_REPORT.md](docs/B26_DEPLOYMENT_REPORT.md)。B26 无数据库迁移，后端已重启；测试收益由管理员逐单核对后操作。
