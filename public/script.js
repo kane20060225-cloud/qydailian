@@ -782,7 +782,7 @@ async function loadProfile() {
             <p><span>用户名：</span><span>${user.username}</span></p>
             <p><span>邮箱：</span><span>${user.email || '未填写'}</span></p>
             <p><span>手机：</span><span>${user.phone || '未填写'}</span></p>
-            <p><span>Velnora 积分：</span><span><img src="qy-coin.png" alt="" style="width:18px;height:18px;vertical-align:middle;margin-right:4px;">${credits.qy_credits}（可用）/ ${totalEarned}（累计）</span></p>
+            <p><span>Velnora 积分：</span><span><img src="velnora-coin.png?v=20260917-b24" alt="" style="width:18px;height:18px;vertical-align:middle;margin-right:4px;">${credits.qy_credits}（可用）/ ${totalEarned}（累计）</span></p>
             <p><span>VIP等级：</span><span>${vipNames[currentVip]}</span></p>
             <div style="background:var(--surface-track); border-radius:10px; height:10px; margin:8px 0; width:100%;">
                 <div style="width:${vipProgress}%; height:100%; background:var(--accent); border-radius:10px;"></div>
@@ -1809,7 +1809,7 @@ async function loadShopItems() {
     items.forEach(item => {
       html += `
         <div class="card" style="text-align:center;">
-          <img src="${item.image || 'qy-coin.png'}" style="width:100px; height:100px; object-fit:contain; margin-bottom:10px;" onerror="this.src='qy-coin.png'">
+          <img src="${item.image || 'velnora-coin.png?v=20260917-b24'}" style="width:100px; height:100px; object-fit:contain; margin-bottom:10px;" onerror="this.src='velnora-coin.png?v=20260917-b24'">
           <h4>${item.name}</h4>
           <p style="color:var(--text-secondary); font-size:0.9rem;">${item.description || ''}</p>
           <p style="color:var(--price); font-weight:700;">🪙 ${item.price_credits} 积分</p>
