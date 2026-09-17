@@ -39,3 +39,5 @@
 经营指标独立入口、打手上下线设置及登录设备合并见 [B20_WORKSPACE_DEVICES_RUNBOOK.md](docs/B20_WORKSPACE_DEVICES_RUNBOOK.md)。B19/B20 联合发布结果见 [B20_DEPLOYMENT_REPORT.md](docs/B20_DEPLOYMENT_REPORT.md)。
 
 登录设备归并优化、标题后的活动弹窗和居中下单布局见 [B21_DEVICES_ACTIVITIES.md](docs/B21_DEVICES_ACTIVITIES.md)，生产发布验收见 [B21_DEPLOYMENT_REPORT.md](docs/B21_DEPLOYMENT_REPORT.md)。
+
+电竞背景、卡片战术纹理与 WebP 图片压缩的发布结果见 [B22_DEPLOYMENT_REPORT.md](docs/B22_DEPLOYMENT_REPORT.md)。B22 仅发布前端文件，无需数据库迁移或后端重启。
