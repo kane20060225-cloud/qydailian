@@ -19,7 +19,7 @@ function createNotificationRouter({pool,authMiddleware,system,cipher,wecomClient
       const config=await loadConfig(pool,cipher);if(!config?.secret||config.corp_id!==s.corp_id||Number(config.agent_id)!==Number(s.agent_id))throw Error('config changed');
       const identity=await wecomClient.identity(config,code);
       await conn.beginTransaction();const [users]=await conn.execute('SELECT role,token_version FROM users WHERE id=? FOR UPDATE',[s.user_id]);
-      if(!['booster','admin'].includes(users[0]?.role)||Number(users[0]?.token_version)!==Number(s.token_version))throw Error('session revoked');
+      if(!['booster','support','admin'].includes(users[0]?.role)||Number(users[0]?.token_version)!==Number(s.token_version))throw Error('session revoked');
       const fresh=await loadConfig(conn,cipher);if(fresh?.corp_id!==config.corp_id||Number(fresh?.agent_id)!==Number(config.agent_id)||fresh?.secret!==config.secret)throw Error('config changed');
       await conn.execute(`INSERT INTO wecom_user_bindings (user_id,corp_id,agent_id,wecom_user_id) VALUES (?,?,?,?)
         ON DUPLICATE KEY UPDATE corp_id=VALUES(corp_id),agent_id=VALUES(agent_id),wecom_user_id=VALUES(wecom_user_id),verified_at=NOW()`,[s.user_id,config.corp_id,config.agent_id,identity]);
@@ -59,9 +59,9 @@ function createNotificationRouter({pool,authMiddleware,system,cipher,wecomClient
   router.get('/preferences',async(req,res)=>{const [rows]=await pool.execute('SELECT new_orders,wecom,sound FROM notification_preferences WHERE user_id=?',[req.userId]);res.json(rows[0] || {new_orders:1,wecom:1,sound:0});});
   router.put('/preferences',async(req,res)=>{const b=req.body || {};if(['new_orders','wecom','sound'].some(k=>typeof b[k]!=='boolean'))return res.status(400).json({error:'请选择通知开关'});
     await pool.execute('INSERT INTO notification_preferences (user_id,new_orders,wecom,sound) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE new_orders=VALUES(new_orders),wecom=VALUES(wecom),sound=VALUES(sound)',[req.userId,+b.new_orders,+b.wecom,+b.sound]);res.json({success:true});});
-  router.get('/wecom/status',async(req,res)=>{const c=await loadConfig(pool,cipher);const [rows]=await pool.execute('SELECT wecom_user_id,corp_id,agent_id,verified_at FROM wecom_user_bindings WHERE user_id=?',[req.userId]);const b=rows[0];res.json({configured:Boolean(c?.secret),enabled:Boolean(c?.enabled),bound:Boolean(b&&b.corp_id===c?.corp_id&&Number(b.agent_id)===Number(c.agent_id)),identity:b?.wecom_user_id || null,can_bind:['booster','admin'].includes(req.notificationRole)});});
+  router.get('/wecom/status',async(req,res)=>{const c=await loadConfig(pool,cipher);const [rows]=await pool.execute('SELECT wecom_user_id,corp_id,agent_id,verified_at FROM wecom_user_bindings WHERE user_id=?',[req.userId]);const b=rows[0];res.json({configured:Boolean(c?.secret),enabled:Boolean(c?.enabled),bound:Boolean(b&&b.corp_id===c?.corp_id&&Number(b.agent_id)===Number(c.agent_id)),identity:b?.wecom_user_id || null,can_bind:['booster','support','admin'].includes(req.notificationRole)});});
   router.post('/wecom/bind',async(req,res)=>{
-    if(!['booster','admin'].includes(req.notificationRole))return res.status(403).json({error:'仅打手和管理员可以绑定接单通知'});
+    if(!['booster','support','admin'].includes(req.notificationRole))return res.status(403).json({error:'仅打手、客服和管理员可以绑定企业微信'});
     const c=await loadConfig(pool,cipher);if(!c?.secret)return res.status(409).json({error:'管理员尚未配置企业微信自建应用'});
     await pool.execute('DELETE FROM wecom_oauth_states WHERE user_id=? OR expires_at<NOW()',[req.userId]);
     const state=crypto.randomBytes(32).toString('hex');await pool.execute('INSERT INTO wecom_oauth_states (state_hash,user_id,token_version,corp_id,agent_id,expires_at) VALUES (?,?,?,?,?,DATE_ADD(NOW(),INTERVAL 10 MINUTE))',[hash(state),req.userId,req.tokenVersion,c.corp_id,c.agent_id]);

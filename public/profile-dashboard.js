@@ -10,7 +10,7 @@
         const highest = level === 5;
         const remaining = highest ? 0 : Math.max(0, thresholds[level + 1] - earned);
         const progress = highest ? 100 : Math.max(0, Math.min(100, Math.floor((earned - thresholds[level]) / (thresholds[level + 1] - thresholds[level]) * 100)));
-        const role = ({admin:'管理员',booster:'打手',user:'玩家'})[user.role] || '玩家';
+        const role = ({admin:'管理员',booster:'打手',support:'客服',user:'玩家'})[user.role] || '玩家';
         const identity = ({gold:'金牌打手',silver:'银牌打手',standard:'标准打手',budget:'特惠打手'})[user.booster_identity] || '标准打手';
         const created = new Date(user.created_at);
         const registered = Number.isNaN(created.getTime()) ? '暂无记录' : created.toLocaleString('zh-CN', {timeZone:'Asia/Shanghai',hour12:false});

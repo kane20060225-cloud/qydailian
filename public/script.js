@@ -244,6 +244,7 @@ const settingsBtn = getEl('settingsBtn');
 function initOrderNotifications() {
     OrderNotifications.init({apiBase:API_BASE,getToken:()=>safeGetItem('token'),getRole:()=>safeGetItem('role'),onToast:showToast,onAuthExpired:promptLoginExpired,
       onOpenOrder:n=>{
+        if(n.kind==='support_message'||n.order_type==='support'){CustomerSupport.openConversation(Number(n.order_ref));return;}
         if(n.kind==='new_order' && ['booster','admin'].includes(safeGetItem('role'))){showSection('booster');document.querySelector('.booster-tab[data-tab="booster-hall"]')?.click();}
         else if(n.kind==='take_confirmed' && ['booster','admin'].includes(safeGetItem('role'))){showSection('booster');document.querySelector('.booster-tab[data-tab="booster-my"]')?.click();}
         else {showSection('profile');OrderCenter.showDetail({order_type:n.order_type,order_ref:n.order_ref});}
@@ -269,6 +270,8 @@ function init() {
           document.querySelector(`.rental-tab[data-rentaltab="${tab}"]`)?.click();
         }
       }});
+    CustomerSupport.init({apiBase:API_BASE,getToken:()=>safeGetItem('token'),getUserId:()=>safeGetItem('userId'),onToast:showToast,onAuthExpired:promptLoginExpired,onLogin:()=>openLoginBtn?.click()});
+    UserPermissions.init({apiBase:API_BASE,getToken:()=>safeGetItem('token')});
     initOrderNotifications();
     BoosterAvailability.init({apiBase:API_BASE,getToken:()=>safeGetItem('token'),onToast:showToast,
       onIdentity:userId=>window.updateBoosterIdentity(userId),onSettings:()=>{
@@ -651,6 +654,7 @@ getEl('calcBtn')?.addEventListener('click', () => {
 
 // ==================== 用户登录状态管理 ====================
 function checkLoginStatus() {
+    window.CustomerSupport?.syncSession();
     ServiceContent.authChanged();
     window.OrderNotifications?.syncSession();
     const token = safeGetItem('token');
@@ -1186,30 +1190,10 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
     });
 });
 async function loadUserList() {
-    const select = getEl('userSelect'); if (!select) return;
-    const token = safeGetItem('token');
-    try {
-        const res = await fetch(`${API_BASE}/admin/users`, { headers:{'Authorization':`Bearer ${token}`} });
-        if (!res.ok) throw new Error('获取失败');
-        const users = await res.json();
-        select.innerHTML = '<option value="">-- 选择用户 --</option>' + users.map(u => `<option value="${u.id}">${u.username} (${u.role})</option>`).join('');
-    } catch (err) { select.innerHTML = '<option value="">加载失败</option>'; }
+    UserPermissions.load();
 }
 function bindUpdateRole() {
-    const btn = getEl('updateRoleBtn'); if (!btn) return;
-    btn.addEventListener('click', async () => {
-        const token = safeGetItem('token');
-        const userId = getEl('userSelect')?.value;
-        const role = getEl('roleSelect')?.value;
-        const msgEl = getEl('roleUpdateMsg');
-        if (!userId) { if (msgEl) msgEl.textContent = '请先选择一个用户'; return; }
-        try {
-            const res = await fetch(`${API_BASE}/admin/users/${userId}/role`, { method:'PUT', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body: JSON.stringify({ role }) });
-            const data = await res.json();
-            if (res.ok) { if (msgEl) msgEl.textContent = '✅ ' + data.message; loadUserList(); }
-            else { if (msgEl) msgEl.textContent = '❌ ' + (data.error||'操作失败'); }
-        } catch (err) { if (msgEl) msgEl.textContent = '❌ 网络错误'; }
-    });
+    // Bound by UserPermissions.init.
 }
 async function loadAdminCustomRequests() {
   const list = getEl('adminCustomList');

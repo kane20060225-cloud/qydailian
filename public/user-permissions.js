@@ -1,0 +1,21 @@
+(function(global){
+ 'use strict';
+ const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const roles={user:'普通用户',booster:'打手',support:'客服',admin:'管理员'};
+ const descriptions={user:'下单、查看自己的订单和咨询。',booster:'接单、处理代练任务和查看自己的收益。',support:'处理客服会话和查看关联订单摘要。',admin:'管理订单、网站配置、客服和用户权限。'};
+ let config,page=1,browse=false,selected=null,users=[],generation=0,timer;
+ async function request(path,options={}){const token=config.getToken();const r=await fetch(config.apiBase+'/admin/users'+path,{...options,headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json',...options.headers}});const d=await r.json();if(token!==config.getToken())throw Error('登录状态已变化');if(!r.ok)throw Error(d.error||'操作失败');return d;}
+ function select(u){selected=u;$('permissionSelected').innerHTML=`<div class="permission-avatar">${esc(u.username.slice(0,1).toUpperCase())}</div><div><strong>${esc(u.username)}</strong><small>用户 #${u.id} · 当前权限：${roles[u.role]}</small></div>`;$('roleSelect').value=u.role;$('updateRoleBtn').disabled=true;$('permissionRoleHelp').textContent=descriptions[u.role];$('permissionEditor').hidden=false;document.querySelectorAll('[data-permission-user]').forEach(b=>b.classList.toggle('is-selected',Number(b.dataset.permissionUser)===u.id));}
+ async function load(reset=false){if(reset)page=1;const seq=++generation;const q=$('permissionSearch').value.trim();$('permissionBrowse').textContent=browse?'返回搜索':'浏览全部用户';
+  if(!q&&!browse){$('permissionResults').innerHTML='<div class="permission-empty">输入用户名或用户 ID，快速定位要调整权限的人。</div>';$('permissionPaging').hidden=true;return;}
+  $('permissionResults').setAttribute('aria-busy','true');try{const d=await request(`?q=${encodeURIComponent(q)}&role=${encodeURIComponent($('permissionFilter').value)}&page=${page}`);if(seq!==generation)return;users=d.users;
+   $('permissionResults').innerHTML=users.length?users.map(u=>`<button class="permission-user ${selected?.id===u.id?'is-selected':''}" data-permission-user="${u.id}" type="button"><span class="permission-avatar">${esc(u.username.slice(0,1).toUpperCase())}</span><span><strong>${esc(u.username)}</strong><small>#${u.id}</small></span><span class="permission-badge permission-role-${u.role}">${roles[u.role]||'普通用户'}</span><span aria-hidden="true">→</span></button>`).join(''):'<div class="permission-empty">没有匹配的用户，请换一个关键词。</div>';
+   $('permissionPaging').hidden=false;$('permissionCount').textContent=`共 ${d.total} 人 · 第 ${page} 页`;$('permissionPrevious').disabled=page<=1;$('permissionNext').disabled=page*20>=d.total;
+  }catch(e){if(seq===generation)$('permissionResults').innerHTML=`<p role="alert">${esc(e.message)}</p><button type="button" data-permission-retry>重新加载</button>`;}finally{if(seq===generation)$('permissionResults').removeAttribute('aria-busy');}
+ }
+ function init(options){config=options;$('permissionSearch').oninput=()=>{clearTimeout(timer);timer=setTimeout(()=>load(true),250);};$('permissionFilter').onchange=()=>load(true);$('permissionBrowse').onclick=()=>{browse=!browse;if(!browse)$('permissionSearch').value='';load(true);};$('permissionPrevious').onclick=()=>{page--;load();};$('permissionNext').onclick=()=>{page++;load();};$('permissionResults').onclick=e=>{const b=e.target.closest('[data-permission-user]');if(b)select(users.find(u=>u.id===Number(b.dataset.permissionUser)));if(e.target.closest('[data-permission-retry]'))load();};
+  $('roleSelect').onchange=()=>{$('permissionRoleHelp').textContent=descriptions[$('roleSelect').value];$('updateRoleBtn').disabled=!selected||selected.role===$('roleSelect').value;};
+  $('updateRoleBtn').onclick=async()=>{if(!selected)return;const u=selected,role=$('roleSelect').value;$('updateRoleBtn').disabled=true;$('roleUpdateMsg').textContent='正在保存…';try{const d=await request(`/${u.id}/role`,{method:'PUT',body:JSON.stringify({role,expected_role:u.role})});u.role=role;select(u);$('roleUpdateMsg').textContent=d.message;load();}catch(e){$('roleUpdateMsg').textContent=e.message;$('updateRoleBtn').disabled=false;}};
+ }
+ global.UserPermissions={init,load:()=>{selected=null;$('permissionEditor').hidden=true;$('roleUpdateMsg').textContent='';load();}};
+})(window);

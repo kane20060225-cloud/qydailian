@@ -39,6 +39,8 @@ const {createNotificationSystem,enqueueHall,enqueueUser}=require('./lib/order-no
 const {createNotificationRouter}=require('./routes/order-notifications');
 const {createAvailabilityRouter}=require('./routes/booster-availability');
 const {createServiceContentRouter}=require('./routes/service-content');
+const {createSupportRouter}=require('./routes/customer-support');
+const {createPermissionsRouter}=require('./routes/user-permissions');
 const serviceContent=require('./lib/service-content');
 const loginDevices=require('./lib/login-devices');
 const locateLoginIp=loginDevices.createLocator();
@@ -828,6 +830,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 // ---------- JWT 中间件 ----------
 const authMiddleware = createAuthMiddleware(pool, JWT_SECRET);
+app.use('/api/support',createSupportRouter({pool,authMiddleware,notificationSystem,recordOperation}));
 app.use('/api/notifications',createNotificationRouter({pool,authMiddleware,system:notificationSystem,cipher:sensitiveFieldCipher,wecomClient,siteUrl:notificationSiteUrl,recordOperation}));
 function adminMiddleware(req, res, next) {
   authMiddleware(req, res, async () => {
@@ -1456,17 +1459,7 @@ app.get('/api/orders/:orderNo/detail', authMiddleware, async (req, res) => {
 });
 
 // ---------- 用户角色管理 ----------
-app.get('/api/admin/users', adminMiddleware, async (req, res) => {
-  try { const [rows] = await pool.execute('SELECT id, username, role FROM users ORDER BY id'); res.json(rows); }
-  catch(err) { res.status(500).json({ error: '服务器错误' }); }
-});
-app.put('/api/admin/users/:userId/role', adminMiddleware, async (req, res) => {
-  const { userId } = req.params;
-  const { role } = req.body;
-  if (!['user','booster','admin'].includes(role)) return res.status(400).json({ error: '无效的角色值' });
-  try { await pool.execute('UPDATE users SET role = ? WHERE id = ?', [role, userId]); res.json({ success: true, message: `角色已更新为 ${role}` }); }
-  catch(err) { res.status(500).json({ error: '服务器错误' }); }
-});
+app.use('/api/admin/users',createPermissionsRouter({pool,adminMiddleware,recordOperation}));
 
 // ---------- 打手接口 ----------
 app.get('/api/booster/hall', boosterMiddleware, async (req, res) => {

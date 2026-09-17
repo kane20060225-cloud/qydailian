@@ -61,10 +61,11 @@ function createNotificationSystem({pool,cipher,wecomClient,siteUrl}) {
             d.attempts FROM order_notifications n JOIN notification_deliveries d ON d.notification_id=n.id JOIN users u ON u.id=n.user_id
             LEFT JOIN wecom_user_bindings b ON b.user_id=n.user_id LEFT JOIN notification_preferences p ON p.user_id=n.user_id
             LEFT JOIN user_settings s ON s.user_id=n.user_id WHERE n.id=?`,[id]);
-          const n=rows[0];let valid=n && n.wecom_user_id && n.corp_id===config.corp_id && Number(n.agent_id)===Number(config.agent_id) && n.wecom_enabled && n.order_updates_enabled && ['booster','admin','user'].includes(n.role);
+          const n=rows[0];let valid=n && n.wecom_user_id && n.corp_id===config.corp_id && Number(n.agent_id)===Number(config.agent_id) && n.wecom_enabled && (n.kind==='support_message'||n.order_updates_enabled) && ['booster','admin','user','support'].includes(n.role);
+          if(valid&&n.kind==='support_message'&&n.title==='有新的客服咨询')valid=['support','admin'].includes(n.role);
           if(valid && n.kind==='new_order') {const [orders]=await pool.execute('SELECT hall_status,booster_id,status,payment_status,required_identity FROM orders WHERE order_no=?',[n.order_ref]);const o=orders[0];
             valid=n.role==='booster' && n.new_orders_enabled && o?.hall_status==='open' && !o.booster_id && o.status==='pending' && o.payment_status==='paid' && canReceiveOrder(n.booster_identity,o.required_identity) && (await loadAvailability(pool,n.user_id)).online;}
-          if(!valid || Date.now()-new Date(n.created_at).getTime()>86400000){await pool.execute("UPDATE notification_deliveries SET status='skipped',last_error_code='STALE_OR_DISABLED',locked_at=NULL WHERE notification_id=?",[id]);continue;}
+          if(!valid || (n.kind!=='support_message'&&Date.now()-new Date(n.created_at).getTime()>86400000)){await pool.execute("UPDATE notification_deliveries SET status='skipped',last_error_code='STALE_OR_DISABLED',locked_at=NULL WHERE notification_id=?",[id]);continue;}
           // Recheck config immediately before sending, so edits/disable do not use a stale secret.
           const fresh=await loadConfig(pool,cipher);
           if(!fresh?.enabled || fresh.corp_id!==config.corp_id || Number(fresh.agent_id)!==Number(config.agent_id) || fresh.secret!==config.secret){await pool.execute("UPDATE notification_deliveries SET status='pending',locked_at=NULL WHERE notification_id=?",[id]);break;}

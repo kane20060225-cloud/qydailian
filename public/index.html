@@ -25,6 +25,7 @@
     <link rel="stylesheet" href="esports-surfaces.css?v=20260917-webp1">
     <link rel="stylesheet" href="profile-dashboard.css?v=20260917-b25">
     <link rel="stylesheet" href="booster-workbench.css?v=20260917-b27">
+    <link rel="stylesheet" href="customer-support.css?v=20260917-b28">
 </head>
 <body>
     <script>document.body.classList.toggle('theme-light', document.documentElement.dataset.theme === 'light');</script>
@@ -505,7 +506,7 @@
                 <button class="admin-tab" data-admintab="rental">🎮 租号审核</button>
                 <button class="admin-tab" data-admintab="custom">✏️ 定制需求</button>
                 <button class="admin-tab" data-admintab="boosters">👥 打手管理</button>
-                <button class="admin-tab" data-admintab="roles">👑 角色管理</button>
+                <button class="admin-tab" data-admintab="roles">👑 权限管理</button>
                 <button class="admin-tab" data-admintab="content">📰 内容管理</button>
                 <button class="admin-tab" data-admintab="shop">🛒 积分商城</button>
                 <button class="admin-tab" data-admintab="chest">🎁 开箱配置</button>
@@ -552,20 +553,20 @@
                 <div id="adminBoostersList">正在加载…</div>
             </div>
             <div id="adminRolesSection" style="display:none;">
-                <div class="admin-role-section">
-                    <h4 style="margin-bottom:12px;">👥 修改用户角色</h4>
-                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                        <select id="userSelect" style="flex:1; min-width:150px;">
-                            <option value="">-- 选择用户 --</option>
-                        </select>
-                        <select id="roleSelect" style="width:130px;">
+                <div class="permission-manager">
+                    <div class="permission-heading"><div><h4>用户与权限</h4><p>快速找到用户，再调整角色与工作台访问权限。</p></div><button id="permissionBrowse" type="button">浏览全部用户</button></div>
+                    <div class="permission-searchbar"><label><input id="permissionSearch" type="search" maxlength="80" placeholder="搜索用户名或用户 ID" aria-label="搜索用户" autocomplete="off"></label><select id="permissionFilter" aria-label="筛选当前角色"><option value="">全部角色</option><option value="user">普通用户</option><option value="booster">打手</option><option value="support">客服</option><option value="admin">管理员</option></select></div>
+                    <div class="permission-grid"><div><div id="permissionResults" aria-live="polite"></div><div id="permissionPaging" class="permission-paging" hidden><button id="permissionPrevious" type="button">上一页</button><span id="permissionCount"></span><button id="permissionNext" type="button">下一页</button></div></div>
+                    <div id="permissionEditor" class="permission-editor" hidden><div id="permissionSelected" class="permission-selected"></div><label for="roleSelect">分配角色</label>
+                        <select id="roleSelect">
                             <option value="user">普通用户</option>
                             <option value="booster">打手</option>
+                            <option value="support">客服</option>
                             <option value="admin">管理员</option>
                         </select>
-                        <button id="updateRoleBtn" class="submit-btn" style="margin:0; padding:8px 16px;">更新角色</button>
-                    </div>
-                    <p id="roleUpdateMsg" style="margin-top:6px; font-size:0.85rem; color:var(--green);"></p>
+                        <p id="permissionRoleHelp"></p><button id="updateRoleBtn" type="button" disabled>保存权限</button>
+                    </div></div>
+                    <p id="roleUpdateMsg" role="status" aria-live="polite"></p><p class="permission-footnote">客服角色可访问客服工作台；管理员拥有全部管理权限。角色调整会让该用户的旧登录失效，重新登录后生效。</p>
                 </div>
             </div>
             <div id="adminContentSection" style="display:none;">
@@ -1026,15 +1027,17 @@
     <script src="ui-runtime.js"></script>
     <script src="booster-availability.js?v=20260917-b20"></script>
     <script src="rental-client.js"></script>
-    <script src="order-center.js?v=20260917-b27"></script>
-    <script src="order-notifications.js?v=20260916-notify1"></script>
+    <script src="order-center.js?v=20260917-b28"></script>
+    <script src="order-notifications.js?v=20260917-b28"></script>
     <script src="boost-checkout.js?v=20260917-b19"></script>
     <script src="rental-discovery.js?v=20260916-b16"></script>
     <script src="service-defaults.js?v=20260917-b19"></script>
     <script src="service-content.js?v=20260917-b21"></script>
-    <script src="profile-dashboard.js?v=20260917-b25"></script>
+    <script src="profile-dashboard.js?v=20260917-b28"></script>
     <script src="booster-workbench.js?v=20260917-b27"></script>
     <script src="boost-completion.js?v=20260917-b27"></script>
-    <script src="script.js?v=20260917-b27"></script>
+    <script src="customer-support.js?v=20260917-b28"></script>
+    <script src="user-permissions.js?v=20260917-b28"></script>
+    <script src="script.js?v=20260917-b28"></script>
 </body>
 </html>

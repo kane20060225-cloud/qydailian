@@ -37,10 +37,10 @@ function createWecomClient({fetchImpl=fetch,now=Date.now}={}) {
       if(typeof id!=='string'|| !/^[A-Za-z0-9_@.-]{1,64}$/.test(id))throw apiError('NOT_ENTERPRISE_MEMBER');return id;},
     async send(config,userId,notification,siteUrl) {
       if(!/^[A-Za-z0-9_@.-]{1,64}$/.test(userId)||userId==='@all')throw apiError('RECIPIENT');
-      const url=new URL('/',siteUrl);url.searchParams.set('notify_order',notification.order_ref);
+      const url=new URL('/',siteUrl);url.searchParams.set(notification.kind==='support_message'?'support_chat':'notify_order',notification.order_ref);
       url.searchParams.set('notify_kind',notification.kind || 'order_update');
       url.searchParams.set('notify_type',notification.order_type || 'boost');
-      const result=await call(config,'/cgi-bin/message/send',{}, {touser:userId,agentid:config.agent_id,msgtype:'text',text:{content:`${notification.title}\n${notification.body}\n查看订单：${url.href}`},enable_duplicate_check:1,duplicate_check_interval:1800});
+      const result=await call(config,'/cgi-bin/message/send',{}, {touser:userId,agentid:config.agent_id,msgtype:'text',text:{content:`${notification.title}\n${notification.body}\n${notification.kind==='support_message'?'查看咨询':'查看订单'}：${url.href}`},enable_duplicate_check:1,duplicate_check_interval:1800});
       if(result.invaliduser || result.unlicenseduser)throw apiError('RECIPIENT_UNAVAILABLE');return result.msgid || null;
     }
   };

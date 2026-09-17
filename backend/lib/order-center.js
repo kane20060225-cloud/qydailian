@@ -222,4 +222,4 @@ function csvCell(value) {
   return '"' + text.replace(/"/g, '""') + '"';
 }
 
-module.exports = { TYPES, STATES, READ_MODEL_SQL, parseFilters, filterClause, decorateOrder, csvCell, visibleOrdersSql, sortClause };
+module.exports = { TYPES, STATES, ORDER_UNION_SQL, READ_MODEL_SQL, parseFilters, filterClause, decorateOrder, csvCell, visibleOrdersSql, sortClause };
