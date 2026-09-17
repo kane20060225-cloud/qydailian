@@ -1044,6 +1044,7 @@ document.addEventListener('click', async (e) => {
 });
 
 async function loadAdminOrders() {
+    BoostCompletion.loadAdmin();
     return OrderCenter.load('admin');
 }
 document.addEventListener('click', async (e) => {
@@ -1060,16 +1061,7 @@ document.addEventListener('click', async (e) => {
             if (res.ok) { showToast('✅ 接单成功'); loadHallOrders();loadMyBoosterOrders();BoosterAvailability.refresh(); } else showToast('❌ ' + (data.error||'接单失败'));
         } catch (err) { showToast('❌ 网络错误'); } finally { e.target.disabled = false; }
     }
-    if (e.target.classList.contains('complete-order-btn')) {
-        if (!window.confirm('确认已完成此订单服务？确认后将按结算规则记入收益。')) return;
-        e.target.disabled = true;
-        const orderNo = e.target.dataset.order;
-        try {
-            const res = await fetch(`${API_BASE}/booster/complete/${orderNo}`, { method:'POST', headers:{'Authorization':`Bearer ${token}`} });
-            const data = await res.json();
-            if (res.ok) { showToast(`✅ 订单已完成，收益 ¥${data.earnings}`); loadMyBoosterOrders(); } else showToast('❌ ' + (data.error||'操作失败'));
-        } catch (err) { showToast('❌ 网络错误'); } finally { e.target.disabled = false; }
-    }
+    if (e.target.classList.contains('complete-order-btn')) BoostCompletion.open(e.target.dataset.order);
         // 内容管理子标签切换
     if (e.target.classList.contains('content-mgr-tab')) {
         const type = e.target.dataset.ctype;
@@ -1390,6 +1382,7 @@ document.querySelectorAll('.booster-tab').forEach(tab => {
     });
 });
 BoosterWorkbench.init({token:()=>safeGetItem('token'),toast:showToast});
+BoostCompletion.init({token:()=>safeGetItem('token'),toast:showToast});
 async function loadHallOrders() { return BoosterWorkbench.loadHall(); }
 async function loadMyBoosterOrders() { return BoosterWorkbench.loadMy(); }
 async function loadEarnings() { return BoosterWorkbench.loadFinance(); }

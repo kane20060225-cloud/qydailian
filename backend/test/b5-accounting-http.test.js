@@ -74,6 +74,7 @@ const conn = {
       state.stock -= 1;
       return [{ affectedRows: 1 }];
     }
+    if(q.startsWith('SELECT order_ref FROM income_test_orders'))return [[]];
     if (q.startsWith('SELECT * FROM orders WHERE order_no = ? AND booster_id')) {
       return [state.orders.filter((o) => o.order_no === params[0] &&
         o.booster_id === params[1] && o.status === params[2])];
@@ -111,7 +112,7 @@ const fakePool = {
 };
 const originalCreatePool = mysql.createPool;
 mysql.createPool = () => fakePool;
-const { app } = require('../server');
+const { app,settleBoostCompletion } = require('../server');
 mysql.createPool = originalCreatePool;
 
 async function serve(t) {
@@ -171,20 +172,15 @@ test('stale and forged catalog quotes cannot create an order or debit credits',a
  assert.equal(state.users[3].qy_credits,200);assert.equal(state.orders.length,0);assert.equal(state.ledger.length,0);assert.equal(state.audit.length,0);
 });
 
-test('paid booster completion posts earnings and rewards only once', async (t) => {
-  reset();
-  state.orders = [{ order_no: 'WOT-TEST', user_id: 3, booster_id: 7,
-    total_price: 10, status: 'playing', payment_status: 'paid' }];
-  const base = await serve(t);
-  const token = issueSessionToken(7, 0, process.env.JWT_SECRET);
-  const request = () => fetch(`${base}/api/booster/complete/WOT-TEST`, {
-    method: 'POST', headers: { Authorization: `Bearer ${token}` }
-  });
-  assert.equal((await request()).status, 200);
-  assert.equal((await request()).status, 400);
-  assert.equal(state.users[7].earnings, 7.5);
-  assert.equal(state.users[7].booster_points, 750);
-  assert.equal(state.users[3].qy_credits, 230);
-  assert.equal(state.orders[0].status, 'done');
-  assert.equal(state.ledger.length, 3);
+test('direct completion without a screenshot cannot pay earnings or rewards',async t=>{
+ reset();state.orders=[{order_no:'WOT-TEST',user_id:3,booster_id:7,total_price:10,status:'playing',payment_status:'paid'}];
+ const base=await serve(t),token=issueSessionToken(7,0,process.env.JWT_SECRET);
+ assert.equal((await fetch(base+'/api/booster/complete/WOT-TEST',{method:'POST',headers:{Authorization:'Bearer '+token}})).status,400);
+ assert.equal(state.users[7].earnings,0);assert.equal(state.orders[0].status,'playing');assert.equal(state.ledger.length,0);
+});
+test('admin approval settlement atomically posts earnings and rewards only once',async()=>{
+ reset();const order={order_no:'WOT-TEST',user_id:3,booster_id:7,total_price:10,status:'playing',payment_status:'paid'};state.orders=[order];
+ await conn.beginTransaction();assert.equal(await settleBoostCompletion(conn,order,3),7.5);await conn.commit();
+ assert.equal(state.users[7].earnings,7.5);assert.equal(state.users[7].booster_points,750);assert.equal(state.users[3].qy_credits,230);assert.equal(state.orders[0].status,'done');assert.equal(state.ledger.length,3);
+ await conn.beginTransaction();await assert.rejects(()=>settleBoostCompletion(conn,order,3));await conn.rollback();assert.equal(state.ledger.length,3);
 });

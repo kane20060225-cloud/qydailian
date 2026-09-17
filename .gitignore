@@ -2,3 +2,5 @@ node_modules/
 .env
 *.log
 artifacts/ui-preview/
+
+backend/private-uploads/

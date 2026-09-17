@@ -6,6 +6,7 @@ const {createBoosterFinanceRouter}=require('../routes/booster-finance');
 function fixture({legacy=false}={}){
  let balance=100,ledger=legacy?[]:[{id:1,entry_key:'order:TEST:booster_earnings',user_id:7,account_type:'earnings',amount_delta:52.65}],snapshot,failAudit=false;
  const conn={beginTransaction:async()=>snapshot=structuredClone({balance,ledger}),commit:async()=>{},rollback:async()=>({balance,ledger}=snapshot),release(){},execute:async(sql,p)=>{
+  if(sql.startsWith('SELECT order_ref FROM income_test_orders'))return [[]];
   if(sql.startsWith('SELECT order_no'))return [[{order_no:'TEST',booster_id:7,status:'done',payment_status:'paid',total_price:70.2}]];
   if(sql.startsWith('SELECT id,username'))return [[{id:7,username:'fixture',earnings:balance}]];
   if(sql.startsWith('SELECT id,entry_key'))return [ledger];

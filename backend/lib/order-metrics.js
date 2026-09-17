@@ -19,9 +19,9 @@ const METRICS_SQL = `SELECT
  MAX(CASE WHEN action='order_completed' THEN created_at END) AS completed_at
  FROM operation_audit WHERE target_type='order' GROUP BY target_ref) timing ON c.order_type='boost' AND timing.target_ref=c.order_ref
  LEFT JOIN (SELECT customer_id FROM (${READ_MODEL_SQL}) repeat_orders
- WHERE created_at>=DATE_SUB(NOW(),INTERVAL 90 DAY) AND payment_status='paid' AND order_type IN ('boost','rental')
+ WHERE created_at>=DATE_SUB(NOW(),INTERVAL 90 DAY) AND payment_status='paid' AND test_order=0 AND order_type IN ('boost','rental')
  GROUP BY customer_id HAVING COUNT(*)>=2) repeaters ON repeaters.customer_id=c.customer_id
- WHERE c.created_at>=DATE_SUB(NOW(),INTERVAL 90 DAY) AND c.order_type IN ('boost','rental')`;
+ WHERE c.created_at>=DATE_SUB(NOW(),INTERVAL 90 DAY) AND c.test_order=0 AND c.order_type IN ('boost','rental')`;
 function decorateMetrics(row) {
   const rate = (numerator,denominator) => Number(denominator)>0 ? Number((Number(numerator)/Number(denominator)*100).toFixed(1)) : null;
   const hours = value => value == null ? null : Number(Number(value).toFixed(2));

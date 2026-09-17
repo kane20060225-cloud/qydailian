@@ -13,6 +13,8 @@ const { generateTotpSecret, verifyTotpCode } = require('./lib/totp');
 const { createRecoveryCodes, hashRecoveryCode } = require('./lib/recovery-codes');
 const { postAccountDelta, recordOperation } = require('./lib/accounting');
 const {createBoosterFinanceRouter}=require('./routes/booster-finance');
+const {createCompletionRouter}=require('./routes/boost-completion');
+const boostCompletion=require('./lib/boost-completion');
 const { validateRentalPaymentEvidence } = require('./lib/rental-payment-evidence');
 const { saveRentalScreenshot, MAX_IMAGE_BYTES } = require('./lib/rental-stream-upload');
 const {
@@ -537,6 +539,8 @@ async function initDB() {
         FOREIGN KEY (reviewer_id) REFERENCES users(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    await boostCompletion.migrate(pool);
 
     // 兼容旧字段 / 确保字段存在
     try { await pool.execute(`ALTER TABLE users ADD COLUMN qy_credits INT DEFAULT 0`); } catch(e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
@@ -1507,6 +1511,9 @@ app.get('/api/booster/my-orders', boosterMiddleware, async (req, res) => {
     const [rows] = await pool.execute(
       `SELECT order_no, project, detail, quantity, player_name, total_price, status, client_type, required_identity, urgent, created_at,
        (total_price * 0.75) AS earnings,
+       (SELECT cs.status FROM boost_completion_submissions cs WHERE cs.order_no=orders.order_no ORDER BY cs.id DESC LIMIT 1) AS completion_status,
+       (SELECT cs.review_reason FROM boost_completion_submissions cs WHERE cs.order_no=orders.order_no ORDER BY cs.id DESC LIMIT 1) AS completion_reason,
+       EXISTS(SELECT 1 FROM income_test_orders t WHERE t.order_type='boost' AND t.order_ref=orders.order_no) AS test_order,
        (SELECT l.amount_delta FROM account_ledger l WHERE l.entry_key=CONCAT('order:',orders.order_no,':booster_earnings') AND l.user_id=orders.booster_id AND l.account_type='earnings') AS settled_earnings,
        EXISTS(SELECT 1 FROM account_ledger r WHERE r.entry_key=CONCAT('order:',orders.order_no,':booster_earnings_test_reversal')) AS earnings_reversed FROM orders WHERE booster_id = ? AND ${visibleOrdersSql('boost','orders.order_no')} ORDER BY created_at DESC`,
       [req.userId]
@@ -1515,18 +1522,15 @@ app.get('/api/booster/my-orders', boosterMiddleware, async (req, res) => {
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
-app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) => {
-  const { orderNo } = req.params;
-  const boosterId = req.userId;
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    await conn.beginTransaction();
-    const [rows] = await conn.execute('SELECT * FROM orders WHERE order_no = ? AND booster_id = ? AND status = ? FOR UPDATE', [orderNo, boosterId, 'playing']);
-    if (rows.length === 0) { await conn.rollback(); return res.status(400).json({ error: '订单无法完成' }); }
-    const order = rows[0];
-    if (order.payment_status !== 'paid') { await conn.rollback(); return res.status(400).json({ error: '该订单尚未确认支付，无法完成' }); }
-
+async function settleBoostCompletion(conn,order,actor) {
+    const orderNo=order.order_no,boosterId=order.booster_id;
+    const [testOrders]=await conn.execute("SELECT order_ref FROM income_test_orders WHERE order_type='boost' AND order_ref=?",[orderNo]);
+    if(testOrders.length) {
+      const [result]=await conn.execute('UPDATE orders SET status = ? WHERE order_no = ? AND status = ?', ['done',orderNo,'playing']);
+      if(result.affectedRows!==1)throw Error('订单状态已变化');
+      await recordOperation(conn,{eventKey:`order:${orderNo}:completed`,actorUserId:actor,action:'order_completed',targetType:'order',targetRef:orderNo});
+      return 0;
+    }
     const earnings = Math.round(order.total_price * 0.75 * 100) / 100;
     const pointsEarned = Math.floor(earnings * 100);
     const [completed] = await conn.execute(
@@ -1538,14 +1542,14 @@ app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) =
       await postAccountDelta(conn, {
         userId: boosterId, accountType: 'earnings', delta: earnings,
         entryKey: `order:${orderNo}:booster_earnings`, sourceType: 'order',
-        sourceRef: orderNo, actorUserId: boosterId
+        sourceRef: orderNo, actorUserId: actor
       });
     }
     if (pointsEarned > 0) {
       await postAccountDelta(conn, {
         userId: boosterId, accountType: 'booster_points', delta: pointsEarned,
         entryKey: `order:${orderNo}:booster_points`, sourceType: 'order',
-        sourceRef: orderNo, actorUserId: boosterId
+        sourceRef: orderNo, actorUserId: actor
       });
     }
     await checkBoosterUpgrade(conn, boosterId);
@@ -1555,7 +1559,7 @@ app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) =
       await postAccountDelta(conn, {
         userId: order.user_id, accountType: 'qy_credits', delta: creditsEarned,
         entryKey: `order:${orderNo}:customer_credits`, sourceType: 'order',
-        sourceRef: orderNo, actorUserId: boosterId
+        sourceRef: orderNo, actorUserId: actor
       });
     }
     await conn.execute('UPDATE users SET total_earned_credits = total_earned_credits + ? WHERE id = ?',
@@ -1571,18 +1575,16 @@ app.post('/api/booster/complete/:orderNo', boosterMiddleware, async (req, res) =
     else if (totalCredits >= 600) newVip = 1;
     await conn.execute('UPDATE users SET vip_level = ? WHERE id = ?', [newVip, order.user_id]);
     await recordOperation(conn, {
-      eventKey: `order:${orderNo}:completed`, actorUserId: boosterId,
+      eventKey: `order:${orderNo}:completed`, actorUserId: actor,
       action: 'order_completed', targetType: 'order', targetRef: orderNo
     });
 
     await sendMessage(order.user_id, '订单已完成', `您的订单 ${orderNo} 已代练完成，感谢您的信任！`,conn,`completed:${orderNo}`);
 
-    await conn.commit();
-    res.json({ success: true, message: '订单已完成', earnings });
-    notificationSystem.poke();
-  } catch(err) { if (conn) await conn.rollback(); res.status(500).json({ error: '服务器错误' }); }
-  finally { if (conn) conn.release(); }
-});
+    return earnings;
+}
+app.use('/api',createCompletionRouter({pool,authMiddleware,boosterMiddleware,adminMiddleware,
+ uploadDir:path.join(__dirname,'private-uploads','boost-completion'),settle:settleBoostCompletion,notify:()=>notificationSystem.poke()}));
 
 app.get('/api/booster/earnings', boosterMiddleware, async (req, res) => {
   try {
@@ -1978,6 +1980,8 @@ app.put('/api/admin/rental/orders/:orderNo/review-payment', adminMiddleware, asy
 });
 
 async function postRentalOwnerEarning(conn, order, actorUserId) {
+  const [testOrders]=await conn.execute("SELECT order_ref FROM income_test_orders WHERE order_type='rental' AND order_ref=?",[order.order_no]);
+  if(testOrders.length)return;
   const amount = Math.round(Number(order.total_price) * 100) / 100;
   if (!Number.isFinite(amount) || amount < 0) throw new Error('租号收益金额无效');
   if (amount === 0) return;
@@ -3221,4 +3225,4 @@ if (require.main === module) {
   startServer();
 }
 
-module.exports = { app, startServer };
+module.exports = { app, startServer, settleBoostCompletion };

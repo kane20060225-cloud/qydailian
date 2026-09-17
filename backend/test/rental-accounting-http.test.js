@@ -36,6 +36,7 @@ const connection = {
   release() {},
   async execute(sql, params) {
     const q = sql.replace(/\s+/g, ' ').trim();
+    if(q.startsWith('SELECT order_ref FROM income_test_orders'))return [[]];
     if (q.startsWith('SELECT * FROM rental_accounts') && q.endsWith('FOR UPDATE')) {
       return [[{ id: 9, owner_id: 8, hourly_price: 2, daily_price: 10 }]];
     }

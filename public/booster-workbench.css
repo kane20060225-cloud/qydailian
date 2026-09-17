@@ -100,3 +100,5 @@ body .bw-danger { min-height:44px; padding:10px 16px; color:var(--red); backgrou
 }
 .booster-tab-content { min-width:0; }
 body #earningsDisplay { background:transparent; padding:0; border-radius:0; color:var(--text); }
+
+.completion-preview{display:block;width:100%;height:auto;max-height:60vh;object-fit:contain;background:var(--bg-dark,#111827);border-radius:12px;margin:16px 0;cursor:zoom-in}.completion-preview[hidden]{display:none}.completion-queue{padding:24px;margin-bottom:24px}.completion-queue h3{margin:0}.completion-queue .bw-order-card{border:1px solid var(--border-color,#334155);border-radius:16px;padding:18px}.bw-test-dialog input[type=file]{width:100%;padding:12px;font:inherit}.bw-test-dialog [data-completion-error]{color:#ef8b8b;overflow-wrap:anywhere}

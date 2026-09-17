@@ -17,14 +17,14 @@ function filters(query={},now=Date.now()) {
  return {range,from,to,page};
 }
 async function earningsRead(pool,userId,query) {
- const f=filters(query),params=[userId];let where="l.user_id=? AND l.account_type='earnings'";
+ const f=filters(query),params=[userId];let where="l.user_id=? AND l.account_type='earnings' AND l.id>COALESCE((SELECT ledger_cutoff FROM income_reset_checkpoint WHERE id=1),0)";
  if(f.from!==null){where+=' AND l.created_at>=FROM_UNIXTIME(?) AND l.created_at<FROM_UNIXTIME(?)';params.push(f.from,f.to);}
  const [users]=await pool.execute('SELECT earnings,role FROM users WHERE id=?',[userId]);if(!users.length)fail('账户不存在',404);
  const [summary]=await pool.execute(`SELECT COALESCE(SUM(CASE WHEN l.amount_delta>0 THEN l.amount_delta ELSE 0 END),0) AS income,
  COALESCE(SUM(CASE WHEN l.amount_delta<0 THEN -l.amount_delta ELSE 0 END),0) AS deductions,
  COALESCE(SUM(l.amount_delta),0) AS net,COUNT(*) AS total FROM account_ledger l WHERE ${where}`,params);
- const [tracked]=await pool.execute("SELECT COALESCE(SUM(amount_delta),0) AS net FROM account_ledger WHERE user_id=? AND account_type='earnings'",[userId]);
- const [pending]=await pool.execute("SELECT COUNT(*) AS orders,COALESCE(SUM(ROUND(total_price*0.75,2)),0) AS estimate FROM orders WHERE booster_id=? AND status='playing' AND payment_status='paid'",[userId]);
+ const [tracked]=await pool.execute("SELECT COALESCE(SUM(amount_delta),0) AS net FROM account_ledger WHERE user_id=? AND account_type='earnings' AND id>COALESCE((SELECT ledger_cutoff FROM income_reset_checkpoint WHERE id=1),0)",[userId]);
+ const [pending]=await pool.execute("SELECT COUNT(*) AS orders,COALESCE(SUM(ROUND(total_price*0.75,2)),0) AS estimate FROM orders WHERE booster_id=? AND status='playing' AND payment_status='paid' AND NOT EXISTS(SELECT 1 FROM income_test_orders t WHERE t.order_type='boost' AND t.order_ref=orders.order_no)",[userId]);
  const [entries]=await pool.execute(`SELECT l.id,l.source_ref AS order_no,l.amount_delta,l.source_type,UNIX_TIMESTAMP(l.created_at)*1000 AS occurred_at,
  o.project,o.detail,o.total_price,o.status,
  CASE WHEN l.entry_key=CONCAT('order:',l.source_ref,':booster_earnings') THEN 1 ELSE 0 END AS order_income,
@@ -44,6 +44,7 @@ const reversalKey=ref=>`order:${ref}:booster_earnings_test_reversal`;
 async function preview(db,ref,legacyAmount,lock=false) {
  if(typeof ref!=='string'||!/^[A-Za-z0-9_-]{1,64}$/.test(ref))fail('订单号无效');
  const [orders]=await db.execute('SELECT order_no,booster_id,status,payment_status,total_price FROM orders WHERE order_no=?'+(lock?' FOR UPDATE':''),[ref]);
+ const [testRows]=await db.execute("SELECT order_ref FROM income_test_orders WHERE order_type='boost' AND order_ref=?",[ref]);if(testRows.length)fail('该历史测试订单已整批清零，不可重复冲正',409);
  const order=orders[0];if(!order)fail('订单不存在',404);
  if(order.status!=='done'||order.payment_status!=='paid'||!order.booster_id)fail('只能核对已完成且已核实收款的接单收益',409);
  const [users]=await db.execute('SELECT id,username,earnings FROM users WHERE id=?'+(lock?' FOR UPDATE':''),[order.booster_id]);if(!users.length)fail('打手账户不存在',404);

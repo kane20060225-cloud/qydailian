@@ -3,7 +3,7 @@ const {operational}=require('./order-guidance');
 
 const TYPES = Object.freeze(['boost', 'rental', 'recharge', 'shop', 'third_party']);
 const STATES = Object.freeze({
-  boost: { pending_payment: '待支付', payment_review: '待核实收款', awaiting_assignment: '待接单', in_progress: '代练中', completed: '已完成', closed: '已取消', exception: '状态待核对' },
+  boost: { pending_payment: '待支付', payment_review: '待核实收款', awaiting_assignment: '待接单', in_progress: '代练中', awaiting_acceptance: '待审核结单', completed: '已完成', closed: '已取消', exception: '状态待核对' },
   rental: { pending_payment: '待支付', payment_review: '待核实收款', awaiting_activation: '待确认租用', in_progress: '租用中', awaiting_acceptance: '待确认完成', dispute: '争议处理中', completed: '已完成', closed: '已取消' },
   recharge: { pending_payment: '待支付', credit_pending: '到账处理中', credited: '已到账', closed: '已关闭', exception: '到账待核对' },
   shop: { completed: '已兑换' },
@@ -18,12 +18,14 @@ SELECT 'boost' AS order_type, o.order_no AS order_ref, CONCAT(o.project,' · ',o
  NULL AS payment_reference, NULL AS ticket_quantity, NULL AS credited_at, NULL AS provider_status,
  CASE WHEN o.status='cancelled' AND o.payment_status='unpaid' THEN 'closed'
  WHEN o.status='done' AND o.payment_status='paid' THEN 'completed'
- WHEN o.status IN ('done','playing') AND o.payment_status!='paid' THEN 'exception' WHEN o.status='playing' THEN 'in_progress'
+ WHEN o.status IN ('done','playing') AND o.payment_status!='paid' THEN 'exception'
+ WHEN o.status='playing' AND EXISTS(SELECT 1 FROM boost_completion_submissions cs WHERE cs.order_no=o.order_no AND cs.status='pending') THEN 'awaiting_acceptance' WHEN o.status='playing' THEN 'in_progress'
  WHEN o.status='pending' AND o.payment_status='paid' THEN 'awaiting_assignment'
  WHEN o.status='pending' AND o.payment_status='pending' THEN 'payment_review'
  WHEN o.status='pending' AND o.payment_status='unpaid' AND o.total_price=0 THEN 'payment_review'
  WHEN o.status='pending' THEN 'pending_payment' ELSE 'exception' END AS state,
  CASE WHEN o.status IN ('done','playing') AND o.payment_status!='paid' THEN 'exception'
+ WHEN o.status='playing' AND EXISTS(SELECT 1 FROM boost_completion_submissions cs WHERE cs.order_no=o.order_no AND cs.status='pending') THEN 'acceptance'
  WHEN o.status!='done' AND o.payment_status='pending' THEN 'payment'
  WHEN o.status='pending' AND o.payment_status='unpaid' AND o.total_price=0 THEN 'payment'
  WHEN o.status='pending' AND o.payment_status='paid' AND o.booster_id IS NULL AND o.hall_status IS NULL THEN 'review'
@@ -97,7 +99,7 @@ const STAGE_SQL = `CASE WHEN c.state='payment_review' THEN history.submitted_at
  WHEN c.state IN ('completed','credited') THEN COALESCE(history.completed_at,c.credited_at)
  WHEN c.state='rejected' THEN tw.updated_at
  WHEN c.state='pending' THEN tw.last_resubmitted_at ELSE NULL END`;
-const READ_MODEL_SQL = `SELECT c.*, a.archived_at, ${REMOVED_SQL} AS removed_at, DATE_ADD(${REMOVED_SQL},INTERVAL 14 DAY) AS purge_after, r.reason AS removal_reason,
+const READ_MODEL_SQL = `SELECT c.*, EXISTS(SELECT 1 FROM income_test_orders it WHERE it.order_type=c.order_type AND it.order_ref=c.order_ref) AS test_order, a.archived_at, ${REMOVED_SQL} AS removed_at, DATE_ADD(${REMOVED_SQL},INTERVAL 14 DAY) AS purge_after, r.reason AS removal_reason,
  ${STAGE_SQL} AS stage_recorded_at, bo.urgent, dq.status AS deletion_status, dq.reason AS deletion_reason, dq.review_note AS deletion_review_note,
  dq.created_at AS deletion_requested_at, COALESCE(dq.retain_records,0) AS retention_protected,
  GREATEST(c.created_at,COALESCE(history.updated_at,c.created_at),COALESCE(a.archived_at,c.created_at),COALESCE(rw.updated_at,c.created_at),COALESCE(tw.updated_at,c.created_at),COALESCE(c.credited_at,c.created_at)) AS last_updated_at
@@ -112,7 +114,7 @@ const READ_MODEL_SQL = `SELECT c.*, a.archived_at, ${REMOVED_SQL} AS removed_at,
  MAX(CASE WHEN action IN ('manual_payment_submitted','rental_payment_submitted') THEN created_at END) AS submitted_at,
  MAX(CASE WHEN action IN ('manual_payment_confirmed','manual_payment_confirmed_without_evidence','payment_confirmed','rental_payment_confirmed') THEN created_at END) AS paid_at,
  MAX(CASE WHEN action IN ('order_taken','rental_activated') THEN created_at END) AS started_at,
- MAX(CASE WHEN action IN ('rental_completion_requested') THEN created_at END) AS acceptance_at,
+ MAX(CASE WHEN action IN ('rental_completion_requested','boost_completion_submitted') THEN created_at END) AS acceptance_at,
  MAX(CASE WHEN action='rental_disputed' THEN created_at END) AS disputed_at,
  MAX(CASE WHEN action IN ('order_completed','rental_completed_by_renter','rental_dispute_resolved_completed') THEN created_at END) AS completed_at
  FROM operation_audit GROUP BY target_type,target_ref) history
@@ -197,6 +199,7 @@ function decorateOrder(row, userId, admin) {
     }
   } else if (row.order_type === 'boost') {
     if (own && row.payment_status === 'unpaid' && Number(row.amount)>0 && row.state==='pending_payment') actions.push('boost_payment');
+    if(admin && row.state==='awaiting_acceptance')actions.push('boost_review');
     if (admin && row.state === 'payment_review') actions.push('boost_confirm_payment');
     if (admin && row.state === 'awaiting_assignment' && row.admin_task === 'review') actions.push('boost_dispatch');
   } else if (row.order_type === 'rental') {
