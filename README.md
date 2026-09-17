@@ -50,6 +50,8 @@ Velnora 积分图标及浏览器 favicon 发布结果见 [B24_DEPLOYMENT_REPORT.
 
 订单关联人工客服、客服角色、搜索式权限管理和企业微信离站提醒验收见 [B28_CUSTOMER_SUPPORT.md](docs/B28_CUSTOMER_SUPPORT.md)。上线前需运行 B28 增量迁移，并用真实客服手机验证提醒链路。
 
+B28 已完成上线、生产迁移和管理员手机提醒确认，发布及备份结果见 [B28_DEPLOYMENT_REPORT.md](docs/B28_DEPLOYMENT_REPORT.md)。客服账号可在管理员权限面板自行设置。
+
 打手工作台卡片、收益明细与测试收益核对冲正见 [B26_DEPLOYMENT_REPORT.md](docs/B26_DEPLOYMENT_REPORT.md)。B26 无数据库迁移，后端已重启；测试收益由管理员逐单核对后操作。
 
 结单截图必填、管理员审核后结算及历史测试收入清零见 [B27_DEPLOYMENT_REPORT.md](docs/B27_DEPLOYMENT_REPORT.md)。B27 新增审核和测试收入记录表；历史现金收益已清零并保留原流水，新订单从审核通过后开始计入收益。
