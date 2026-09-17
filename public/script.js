@@ -782,7 +782,7 @@ async function loadProfile() {
             <p><span>用户名：</span><span>${user.username}</span></p>
             <p><span>邮箱：</span><span>${user.email || '未填写'}</span></p>
             <p><span>手机：</span><span>${user.phone || '未填写'}</span></p>
-            <p><span>情谊积分：</span><span><img src="qy-coin.png" alt="" style="width:18px;height:18px;vertical-align:middle;margin-right:4px;">${credits.qy_credits}（可用）/ ${totalEarned}（累计）</span></p>
+            <p><span>Velnora 积分：</span><span><img src="qy-coin.png" alt="" style="width:18px;height:18px;vertical-align:middle;margin-right:4px;">${credits.qy_credits}（可用）/ ${totalEarned}（累计）</span></p>
             <p><span>VIP等级：</span><span>${vipNames[currentVip]}</span></p>
             <div style="background:var(--surface-track); border-radius:10px; height:10px; margin:8px 0; width:100%;">
                 <div style="width:${vipProgress}%; height:100%; background:var(--accent); border-radius:10px;"></div>

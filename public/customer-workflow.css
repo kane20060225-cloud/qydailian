@@ -12,6 +12,17 @@
 .boost-success-reference { font-family:var(--font-mono); overflow-wrap:anywhere; color:var(--accent); }
 .rental-filters { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; padding:16px; border:1px solid var(--border); border-radius:12px; margin-bottom:12px; }
 .rental-filters label { display:grid; gap:6px; font-size:.85rem; }
+.rental-filter-panel { margin-bottom:12px; border:1px solid var(--border); border-radius:14px; background:var(--card-bg); overflow:hidden; }
+.rental-filter-panel > summary { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; min-height:48px; list-style:none; cursor:pointer; font-weight:600; }
+.rental-filter-panel > summary::-webkit-details-marker { display:none; }
+.rental-filter-panel > summary:hover { color:var(--accent); }
+.rental-filter-panel > summary:focus-visible { outline:2px solid var(--accent); outline-offset:-4px; }
+.rental-filter-toggle { display:flex; align-items:center; gap:8px; color:var(--text-muted); font-size:.85rem; font-weight:400; }
+.rental-filter-panel .rental-filter-collapse { display:none; }
+.rental-filter-panel[open] .rental-filter-expand { display:none; }
+.rental-filter-panel[open] .rental-filter-collapse { display:inline; }
+.rental-filter-panel[open] .rental-filter-chevron { transform:rotate(180deg); }
+body .rental-filter-panel .rental-filters { margin:0; border:0; border-top:1px solid var(--border); border-radius:0; }
 .rental-filters input,.rental-filters select { width:100%; min-width:0; padding:8px; background:var(--card-bg); color:var(--text); border:1px solid var(--border); border-radius:6px; }
 #rentalFilterResult { font-size:.85rem; color:var(--text-muted); margin-bottom:12px; }
 .rental-account-card .rental-tanks { min-height:3em; color:var(--text); }

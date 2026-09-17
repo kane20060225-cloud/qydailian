@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blitz情谊工具站</title>
+    <title>QY Blitz | WOT Blitz Tools &amp; Services</title>
     <script>
         try { document.documentElement.dataset.theme = localStorage.getItem('theme') === 'light' ? 'light' : 'dark'; }
         catch { document.documentElement.dataset.theme = 'dark'; }
@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="order-center.css?v=20260916-b16">
     <link rel="stylesheet" href="order-notifications.css?v=20260916-notify1">
     <link rel="stylesheet" href="booster-availability.css?v=20260916-b18">
-    <link rel="stylesheet" href="customer-workflow.css?v=20260916-b16">
+    <link rel="stylesheet" href="customer-workflow.css?v=20260917-b23">
     <link rel="stylesheet" href="ui-foundation.css?v=20260917-webp1">
     <link rel="stylesheet" href="light-theme.css?v=20260917-b19">
     <link rel="stylesheet" href="theme-components.css?v=20260917-b19">
@@ -24,9 +24,9 @@
     <script>document.body.classList.toggle('theme-light', document.documentElement.dataset.theme === 'light');</script>
     <!-- 顶部栏 -->
     <header class="top-bar">
-        <a class="logo-area" href="#mainMenu" data-nav-target="mainMenu" aria-label="Blitz情谊工具站，返回首页">
+        <a class="logo-area" href="#mainMenu" data-nav-target="mainMenu" aria-label="QY Blitz，返回首页">
             <span class="logo-icon" aria-hidden="true">🎯</span>
-            <span class="logo-text">Blitz情谊工具站</span>
+            <span class="logo-text">QY Blitz</span>
         </a>
         <nav class="site-nav" aria-label="全站导航">
             <a class="site-nav-link" href="#boost" data-nav-target="boost">代练下单</a>
@@ -67,7 +67,7 @@
     <main id="mainMenu" class="main-menu">
         <section class="home-hero" aria-labelledby="homeTitle">
             <div class="hero-copy">
-                <span class="hero-eyebrow">WOTB 玩家服务与实用工具</span>
+                <span class="hero-eyebrow">WOT Blitz 玩家服务与实用工具</span>
                 <h1 id="homeTitle">更快完成下单，<br>更清楚掌握进度</h1>
                 <p>选择代练服务、查找可租账号，或使用常用计算工具。下单前查看费用，登录后随时跟踪订单。</p>
                 <div class="hero-actions">
@@ -239,9 +239,9 @@
                 </label>
                 <p class="urgent-hint">加急服务将在总价基础上额外增加10%费用，优先安排打手</p>
 
-                <!-- 情谊积分抵扣区域 -->
+                <!-- Velnora 积分抵扣区域 -->
                 <div class="credits-section" style="margin-bottom:15px;">
-                    <div class="card-header"><span class="card-num">🎫</span><h3>情谊积分抵扣</h3></div>
+                    <div class="card-header"><span class="card-num">🎫</span><h3>Velnora 积分抵扣</h3></div>
                     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                         <span>可用积分：<strong id="availableCredits">0</strong></span>
                         <input type="number" id="useCreditsInput" placeholder="使用积分" min="0" step="100" style="width:120px;" class="remark-input">
@@ -377,17 +377,20 @@
         <div class="container">
             <!-- 租号大厅 -->
             <div id="rentalHallView" class="rental-view">
-                <form id="rentalFilters" class="rental-filters" aria-label="查找可租账号">
-                    <label>客户端<select name="client"><option value="">全部客户端</option><option>Android</option><option>iOS</option></select></label>
-                    <label>坦克名称<input name="tank" type="search" placeholder="例如 IS-7" maxlength="80"></label>
-                    <label>计价单位<select name="unit"><option value="hour">按小时</option><option value="day">按天</option></select></label>
-                    <label>最低单价（元）<input name="min" type="number" min="0" step="0.01"></label>
-                    <label>最高单价（元）<input name="max" type="number" min="0" step="0.01"></label>
-                    <label>可用时段关键词<input name="availability" type="search" placeholder="如晚上、周末（按出租方说明）" maxlength="80"></label>
-                    <label>可租状态<select name="availabilityStatus"><option value="available">现在可申请</option><option value="">全部账号</option><option value="rented">租用中</option><option value="reserved">待交接</option></select></label>
-                    <label>排序<select name="sort"><option value="default">默认</option><option value="price">价格从低到高</option></select></label>
-                    <button type="reset">清空筛选</button>
-                </form>
+                <details id="rentalFilterPanel" class="rental-filter-panel">
+                    <summary><span>筛选账号</span><span class="rental-filter-toggle"><span class="rental-filter-expand">展开筛选</span><span class="rental-filter-collapse">收起筛选</span><span class="rental-filter-chevron" aria-hidden="true">⌄</span></span></summary>
+                    <form id="rentalFilters" class="rental-filters" aria-label="查找可租账号">
+                        <label>客户端<select name="client"><option value="">全部客户端</option><option>Android</option><option>iOS</option></select></label>
+                        <label>坦克名称<input name="tank" type="search" placeholder="例如 IS-7" maxlength="80"></label>
+                        <label>计价单位<select name="unit"><option value="hour">按小时</option><option value="day">按天</option></select></label>
+                        <label>最低单价（元）<input name="min" type="number" min="0" step="0.01"></label>
+                        <label>最高单价（元）<input name="max" type="number" min="0" step="0.01"></label>
+                        <label>可用时段关键词<input name="availability" type="search" placeholder="如晚上、周末（按出租方说明）" maxlength="80"></label>
+                        <label>可租状态<select name="availabilityStatus"><option value="available">现在可申请</option><option value="">全部账号</option><option value="rented">租用中</option><option value="reserved">待交接</option></select></label>
+                        <label>排序<select name="sort"><option value="default">默认</option><option value="price">价格从低到高</option></select></label>
+                        <button type="reset">清空筛选</button>
+                    </form>
+                </details>
                 <p id="rentalFilterResult" role="status"></p>
                 <button id="refreshRentalHallBtn" type="button" style="margin-bottom:12px;">刷新可租账号</button>
                 <div id="rentalHallList" class="rental-grid">正在加载…</div>
@@ -1020,12 +1023,12 @@
     <script src="ui-runtime.js"></script>
     <script src="booster-availability.js?v=20260917-b20"></script>
     <script src="rental-client.js"></script>
-    <script src="order-center.js?v=20260917-b20"></script>
+    <script src="order-center.js?v=20260917-b23"></script>
     <script src="order-notifications.js?v=20260916-notify1"></script>
     <script src="boost-checkout.js?v=20260917-b19"></script>
     <script src="rental-discovery.js?v=20260916-b16"></script>
     <script src="service-defaults.js?v=20260917-b19"></script>
     <script src="service-content.js?v=20260917-b21"></script>
-    <script src="script.js?v=20260917-b21"></script>
+    <script src="script.js?v=20260917-b23"></script>
 </body>
 </html>

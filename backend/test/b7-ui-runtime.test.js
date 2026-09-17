@@ -51,5 +51,5 @@ test('B7 upload, mobile table and theme cleanup stay wired into the page', () =>
   assert.match(script, /onProgress\(percent\)/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.responsive-table/);
   assert.equal((css.match(/#adminCustomList table\s*\{/g) || []).length, 1);
-  assert.equal((css.match(/background-image:\s*url\('bg\.png'\)/g) || []).length, 1);
+  assert.equal((css.match(/background-image:\s*url\('bg\.webp'\)/g) || []).length, 1);
 });

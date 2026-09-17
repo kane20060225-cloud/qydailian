@@ -72,7 +72,7 @@ FROM payment_orders p JOIN users u ON u.id=p.user_id
  AND l.user_id=p.user_id AND l.account_type='chest_tickets' AND l.amount_delta>0
 UNION ALL
 SELECT 'shop',CONCAT('SHOP',p.id),p.item_name,p.user_id,NULL,p.price_credits,'credits','completed','paid',p.purchased_at,
- '情谊积分',NULL,NULL,NULL,NULL,'completed',NULL,u.username,NULL
+ 'Velnora 积分',NULL,NULL,NULL,NULL,'completed',NULL,u.username,NULL
 FROM qy_purchases p JOIN users u ON u.id=p.user_id
 UNION ALL
 SELECT 'third_party',o.order_no,o.content,o.creator_id,NULL,o.price,'money',o.status,o.payment_status,o.created_at,

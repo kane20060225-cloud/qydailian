@@ -12,7 +12,7 @@ function paymentFormParams(order, env) {
     return_url: env.ALIPAY_RETURN_URL,
     bizContent: {
       out_trade_no: order.out_trade_no, total_amount: String(order.amount),
-      subject: `情谊工具站充值 ${order.ticket_quantity} 军需券`,
+      subject: `QY Blitz 充值 ${order.ticket_quantity} 军需券`,
       product_code: 'FAST_INSTANT_TRADE_PAY', timeout_express: '30m'
     }
   };
