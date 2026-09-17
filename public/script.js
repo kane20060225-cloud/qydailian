@@ -1051,21 +1051,24 @@ document.addEventListener('click', async (e) => {
     if (e.target.classList.contains('detail-btn')) { showOrderDetail(e.target.dataset.order); }
     if (e.target.classList.contains('copy-order-detail-btn')) { copyOrderDetail(e.target.dataset.order); }
     if (e.target.classList.contains('take-order-btn')) {
+        e.target.disabled = true;
         const orderNo = e.target.dataset.order;
         try {
             const availability=await BoosterAvailability.prepareTake();if(!availability)return;
             const res = await fetch(`${API_BASE}/booster/take/${orderNo}`, { method:'POST', headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(availability) });
             const data = await res.json();
-            if (res.ok) { showToast('✅ 接单成功'); loadHallOrders();BoosterAvailability.refresh(); } else showToast('❌ ' + (data.error||'接单失败'));
-        } catch (err) { showToast('❌ 网络错误'); }
+            if (res.ok) { showToast('✅ 接单成功'); loadHallOrders();loadMyBoosterOrders();BoosterAvailability.refresh(); } else showToast('❌ ' + (data.error||'接单失败'));
+        } catch (err) { showToast('❌ 网络错误'); } finally { e.target.disabled = false; }
     }
     if (e.target.classList.contains('complete-order-btn')) {
+        if (!window.confirm('确认已完成此订单服务？确认后将按结算规则记入收益。')) return;
+        e.target.disabled = true;
         const orderNo = e.target.dataset.order;
         try {
             const res = await fetch(`${API_BASE}/booster/complete/${orderNo}`, { method:'POST', headers:{'Authorization':`Bearer ${token}`} });
             const data = await res.json();
             if (res.ok) { showToast(`✅ 订单已完成，收益 ¥${data.earnings}`); loadMyBoosterOrders(); } else showToast('❌ ' + (data.error||'操作失败'));
-        } catch (err) { showToast('❌ 网络错误'); }
+        } catch (err) { showToast('❌ 网络错误'); } finally { e.target.disabled = false; }
     }
         // 内容管理子标签切换
     if (e.target.classList.contains('content-mgr-tab')) {
@@ -1386,48 +1389,10 @@ document.querySelectorAll('.booster-tab').forEach(tab => {
         else if (target === 'booster-availability') BoosterAvailability.showSchedule();
     });
 });
-async function loadHallOrders() {
-    const token = safeGetItem('token');
-    const list = getEl('hallOrderList'); if (!list) return;
-    try {
-        const profileRes = await fetch(`${API_BASE}/user/profile`, { headers: { 'Authorization': `Bearer ${token}` } });
-        const profile = await profileRes.json();
-        const myIdentity = profile.booster_identity || 'standard';
-        const myWeight = identityWeights[myIdentity] || 0;
-        const res = await fetch(`${API_BASE}/booster/hall`, { headers:{'Authorization':`Bearer ${token}`} });
-        const orders = await res.json();
-        const filtered = orders.filter(o => (identityWeights[o.required_identity]||0) <= myWeight);
-        if (!filtered.length) { list.innerHTML = '<p>暂无可接订单</p>'; return; }
-        let html = '<table><tr><th>订单号</th><th>项目</th><th>数量</th><th>客户端</th><th>要求</th><th>预估收益</th><th>操作</th></tr>';
-        const identityMap = { gold:'金牌', silver:'银牌', standard:'标准', budget:'特惠' };
-        filtered.forEach(o => {
-            html += `<tr><td>${o.order_no}</td><td>${o.project} - ${o.detail}</td><td>${o.quantity}</td><td>${o.client_type||'未知'}</td><td>${identityMap[o.required_identity]||'标准'}</td><td>¥${Number(o.earnings).toFixed(2)}</td><td><button class="take-order-btn" data-order="${o.order_no}">接单</button></td></tr>`;
-        });
-        html += '</table>'; list.innerHTML = html;
-    } catch (err) { list.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
-}
-async function loadMyBoosterOrders() {
-    const token = safeGetItem('token'); const list = getEl('myBoosterOrderList'); if (!list) return;
-    try {
-        const res = await fetch(`${API_BASE}/booster/my-orders`, { headers:{'Authorization':`Bearer ${token}`} });
-        const orders = await res.json();
-        if (!orders.length) { list.innerHTML = '<p>暂无订单</p>'; return; }
-        const statusMap = { pending: '待接单', playing: '代练中', done: '已完成' };
-        let html = '<table><tr><th>订单号</th><th>项目</th><th>数量</th><th>客户端</th><th>预估收益</th><th>状态</th><th>操作</th></tr>';
-        orders.forEach(o => {
-            html += `<tr><td>${o.order_no}</td><td>${o.project} - ${o.detail}</td><td>${o.quantity}</td><td>${o.client_type||'未知'}</td><td>¥${Number(o.earnings).toFixed(2)}</td><td>${statusMap[o.status]||o.status}</td><td>${o.status==='playing'?`<button class="complete-order-btn" data-order="${o.order_no}">完成</button>`:''}${o.status!=='pending'?`<button class="detail-btn" data-order="${o.order_no}">详情</button>`:''}</td></tr>`;
-        });
-        html += '</table>'; list.innerHTML = html;
-    } catch (err) { list.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
-}
-async function loadEarnings() {
-    const token = safeGetItem('token'); const display = getEl('earningsDisplay'); if (!display) return;
-    try {
-        const res = await fetch(`${API_BASE}/booster/earnings`, { headers:{'Authorization':`Bearer ${token}`} });
-        const data = await res.json();
-        display.innerHTML = `<p>累计收益：<strong>¥${data.earnings}</strong></p>`;
-    } catch (err) { display.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
-}
+BoosterWorkbench.init({token:()=>safeGetItem('token'),toast:showToast});
+async function loadHallOrders() { return BoosterWorkbench.loadHall(); }
+async function loadMyBoosterOrders() { return BoosterWorkbench.loadMy(); }
+async function loadEarnings() { return BoosterWorkbench.loadFinance(); }
 
 // ==================== 开箱模拟器（后端持久化版） ====================
 

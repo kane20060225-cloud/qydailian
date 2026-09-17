@@ -12,6 +12,7 @@ const { createAuthMiddleware, issueSessionToken } = require('./lib/auth-session'
 const { generateTotpSecret, verifyTotpCode } = require('./lib/totp');
 const { createRecoveryCodes, hashRecoveryCode } = require('./lib/recovery-codes');
 const { postAccountDelta, recordOperation } = require('./lib/accounting');
+const {createBoosterFinanceRouter}=require('./routes/booster-finance');
 const { validateRentalPaymentEvidence } = require('./lib/rental-payment-evidence');
 const { saveRentalScreenshot, MAX_IMAGE_BYTES } = require('./lib/rental-stream-upload');
 const {
@@ -847,6 +848,7 @@ function boosterMiddleware(req, res, next) {
   });
 }
 
+app.use('/api',createBoosterFinanceRouter({pool,boosterMiddleware,adminMiddleware}));
 app.use('/api',createAvailabilityRouter({pool,boosterMiddleware,adminMiddleware}));
 app.use('/api',createServiceContentRouter({pool,adminMiddleware,recordOperation}));
 
@@ -1466,8 +1468,8 @@ app.put('/api/admin/users/:userId/role', adminMiddleware, async (req, res) => {
 app.get('/api/booster/hall', boosterMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT order_no, project, detail, quantity, player_name, total_price, status, client_type, required_identity, created_at,
-       (total_price * 0.75) AS earnings FROM orders WHERE hall_status = 'open' AND booster_id IS NULL AND status = 'pending' ORDER BY created_at DESC`
+      `SELECT order_no, project, detail, quantity, player_name, total_price, status, client_type, required_identity, urgent, created_at,
+       (total_price * 0.75) AS earnings FROM orders WHERE hall_status = 'open' AND booster_id IS NULL AND status = 'pending' AND payment_status='paid' ORDER BY urgent DESC,created_at ASC created_at DESC`
     );
     res.json(rows);
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }
@@ -1492,7 +1494,7 @@ app.post('/api/booster/take/:orderNo', boosterMiddleware, async (req, res) => {
     await recordOperation(conn,{eventKey:`order:${orderNo}:taken`,actorUserId:boosterId,action:'order_taken',targetType:'order',targetRef:orderNo});
     if(req.body?.go_online===true)await changeAvailability(conn,boosterId,boosterId,validateChange({action:'temporary',online:true,hours:2}),'take_online');
     await enqueueUser(conn,{userId:orderRows[0].user_id,key:`taken:${orderNo}`,ref:orderNo,title:'订单已接单',body:`订单 ${orderNo} 已有打手接单，可在个人中心查看进度。`});
-    await enqueueUser(conn,{userId:boosterId,key:`take_confirmed:${orderNo}`,kind:'take_confirmed',ref:orderNo,title:'接单成功',body:`订单 ${orderNo} 已分配给你，请在打手面板查看并开始处理。`});
+    await enqueueUser(conn,{userId:boosterId,key:`take_confirmed:${orderNo}`,kind:'take_confirmed',ref:orderNo,title:'接单成功',body:`订单 ${orderNo} 已分配给你，请在打手工作台查看并开始处理。`});
     await conn.commit();
     notificationSystem.poke();
     res.json({ success: true, message: '接单成功' });
@@ -1503,8 +1505,10 @@ app.post('/api/booster/take/:orderNo', boosterMiddleware, async (req, res) => {
 app.get('/api/booster/my-orders', boosterMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT order_no, project, detail, quantity, player_name, total_price, status, client_type, required_identity, created_at,
-       (total_price * 0.75) AS earnings FROM orders WHERE booster_id = ? AND ${visibleOrdersSql('boost','orders.order_no')} ORDER BY created_at DESC`,
+      `SELECT order_no, project, detail, quantity, player_name, total_price, status, client_type, required_identity, urgent, created_at,
+       (total_price * 0.75) AS earnings,
+       (SELECT l.amount_delta FROM account_ledger l WHERE l.entry_key=CONCAT('order:',orders.order_no,':booster_earnings') AND l.user_id=orders.booster_id AND l.account_type='earnings') AS settled_earnings,
+       EXISTS(SELECT 1 FROM account_ledger r WHERE r.entry_key=CONCAT('order:',orders.order_no,':booster_earnings_test_reversal')) AS earnings_reversed FROM orders WHERE booster_id = ? AND ${visibleOrdersSql('boost','orders.order_no')} ORDER BY created_at DESC`,
       [req.userId]
     );
     res.json(rows);
