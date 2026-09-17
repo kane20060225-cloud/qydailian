@@ -35,7 +35,7 @@ const {decorateOrder}=require('../lib/order-center'),{guidance}=require('../lib/
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,theme+' '+viewport.width+' '+name+' overflow');
     assert.deepEqual(errors,[],name+' page errors');
     const background=await page.evaluate(()=>getComputedStyle(document.body).backgroundImage);
-    if(theme==='light')assert.equal(background,'none');else assert.match(background,/bg\.png/);
+    if(theme==='light')assert.equal(background,'none');else assert.match(background,/bg\.webp/);
     const layout=await page.evaluate(()=>Array.from(document.body.querySelectorAll('*')).filter(el=>el.getClientRects().length&& !el.closest('.toast-message')).map(el=>{
       const r=el.getBoundingClientRect(),s=getComputedStyle(el),round=n=>Math.round(n*2)/2;
       return {element:el.tagName+':'+el.id+':'+String(el.className),rect:[r.width,r.height,round(r.x+scrollX),round(r.y+scrollY)].map(round),display:s.display,font:s.fontSize,line:s.lineHeight,padding:s.padding,margin:s.margin,radius:s.borderRadius};

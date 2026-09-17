@@ -1213,7 +1213,7 @@ input[type="text"], input[type="password"], input[type="email"], input[type="tel
 
 /* ==================== 背景图片（不混合） ==================== */
 body {
-    background-image: url('bg.png');
+    background-image: url('bg.webp');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;

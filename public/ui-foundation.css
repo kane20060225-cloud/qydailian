@@ -11,7 +11,7 @@
   --modal-shadow-color: rgba(0,0,0,.35); --menu-shadow-color: rgba(0,0,0,.28); --toast-shadow-color: rgba(0,0,0,.25); --bar-shadow-color: rgba(0,0,0,.2);
   --toast-bg: rgba(0,0,0,.8); --toast-text: #fff; --toast-border: #1e2a3a;
   --shadow-sm: 0 2px 6px rgba(0,0,0,.08); --shadow-md: 0 8px 24px rgba(0,0,0,.18);
-  --page-image: url('bg.png'); --home-background: linear-gradient(180deg,rgba(10,15,26,.46),rgba(10,15,26,.94) 72%,var(--bg));
+  --page-image: url('bg.webp'); --home-background: linear-gradient(180deg,rgba(10,15,26,.46),rgba(10,15,26,.94) 72%,var(--bg));
   --hero-button-bg: linear-gradient(135deg,#f6bd71,#e9973e); --hero-button-text: #141414;
   --boost-button-bg: linear-gradient(135deg,#f0ad60,#e58a2f); --boost-button-hover: linear-gradient(135deg,#f4ba73,#ec9840); --boost-button-text: #17130f;
   --login-bg: transparent; --login-border: #58a6ff; --login-text: #58a6ff; --login-hover: rgba(88,166,255,.1);

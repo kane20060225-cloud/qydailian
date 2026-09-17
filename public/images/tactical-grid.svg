@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420" fill="none">
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" stroke="#87b4d8" stroke-opacity=".07"/>
+      <circle cx="0" cy="0" r="1" fill="#87b4d8" fill-opacity=".15"/>
+    </pattern>
+    <linearGradient id="fade" x1="640" y1="0" x2="120" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#87b4d8" stop-opacity=".3"/>
+      <stop offset="1" stop-color="#87b4d8" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#grid)" d="M0 0h640v420H0z"/>
+  <g stroke="url(#fade)">
+    <circle cx="528" cy="210" r="140"/>
+    <circle cx="528" cy="210" r="112" stroke-dasharray="2 9"/>
+    <circle cx="528" cy="210" r="82"/>
+    <path d="M528 46v70m0 188v70M364 210h70m188 0h18M429 111l30 30m138 138 30 30m-198 0 30-30m138-138 30-30"/>
+    <path d="m528 152 50 29v58l-50 29-50-29v-58z"/>
+    <path d="m510 205 18 18 28-36M260 30h170l30-30M320 390h110l30 30M610 30h-30v30M610 360v30h-30"/>
+  </g>
+  <g stroke="#edab63" stroke-opacity=".22">
+    <path d="M389 210a139 139 0 0 1 139-139M610 323a139 139 0 0 1-82 27M24 40h44M24 48h24"/>
+    <path d="m594 16 8 8m4-8 8 8m4-8 8 8" stroke-width="3"/>
+  </g>
+</svg>

@@ -1,0 +1,221 @@
+/* Visual surfaces only: retain the shared layout, theme controls and workflows. */
+body {
+  --arena-cool: rgba(83, 171, 220, .12);
+  --arena-warm: rgba(240, 160, 80, .13);
+  --arena-edge: rgba(146, 177, 208, .23);
+  --arena-panel: linear-gradient(135deg, rgba(30, 42, 57, .96), rgba(13, 21, 33, .98));
+  --arena-inset: linear-gradient(145deg, #1a2636, #101925);
+  --arena-shadow: 0 12px 32px rgba(0, 0, 0, .22), inset 0 1px 0 rgba(255, 255, 255, .045);
+  --arena-texture: url('images/tactical-grid.svg');
+}
+
+body:not(.theme-light) {
+  background-image:
+    radial-gradient(ellipse at 7% 15%, var(--arena-warm), transparent 42%),
+    radial-gradient(ellipse at 95% 32%, var(--arena-cool), transparent 45%),
+    linear-gradient(180deg, rgba(5, 11, 20, .38), rgba(5, 11, 20, .88)),
+    url('bg.webp');
+  background-position: center;
+  background-size: cover;
+}
+
+body .main-menu {
+  background: linear-gradient(180deg, transparent, var(--bg) 96%);
+}
+
+body .top-bar {
+  background: linear-gradient(110deg, var(--header-bg), var(--header-bg));
+  border-bottom-color: var(--arena-edge);
+  box-shadow: 0 1px 0 var(--arena-warm), 0 8px 28px var(--header-shadow-color);
+  backdrop-filter: blur(18px);
+}
+
+body .home-hero {
+  isolation: isolate;
+  border-color: var(--arena-edge);
+  background:
+    linear-gradient(90deg, rgba(12, 20, 31, .98) 8%, rgba(12, 20, 31, .86) 49%, rgba(12, 20, 31, .24)),
+    radial-gradient(ellipse at 84% 30%, rgba(72, 142, 183, .24), transparent 62%),
+    url('bg.webp') center 64% / cover;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+
+body .home-hero::before {
+  width: 112px;
+  background: linear-gradient(90deg, var(--accent), #ffe1a8, transparent);
+  box-shadow: 0 0 24px var(--accent-glow);
+}
+
+body .home-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--arena-texture) right center / auto 100% no-repeat;
+  opacity: .7;
+}
+
+body .hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--accent);
+}
+
+body .hero-eyebrow::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+body .hero-panel {
+  background: linear-gradient(145deg, rgba(30, 45, 62, .88), rgba(11, 20, 31, .94));
+  border-color: var(--arena-edge);
+  box-shadow: var(--arena-shadow);
+  backdrop-filter: blur(8px);
+}
+
+body .hero-panel li > span {
+  background: var(--arena-inset);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+
+body .main-menu .service-card,
+body .main-menu .quick-card {
+  position: relative;
+  isolation: isolate;
+  background: var(--arena-panel);
+  border-color: var(--arena-edge);
+  box-shadow: var(--arena-shadow);
+  overflow: hidden;
+  transition: border-color .2s, box-shadow .2s, transform .2s;
+}
+
+body .main-menu .service-card::before,
+body .main-menu .quick-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 100% 0, var(--arena-cool), transparent 68%),
+    var(--arena-texture) right center / auto 230% no-repeat;
+}
+
+body .main-menu .service-card::after,
+body .main-menu .quick-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 24px;
+  width: 48px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+  pointer-events: none;
+}
+
+body .main-menu .service-card-primary,
+body .main-menu .service-card-primary:hover {
+  background: linear-gradient(115deg, rgba(62, 43, 29, .98), rgba(25, 30, 39, .98) 65%);
+  border-color: rgba(240, 160, 80, .45);
+}
+
+body .main-menu .service-card:hover,
+body .main-menu .quick-card:hover {
+  background: var(--arena-panel);
+  border-color: var(--accent);
+  box-shadow: 0 14px 36px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+
+body .service-card .menu-icon {
+  border: 1px solid var(--accent-border);
+  background: linear-gradient(145deg, var(--accent-soft), var(--surface-inset));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 4px 16px rgba(0, 0, 0, .12);
+}
+
+body .card,
+body .rental-account-card,
+body .oc-card,
+body .tp-order-card,
+body .news-item,
+body .content-item-card {
+  background:
+    radial-gradient(ellipse at 100% 0, var(--arena-cool), transparent 60%),
+    var(--arena-texture) right top / 360px auto no-repeat,
+    var(--arena-panel);
+  border-color: var(--arena-edge);
+  box-shadow: var(--arena-shadow);
+}
+
+body .card:hover { box-shadow: var(--arena-shadow); }
+body .card-header { border-bottom: 1px solid var(--arena-edge); padding-bottom: 14px; }
+body .card-num { border: 1px solid var(--accent-border); border-radius: 9px; }
+
+body .card-inner,
+body .detail-inner,
+body .player-inner {
+  background: var(--arena-inset);
+  border-color: var(--arena-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035);
+}
+
+body .project-card input:checked + .card-inner,
+body .detail-card input:checked + .detail-inner,
+body .player-card input:checked + .player-inner {
+  background: linear-gradient(145deg, var(--accent-soft), var(--surface-inset));
+  border-color: var(--accent);
+  box-shadow: inset 0 0 24px var(--accent-soft), 0 0 14px var(--accent-glow);
+}
+
+body .price-box,
+body .calc-result {
+  background: linear-gradient(125deg, var(--accent-soft), var(--surface-inset) 75%);
+  border-color: var(--accent-border);
+}
+
+body:not(.theme-light) .hero-panel li small,
+body:not(.theme-light) .service-copy small,
+body:not(.theme-light) .quick-card small,
+body:not(.theme-light) .card-desc { color: #a4b2c4; }
+
+/* Light mode uses the same tactical details with pale metal surfaces. */
+body.theme-light {
+  --arena-cool: rgba(55, 117, 198, .055);
+  --arena-warm: rgba(40, 89, 207, .08);
+  --arena-edge: #d4deed;
+  --arena-panel: linear-gradient(135deg, #fff, #f0f4fb);
+  --arena-inset: linear-gradient(145deg, #fff, #eef3fa);
+  --arena-shadow: 0 8px 26px rgba(24, 36, 59, .055), inset 0 1px 0 #fff;
+}
+
+body.theme-light .home-hero {
+  background:
+    radial-gradient(ellipse at 96% 10%, rgba(40, 89, 207, .1), transparent 58%),
+    linear-gradient(110deg, #fff, #edf3fc);
+  box-shadow: var(--arena-shadow);
+}
+
+body.theme-light .hero-panel { background: var(--arena-panel); }
+body.theme-light .main-menu .service-card-primary,
+body.theme-light .main-menu .service-card-primary:hover {
+  background: linear-gradient(115deg, #eaf1ff, #fff);
+  border-color: var(--accent-border);
+}
+
+@media (max-width: 700px) {
+  body:not(.theme-light) { background-attachment: scroll; }
+  body .home-hero::after { opacity: .4; }
+  body .card, body .rental-account-card, body .oc-card { background-size: auto, 250px auto, auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body .main-menu .service-card,
+  body .main-menu .quick-card { transition: none; }
+  body .main-menu .service-card:hover,
+  body .main-menu .quick-card:hover { transform: none; }
+}
