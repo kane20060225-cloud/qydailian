@@ -41,3 +41,5 @@
 登录设备归并优化、标题后的活动弹窗和居中下单布局见 [B21_DEVICES_ACTIVITIES.md](docs/B21_DEVICES_ACTIVITIES.md)，生产发布验收见 [B21_DEPLOYMENT_REPORT.md](docs/B21_DEPLOYMENT_REPORT.md)。
 
 电竞背景、卡片战术纹理与 WebP 图片压缩的发布结果见 [B22_DEPLOYMENT_REPORT.md](docs/B22_DEPLOYMENT_REPORT.md)。B22 仅发布前端文件，无需数据库迁移或后端重启。
+
+QY Blitz 品牌、Velnora 积分和租号折叠筛选的发布结果见 [B23_DEPLOYMENT_REPORT.md](docs/B23_DEPLOYMENT_REPORT.md)。B23 无数据库迁移，后端已重启。
