@@ -1469,7 +1469,7 @@ app.get('/api/booster/hall', boosterMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT order_no, project, detail, quantity, player_name, total_price, status, client_type, required_identity, urgent, created_at,
-       (total_price * 0.75) AS earnings FROM orders WHERE hall_status = 'open' AND booster_id IS NULL AND status = 'pending' AND payment_status='paid' ORDER BY urgent DESC,created_at ASC created_at DESC`
+       (total_price * 0.75) AS earnings FROM orders WHERE hall_status = 'open' AND booster_id IS NULL AND status = 'pending' AND payment_status='paid' ORDER BY urgent DESC,created_at ASC`
     );
     res.json(rows);
   } catch(err) { res.status(500).json({ error: '服务器错误' }); }

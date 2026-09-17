@@ -47,4 +47,13 @@ async function explain(db,finance){
  }};
  await finance.earnings(adapter,0,{range:'7'});assert.equal(queries,4);return queries;
 }
-module.exports={verify,explain};
+async function explainOrders(db,source,visibleOrdersSql){
+ for(const endpoint of ['/api/booster/hall','/api/booster/my-orders']){
+  const start=source.indexOf("app.get('"+endpoint+"'");assert.ok(start>0);
+  const part=source.slice(start,source.indexOf('\n});',start));let sql=/`([\s\S]*?)`/.exec(part)[1];
+  sql=sql.replace("${visibleOrdersSql('boost','orders.order_no')}",visibleOrdersSql('boost','orders.order_no'));
+  await db.execute('EXPLAIN '+sql,endpoint.endsWith('my-orders')?[0]:[]);
+ }
+ return 2;
+}
+module.exports={verify,explain,explainOrders};

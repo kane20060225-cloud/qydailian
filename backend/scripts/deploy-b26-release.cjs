@@ -53,7 +53,7 @@ function atomic(name, bytes, mode) {
   const isolated=await mysql.createConnection(dbOptions);let mysqlChecks;
   try{mysqlChecks=await verifier.verify(isolated,finance);}finally{await isolated.end();}
   const readOnly=await mysql.createConnection(dbOptions);
-  try{await readOnly.query('SET TRANSACTION READ ONLY');await readOnly.beginTransaction();mysqlChecks.production_explain_queries=await verifier.explain(readOnly,finance);await readOnly.rollback();}finally{await readOnly.end();}
+  try{await readOnly.query('SET TRANSACTION READ ONLY');await readOnly.beginTransaction();mysqlChecks.production_explain_queries=await verifier.explain(readOnly,finance);mysqlChecks.order_explain_queries=await verifier.explainOrders(readOnly,fs.readFileSync(root+'/code/backend/server.js','utf8'),require(site+'/backend/lib/order-center').visibleOrdersSql);await readOnly.rollback();}finally{await readOnly.end();}
   const healthy=async()=>{for(let i=0;i<30;i++){try{if((await fetch('http://127.0.0.1:'+Number(cfg.PORT||3000)+'/api/health',{signal:AbortSignal.timeout(1000)})).status===200)return;}catch{}await new Promise(r=>setTimeout(r,500));}throw Error('Backend health timeout');};
   // Publish assets first so the new document never references missing files.
   const publishOrder = [...manifest.files.filter(file => file.path !== 'public/index.html'), manifest.files.find(file=>file.path==='public/index.html')];
