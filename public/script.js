@@ -758,7 +758,8 @@ async function loadProfile() {
     const info = getEl('profileInfo');
     if (!info) return;
     const token = safeGetItem('token');
-    if (!token) { info.innerHTML = '<p style="color:var(--red)">请先登录</p>'; return; }
+    if (!token) { info.innerHTML = '<div class="profile-load-state">请先登录后查看账户信息。</div>'; return; }
+    info.innerHTML = '<div class="profile-load-state" role="status">正在加载账户信息…</div>';
     try {
         const [userRes, creditRes] = await Promise.all([
             fetch(`${API_BASE}/user/profile`, { headers: { 'Authorization': `Bearer ${token}` } }),
@@ -767,39 +768,17 @@ async function loadProfile() {
         const user = await userRes.json();
         const credits = await creditRes.json();
 
-        const vipNames = ['VIP 0', 'VIP 1', 'VIP 2', 'VIP 3', 'VIP 4', 'VIP 5'];
-        const vipThresholds = [0, 600, 1500, 3000, 6000, 15000];
-        const currentVip = credits.vip_level || 0;
-        const totalEarned = credits.total_earned_credits || 0;
-        let nextThreshold = vipThresholds[currentVip + 1] || totalEarned;
-        let vipProgress = 0;
-        if (nextThreshold > 0) {
-            const prevThreshold = vipThresholds[currentVip] || 0;
-            vipProgress = Math.min(100, Math.floor(((totalEarned - prevThreshold) / (nextThreshold - prevThreshold)) * 100));
-        }
-
-        info.innerHTML = `
-            <p><span>用户名：</span><span>${user.username}</span></p>
-            <p><span>邮箱：</span><span>${user.email || '未填写'}</span></p>
-            <p><span>手机：</span><span>${user.phone || '未填写'}</span></p>
-            <p><span>Velnora 积分：</span><span><img src="velnora-coin.png?v=20260917-b24" alt="" style="width:18px;height:18px;vertical-align:middle;margin-right:4px;">${credits.qy_credits}（可用）/ ${totalEarned}（累计）</span></p>
-            <p><span>VIP等级：</span><span>${vipNames[currentVip]}</span></p>
-            <div style="background:var(--surface-track); border-radius:10px; height:10px; margin:8px 0; width:100%;">
-                <div style="width:${vipProgress}%; height:100%; background:var(--accent); border-radius:10px;"></div>
-            </div>
-            <p style="font-size:0.75rem; color:var(--text-muted);">升级还需 ${nextThreshold - totalEarned} 积分</p>
-            <p><span>信誉分：</span><span>${user.reputation}</span></p>
-            <p><span>推荐码：</span><span>${user.referral_code}</span></p>
-            <p><span>打手身份：</span><span>${({gold:'金牌打手',silver:'银牌打手',standard:'标准打手',budget:'特惠打手'})[user.booster_identity] || '标准打手'}</span></p>
-            <p><span>打手积分：</span><span>${user.booster_points || 0}</span></p>
-            <p><span>注册时间：</span><span>${new Date(user.created_at).toLocaleString()}</span></p>
-            <div style="margin-top:10px;">
-                <button class="submit-btn" id="openShopBtn">🎁 积分商城</button>
-            </div>
-        `;
+        if (safeGetItem('token') !== token) return;
+        if (!userRes.ok || !creditRes.ok) throw new Error('Profile request failed');
+        info.innerHTML = ProfileDashboard.render(user, credits);
+        getEl('profileSettingsBtn')?.addEventListener('click', () => showSection('settings'));
 
         getEl('openShopBtn')?.addEventListener('click', () => showSection('qyshop'));
-    } catch (err) { info.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+    } catch (err) {
+        if (safeGetItem('token') !== token) return;
+        info.innerHTML = '<div class="profile-load-state" role="status">账户信息加载失败，请重试。<button type="button" id="retryProfileBtn">重新加载</button></div>';
+        getEl('retryProfileBtn')?.addEventListener('click', loadProfile);
+    }
 }
 async function loadOrders() {
     return OrderCenter.load('user');

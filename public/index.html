@@ -23,13 +23,14 @@
     <link rel="stylesheet" href="service-content.css?v=20260917-b21-2">
     <link rel="stylesheet" href="dark-theme.css?v=20260917-b19">
     <link rel="stylesheet" href="esports-surfaces.css?v=20260917-webp1">
+    <link rel="stylesheet" href="profile-dashboard.css?v=20260917-b25">
 </head>
 <body>
     <script>document.body.classList.toggle('theme-light', document.documentElement.dataset.theme === 'light');</script>
     <!-- 顶部栏 -->
     <header class="top-bar">
         <a class="logo-area" href="#mainMenu" data-nav-target="mainMenu" aria-label="QY Blitz，返回首页">
-            <span class="logo-icon" aria-hidden="true">🎯</span>
+            <span class="logo-icon" aria-hidden="true"><img src="velnora-coin.png?v=20260917-b24" alt="" width="38" height="38"></span>
             <span class="logo-text">QY Blitz</span>
         </a>
         <nav class="site-nav" aria-label="全站导航">
@@ -482,15 +483,12 @@
     <div id="sectionProfile" class="content-section" style="display: none;">
         <div class="section-top">
             <button class="back-btn" data-back="mainMenu">← 返回首页</button>
-            <h2 class="section-heading">👤 个人中心</h2>
+            <h2 class="section-heading">个人中心</h2>
         </div>
-        <div class="container">
-            <section class="card">
-                <h4 style="color:var(--accent); margin-bottom:10px;">基本信息</h4>
-                <div class="profile-info" id="profileInfo">正在加载…</div>
-            </section>
-            <section class="card">
-                <h4 style="color:var(--accent); margin-bottom:10px;">所有订单</h4>
+        <div class="container profile-layout">
+            <div class="profile-dashboard" id="profileInfo">正在加载…</div>
+            <section class="card profile-orders-card">
+                <div class="profile-orders-heading"><h4>我的订单</h4><p>查看进度、付款与处理记录</p></div>
                 <div id="userOrderCenter" class="order-center"><div class="oc-list" id="orderList">正在加载…</div></div>
             </section>
         </div>
@@ -1033,6 +1031,7 @@
     <script src="rental-discovery.js?v=20260916-b16"></script>
     <script src="service-defaults.js?v=20260917-b19"></script>
     <script src="service-content.js?v=20260917-b21"></script>
-    <script src="script.js?v=20260917-b24"></script>
+    <script src="profile-dashboard.js?v=20260917-b25"></script>
+    <script src="script.js?v=20260917-b25"></script>
 </body>
 </html>
