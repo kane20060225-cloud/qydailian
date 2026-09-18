@@ -22,4 +22,12 @@
 
 .support-shell.support-compact #supportConnection,.support-shell.support-compact .support-compose p:last-child{display:none}.support-shell.support-compact .support-header{padding:8px 12px}.support-shell.support-compact .support-header small{font-size:11px}.support-shell.support-compact .support-compose textarea{height:50px}.support-shell.support-compact .support-quick{margin-bottom:4px}.support-shell.support-compact .support-order{max-height:60px;overflow:auto}.support-shell.support-compact .support-compose-actions{gap:6px}
 
-@media(max-width:600px){.support-launch{bottom:calc(80px + env(safe-area-inset-bottom))}}
+@media(max-width:760px){
+ .support-launch{bottom:calc(var(--mobile-nav-height,0px) + max(16px,env(safe-area-inset-bottom)))}
+ body[data-current-section=thirdparty] #sectionThirdParty{padding-bottom:calc(var(--mobile-nav-height,0px) + var(--support-launch-height,44px) + max(16px,env(safe-area-inset-bottom)) + 24px)}
+}
+@media(max-width:700px){
+ body[data-current-section=boost] .support-launch{bottom:calc(var(--mobile-nav-height,0px) + var(--boost-checkout-height,80px) + max(8px,env(safe-area-inset-bottom)) + 12px)}
+ body[data-current-section=boost] .boost-checkout-bar{bottom:calc(var(--mobile-nav-height,0px) + max(8px,env(safe-area-inset-bottom)))}
+ body[data-current-section=boost] #sectionBoost{padding-bottom:calc(var(--mobile-nav-height,0px) + var(--boost-checkout-height,80px) + var(--support-launch-height,44px) + max(8px,env(safe-area-inset-bottom)) + 36px)}
+}

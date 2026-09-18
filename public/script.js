@@ -362,6 +362,7 @@ function restoreNavigation() {
 function layoutNavigation() {
     const header = document.querySelector('.top-bar');
     if (header) document.documentElement.style.setProperty('--site-header-height', `${header.offsetHeight}px`);
+    measureMobileControls();
     [
         {id: 'adminNavMore', selector: '.admin-tab', attribute: 'admintab', items: ['roles', 'content', 'shop', 'chest'], width: 1400},
         {id: 'settingsNavMore', selector: '.settings-nav-btn', attribute: 'setting', items: ['order-defaults', 'language', 'messages', 'devices'], width: 1400}
@@ -425,6 +426,7 @@ function showSection(target) {
     if (!targetSection) return;
     targetSection.style.display = 'block';
     document.body.dataset.currentSection = target;
+    measureMobileControls();
     syncNavigation(target);
     saveNavigation();
     if (userDropdown) userDropdown.style.display = 'none';
@@ -3708,15 +3710,24 @@ getEl('goUploadPaymentBtn')?.addEventListener('click', () => {
 
 
 // ==================== 启动 ====================
+function measureMobileControls() {
+    const rootStyle = document.documentElement.style;
+    [['.mobile-nav', '--mobile-nav-height'], ['#boostCheckoutBar', '--boost-checkout-height'], ['#supportLaunch', '--support-launch-height']].forEach(([selector, variable]) => {
+        const element = document.querySelector(selector);
+        rootStyle.setProperty(variable, `${element?.getBoundingClientRect().height || 0}px`);
+    });
+}
 init();
 window.addEventListener('popstate', restoreNavigation);
 window.addEventListener('resize', layoutNavigation);
 layoutNavigation();
 if (typeof ResizeObserver !== 'undefined') {
-    new ResizeObserver(() => {
+    const layoutObserver = new ResizeObserver(() => {
         const header = document.querySelector('.top-bar');
         document.documentElement.style.setProperty('--site-header-height', `${header.offsetHeight}px`);
-    }).observe(document.querySelector('.top-bar'));
+        measureMobileControls();
+    });
+    document.querySelectorAll('.top-bar, .mobile-nav, #boostCheckoutBar, #supportLaunch').forEach(element => layoutObserver.observe(element, { box: 'border-box' }));
 }
 if (window.location.hash) restoreNavigation();
 else syncNavigation('mainMenu');
