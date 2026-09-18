@@ -21,6 +21,12 @@ const {chromium}=require('playwright');
    await r.fulfill({json:d});
   });
   await page.goto(origin,{waitUntil:'domcontentloaded'});await page.locator('#supportLaunch').waitFor();await page.evaluate(()=>showSection('boost'));await page.locator('#boostCheckoutBar').waitFor();await page.waitForTimeout(100);
+  if(!process.env.B29_PROBE){
+   const progress=await page.locator('.boost-progress').evaluate(el=>{const card=el.getBoundingClientRect();return {left:card.left,right:card.right,steps:[...el.querySelectorAll('span')].map(s=>{const b=s.getBoundingClientRect();return {left:b.left,right:b.right,center:(b.left+b.right)/2,height:b.height};})};});
+   assert.equal(progress.steps.length,3);for(const step of progress.steps){assert.ok(step.left>=progress.left&&step.right<=progress.right,'Step exceeds progress card');assert.ok(step.height>=44,'Step touch target too short');}
+   const [a,b,c]=progress.steps.map(s=>s.center);assert.ok(Math.abs((b-a)-(c-b))<=2,'Steps are unevenly spaced');
+   if(width===1440||width===390)await page.locator('.boost-progress').screenshot({path:path.join(out,`${process.env.B29_ORIGIN?'live-':''}${theme}-${width}-progress.png`)});
+  }
   const boost=await page.evaluate(()=>{const b=document.querySelector('#boostCheckoutBar').getBoundingClientRect(),s=document.querySelector('#supportLaunch').getBoundingClientRect(),n=document.querySelector('.mobile-nav').getBoundingClientRect();return {bar:{top:b.top,bottom:b.bottom},support:{top:s.top,bottom:s.bottom},nav:{top:n.top,height:n.height},overflow:document.documentElement.scrollWidth-innerWidth};});
   console.log(theme,width,'boost',JSON.stringify(boost));
   if(!process.env.B29_PROBE&&width<=700){assert.ok(boost.support.bottom<=boost.bar.top-7,'Support overlaps checkout');if(width<=600)assert.ok(boost.bar.bottom<=boost.nav.top,'Checkout overlaps navigation');}

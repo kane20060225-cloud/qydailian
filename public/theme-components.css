@@ -98,7 +98,15 @@ body .detail-price, body .chest-price, body #ticketBalance { color: var(--price)
 body .qty-btn { background: var(--surface-muted); border: 1px solid var(--border); border-radius: 10px; color: var(--text-secondary); }
 body .urgent-toggle input:checked + .toggle-track { background: var(--accent); }
 body .toggle-track { background: var(--control-border); }
-body .boost-progress { justify-content: flex-start; padding: 18px 22px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; margin-top: 0; }
+body .boost-progress {
+  display: grid;
+  grid-template-columns: minmax(max-content,1fr) minmax(8px,.4fr) minmax(max-content,1fr) minmax(8px,.4fr) minmax(max-content,1fr);
+  align-items: center; padding: 12px 22px; background: var(--card-bg);
+  border: 1px solid var(--border); border-radius: 12px; margin-top: 0;
+}
+body .boost-progress span { justify-content: center; min-height: 44px; }
+body .boost-progress b { flex-shrink: 0; }
+body .boost-progress i { width: 100%; margin: 0; }
 body .boost-progress .active b { background: var(--primary-bg); color: var(--on-primary); border-color: var(--primary-bg); }
 body .boost-progress .completed b { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
 body #boostStepTitle { margin-top: 4px; font-size: 1.3rem; }
@@ -282,7 +290,7 @@ body .async-state-error { background: var(--danger-soft); color: var(--red); bor
   body .panel-nav button { font-size: .8rem; padding: 8px 10px; }
   body .card { padding: 20px 16px; border-radius: 12px; }
   body .boost-progress { padding: 14px 12px; font-size: .75rem; }
-  body .boost-progress i { margin: 0 8px; flex: 1; }
+  body .boost-progress i { margin: 0; }
   body .boost-progress b { width: 24px; height: 24px; }
   body .boost-checkout-bar { padding: 12px 14px; border-radius: 14px 14px 0 0; box-shadow: 0 -6px 24px var(--bar-shadow-color); }
   body .rental-filters { padding: 16px 12px; gap: 12px; }
