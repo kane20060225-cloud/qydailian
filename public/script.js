@@ -259,6 +259,9 @@ document.querySelectorAll('.back-btn').forEach(btn => {
         showSection(target);
     });
 });
+document.querySelectorAll('.site-nav-link').forEach(link => {
+    link.addEventListener('dragstart', event => event.preventDefault());
+});
 document.querySelectorAll('[data-nav-target]').forEach(btn => {
     btn.addEventListener('click', (event) => {
         if (btn.tagName === 'A' && (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)) return;
