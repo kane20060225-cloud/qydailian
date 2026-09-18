@@ -101,7 +101,21 @@ const publicDir = process.env.PUBLIC_DIR
   ? path.resolve(process.env.PUBLIC_DIR)
   : (fs.existsSync(repositoryPublicDir) ? repositoryPublicDir : legacyPublicDir);
 
-app.use(express.static(publicDir));
+app.use(express.static(publicDir, {
+  setHeaders(res, filePath) {
+    const name = path.basename(filePath);
+    if (name === 'service-worker.js') {
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Service-Worker-Allowed', '/');
+    } else if (name === 'manifest.webmanifest') {
+      res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache');
+    } else if (name === 'index.html' || name === 'pwa.js') {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  }
+}));
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));

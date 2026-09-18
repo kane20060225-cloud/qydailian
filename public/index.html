@@ -3,6 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0a0f1a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="QY Blitz">
+    <link rel="manifest" href="/manifest.webmanifest">
     <link rel="icon" href="favicon.ico?v=20260917-b24" sizes="16x16 32x32 48x48">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=20260917-b24">
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=20260917-b24">
@@ -28,6 +34,7 @@
     <link rel="stylesheet" href="customer-support.css?v=20260918-b29">
     <link rel="stylesheet" href="community-pages.css?v=20260918-b32-inline-nav">
     <link rel="stylesheet" href="game-tools.css?v=20260919-b33">
+    <link rel="stylesheet" href="pwa.css?v=20260919-pwa1">
 </head>
 <body>
     <script>document.body.classList.toggle('theme-light', document.documentElement.dataset.theme === 'light');</script>
@@ -85,6 +92,14 @@
                 </div>
                 <div class="hero-trust" aria-label="服务特点">
                     <span>价格透明</span><span>进度可查</span><span>人工客服</span>
+                </div>
+                <div id="pwaInstallArea" class="pwa-install-area" hidden>
+                    <button id="pwaInstallButton" class="pwa-install-button" type="button" hidden>安装应用</button>
+                    <details id="pwaIosHelp" hidden>
+                        <summary>添加 QY Blitz 到主屏幕</summary>
+                        <p>点击 Safari 分享按钮 → 添加到主屏幕，然后从桌面图标打开。</p>
+                    </details>
+                    <p id="pwaInstallStatus" role="status" hidden></p>
                 </div>
             </div>
             <div class="hero-panel" aria-label="下单流程">
@@ -1040,6 +1055,7 @@
     <script src="tank-catalog.js?v=20260919-b33"></script>
     <script src="game-tools.js?v=20260919-b33"></script>
     <script src="theme-preference.js?v=20260919-b34"></script>
+    <script src="pwa.js?v=20260919-pwa1"></script>
     <script src="script.js?v=20260919-b36-nav-drag"></script>
 </body>
 </html>

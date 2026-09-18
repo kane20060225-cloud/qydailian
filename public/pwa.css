@@ -1,0 +1,7 @@
+/* Inline installation controls stay within the home page, away from checkout. */
+.pwa-install-area { margin-top: 18px; color: var(--text-secondary); font-size: .85rem; }
+.pwa-install-area[hidden], .pwa-install-area [hidden] { display: none !important; }
+.pwa-install-button { border: 1px solid var(--border); background: var(--card-bg); color: var(--text); border-radius: 10px; padding: 8px 16px; cursor: pointer; }
+.pwa-install-button:hover { border-color: var(--accent); }
+.pwa-install-area summary { cursor: pointer; }
+.pwa-install-area p { margin: 8px 0 0; font-size: .85rem; line-height: 1.6; }
