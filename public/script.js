@@ -631,6 +631,7 @@ getEl('calcBtn')?.addEventListener('click', () => {
 
 // ==================== 用户登录状态管理 ====================
 function checkLoginStatus() {
+    themePreferences.syncSession();
     window.CustomerSupport?.syncSession();
     ServiceContent.authChanged();
     window.OrderNotifications?.syncSession();
@@ -1765,12 +1766,24 @@ function bindAccountSecurityEvents() {
 }
 
 // ---------- 界面主题（深色 / 浅色） ----------
+const themePreferences = ThemePreference.create({
+    token: () => safeGetItem('token'), userId: () => safeGetItem('userId'),
+    read: key => safeGetItem(key), write: safeSetItem,
+    fetch: (...args) => window.fetch(...args), apply: applyTheme,
+    onStatus: state => {
+        const status = getEl('themeSaveStatus'), button = getEl('saveThemeBtn');
+        if (status) status.textContent = state.message;
+        if (button) { button.disabled = !!state.saving; button.textContent = state.saving ? '正在保存…' : '保存主题'; }
+        if (state.saved) window._userSettings = { ...(window._userSettings || {}), theme: state.theme };
+        if (state.error) showToast('主题已保留，账号同步失败，请稍后重试');
+    }
+});
 function renderAppearance() {
     const currentTheme = document.body.classList.contains('theme-light') ? 'light' : 'dark';
     const content = getEl('settingsContent');
     content.innerHTML = `
         <div class="card"><div class="appearance-heading"><h4>界面主题</h4>
-            <p>选择适合你的阅读方式。点击预览，保存后同步到账号。</p></div>
+            <p>选择适合你的阅读方式。切换后自动保存并同步到账号。</p></div>
             <div class="theme-options" role="radiogroup" aria-label="界面主题">
                 ${[['dark','深色主题','沉稳背景，突出服务与进度'],['light','浅色主题','明亮界面，清楚查看每项信息']].map(([value,title,description])=>`
                 <label class="theme-option">
@@ -1782,26 +1795,12 @@ function renderAppearance() {
             <p id="themeSaveStatus" class="theme-save-status" role="status" aria-live="polite"></p>
         </div>`;
     content.querySelectorAll('input[name=theme]').forEach(input=>input.addEventListener('change',()=>{
-        applyTheme(input.value);
-        getEl('themeSaveStatus').textContent='已在此浏览器应用，保存后同步到账号。';
+        themePreferences.select(input.value);
     }));
     getEl('saveThemeBtn')?.addEventListener('click', async () => {
         const theme = document.querySelector('input[name="theme"]:checked')?.value || 'dark';
-        applyTheme(theme);
-        const token = safeGetItem('token'),button=getEl('saveThemeBtn'),status=getEl('themeSaveStatus');
-        if(!token){status.textContent='主题已保存到此浏览器，登录后可同步到账号。';return;}
-        button.disabled=true;button.textContent='正在保存…';
-        try {
-            const res=await fetch(`${API_BASE}/user/settings`, {
-                method: 'PUT', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ theme })
-            });
-            const data=await res.json().catch(()=>({}));
-            if(!res.ok)throw new Error(data.error||'账号主题保存失败，请重试。');
-            window._userSettings={...(window._userSettings||{}),theme};
-            status.textContent='主题已保存，并同步到账号。';showToast('主题已保存');
-        }catch(err){status.textContent=(err.message||'网络连接失败，请重试。')+' 当前浏览器已保留所选主题。';}
-        finally{button.disabled=false;button.textContent='保存主题';}
+        const result = await themePreferences.select(theme);
+        if (result.saved) showToast('主题已保存');
     });
 }
 
@@ -1814,28 +1813,20 @@ function applyTheme(theme) {
         document.body.classList.remove('theme-light');
     }
     safeSetItem('theme', theme);
+    document.querySelectorAll('input[name=theme]').forEach(input => input.checked = input.value === theme);
     const toggle=getEl('themeToggleBtn');
     if(toggle){const label=theme==='light'?'切换到深色主题':'切换到浅色主题';toggle.textContent=theme==='light'?'☾':'☀';toggle.title=label;toggle.setAttribute('aria-label',label);}
 }
 
 getEl('themeToggleBtn')?.addEventListener('click',()=>{
-    const theme=document.body.classList.contains('theme-light')?'dark':'light';applyTheme(theme);
-    document.querySelectorAll('input[name=theme]').forEach(input=>input.checked=input.value===theme);
-    if(getEl('themeSaveStatus'))getEl('themeSaveStatus').textContent='已在此浏览器应用，保存后同步到账号。';
+    const theme=document.body.classList.contains('theme-light')?'dark':'light';
+    themePreferences.select(theme);
 });
 
 function applySavedTheme() {
-    const theme = safeGetItem('theme') || 'dark';
-    applyTheme(theme);
-    // 可选：从服务器同步
-    const token = safeGetItem('token');
-    if (token) {
-        fetch(`${API_BASE}/user/settings`, { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(res => res.json())
-            .then(data => { if (data?.theme) applyTheme(data.theme); })
-            .catch(() => {});
-    }
+    return themePreferences.syncSession();
 }
+window.addEventListener('online', () => themePreferences.retry());
 
 // ---------- 通知与提醒 ----------
 function renderNotifications() {
