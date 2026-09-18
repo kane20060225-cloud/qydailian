@@ -27,6 +27,7 @@
     <link rel="stylesheet" href="booster-workbench.css?v=20260917-b27">
     <link rel="stylesheet" href="customer-support.css?v=20260918-b29">
     <link rel="stylesheet" href="community-pages.css?v=20260918-b32-inline-nav">
+    <link rel="stylesheet" href="game-tools.css?v=20260919-b33">
 </head>
 <body>
     <script>document.body.classList.toggle('theme-light', document.documentElement.dataset.theme === 'light');</script>
@@ -319,35 +320,35 @@
             </div>
 
             <!-- 开箱模拟器面板 -->
-<div id="toolChestSim" class="tool-panel">
-    <section class="card">
-        <div class="card-header">
-            <span class="card-num">🎁</span>
-            <h3>开箱模拟器</h3>
-            <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
-                <span style="font-size:0.9rem; color: var(--text-secondary);">军需券：</span>
-                <span id="ticketBalance" style="font-weight:700; color: var(--price); font-family: var(--font-mono);">0</span>
+            <div id="toolChestSim" class="tool-panel game-tool">
+                <section class="card supply-account">
+                    <div class="supply-account-title"><span class="game-eyebrow">军需库</span><h3>开启你的下一份惊喜</h3><p>选择集装箱，查看奖池与概率，再使用军需券开启。</p></div>
+                    <div class="supply-wallet"><span>我的军需券</span><strong id="ticketBalance">0</strong><div><button id="rechargeBtn" type="button">充值军需券</button><button id="rechargeOrdersBtn" type="button">充值订单</button></div></div>
+                    <div class="supply-shortcuts"><button id="checkinBtn" type="button" class="checkin-btn">每日签到 <small>+1000 券</small></button><button id="inventoryBtn" type="button">我的仓库 <span aria-hidden="true">↗</span></button></div>
+                </section>
+                <div class="supply-layout">
+                    <section class="card supply-catalog"><div class="game-block-heading"><h3>精选集装箱</h3><span id="chestCount">加载中</span></div><div class="chest-grid" id="chestGrid" aria-label="选择集装箱"></div></section>
+                    <section class="card supply-detail" id="chestSelected" aria-label="选中的集装箱">
+                        <div id="chestSelectionEmpty" class="game-empty">正在准备军需库…</div>
+                        <div id="chestSelectionContent" hidden>
+                            <div class="supply-hero"><span class="game-eyebrow">当前选择</span><button id="changeChestBtn" type="button" class="supply-change">更换集装箱 ↑</button><img id="chestDetailImg" src="images/chests/chest_1.png" alt=""><h3 id="selectedChestName"></h3><p id="chestDetailDesc"></p></div>
+                            <div class="supply-cost"><span>单次开启</span><strong><span id="chestPriceDisplay">0</span> <small>军需券</small></strong></div>
+                            <button id="buyChestBtn" type="button" class="submit-btn">开启集装箱</button><p id="chestBuyMsg" class="game-feedback" role="alert" hidden></p>
+                            <div class="game-block-heading pool-heading"><h4>奖池预览</h4><span>按当前配置展示</span></div><div id="chestDetailProb"></div>
+                        </div>
+                    </section>
+                </div>
             </div>
-        </div>
-        <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
-            <button id="checkinBtn" class="checkin-btn">📅 每日签到 (+1000券)</button>
-            <button id="rechargeBtn" class="recharge-btn">💰 充值 (6元=10000券)</button>
-            <button id="rechargeOrdersBtn" type="button">充值订单</button>
-            <button id="inventoryBtn" class="checkin-btn">📦 我的仓库</button>
-        </div>
-        <div class="chest-grid" id="chestGrid"></div>
-    </section>
-</div>
 
-            <!-- 这把玩什么转盘面板 -->
-            <div id="toolRandomTank" class="tool-panel">
-                <section class="card">
-                    <div class="card-header"><span class="card-num">🎲</span><h3>这把玩什么？</h3></div>
-                    <div style="display: flex; flex-direction: column; align-items: center;">
-                        <canvas id="wheelCanvas" width="400" height="400" style="max-width: 100%; height: auto; border-radius: 50%; box-shadow: 0 0 20px var(--accent-glow);"></canvas>
-                        <button id="spinWheelBtn" class="submit-btn" style="margin-top: 20px; width: auto; padding: 12px 40px;">🎰 开始旋转</button>
-                        <p id="wheelResult" style="margin-top: 16px; font-size: 1.2rem; font-weight: 700; color: var(--accent); min-height: 2em;"></p>
-                    </div>
+            <div id="toolRandomTank" class="tool-panel game-tool">
+                <section class="card tank-picker">
+                    <div class="game-block-heading"><div><span class="game-eyebrow">坦克推荐台</span><h3>这把玩什么？</h3><p>交给运气，选出下一场的主角。</p></div><span class="tank-pool-count" id="tankPoolCount" role="status"></span></div>
+                    <form id="tankFilters" class="tank-filters" aria-label="坦克抽选条件"><label for="tankTier">等级<select id="tankTier"><option value="">全部等级</option></select></label><label for="tankType">车型<select id="tankType"><option value="">全部车型</option></select></label><label for="tankNation">国家 / 系别<select id="tankNation"><option value="">全部系别</option></select></label><button id="resetTankFilters" type="button">重置条件</button></form>
+                    <div class="tank-reel-window" id="tankReelWindow" aria-hidden="true"><div class="tank-reel-focus"></div><div id="tankReel" class="tank-reel"></div><span class="tank-reel-pointer"></span></div>
+                    <div class="tank-picker-actions"><button id="spinWheelBtn" type="button" class="submit-btn">帮我选一辆</button><button id="skipTankAnimation" type="button" hidden>跳过动画</button><span id="tankPickStatus" role="status">无需设置条件，也可以直接抽选。</span></div>
+                    <div class="tank-recommendation" id="tankRecommendation"><div class="tank-result-placeholder"><span aria-hidden="true">✦</span><div><h4>你的下一辆坦克，会是谁？</h4><p>抽选结果会显示在这里，包含坦克名称、等级与车型。</p></div></div></div>
+                    <div class="tank-result-actions" id="tankResultActions" hidden><button id="excludeTankBtn" type="button">排除这辆，再选一辆</button><button id="restoreExcludedTanks" type="button" hidden>恢复已排除坦克</button></div>
+                    <p class="tank-source">坦克资料与图片来自 <a href="https://blitzkit.net/tanks/" target="_blank" rel="noopener noreferrer">BlitzKit 坦克百科</a>。抽选不代表账号已拥有该坦克。</p>
                 </section>
             </div>
         </div>
@@ -742,20 +743,15 @@
 
 
 
-    <!-- 箱子详情弹窗 -->
-    <div class="modal-overlay" id="chestDetailModal" style="display: none;">
-        <div class="modal-card" style="max-width: 500px;">
+    <!-- 开箱结果弹窗（仅军需库使用） -->
+    <div class="modal-overlay game-tool-modal" id="chestDetailModal" style="display: none;">
+        <div class="modal-card reward-modal-card">
             <div class="modal-header">
-                <h3 id="chestDetailTitle">箱子详情</h3>
+                <h3 id="chestDetailTitle">开启集装箱</h3>
                 <button class="modal-close" id="closeChestDetailBtn">&times;</button>
             </div>
-            <div style="text-align: center;">
-                <img id="chestDetailImg" src="" alt="" style="max-width: 200px; border-radius: 12px; margin-bottom: 16px;">
-            </div>
-            <p id="chestDetailDesc" style="margin-bottom: 12px; color: var(--text-secondary);"></p>
-            <div id="chestDetailProb" style="margin-bottom: 16px;"></div>
-            <button id="buyChestBtn" class="submit-btn" style="margin-top: 0;">🎁 购买 (价格: <span id="chestPriceDisplay">0</span>券)</button>
-            <p id="chestBuyMsg" style="margin-top: 8px; font-size: 0.85rem; color: var(--red); display: none;"></p>
+            <div id="chestOpeningStage" class="chest-opening-stage"><img id="chestOpeningImg" src="images/chests/chest_1.png" alt="正在开启的集装箱"><p id="chestOpeningStatus" role="status">正在开启集装箱…</p><button id="skipChestAnimation" type="button" hidden>跳过动画</button></div>
+            <div id="chestRewards" hidden><p id="chestRewardsSummary" class="reward-summary" role="status"></p><div id="chestRewardGrid" class="reward-grid"></div><div class="reward-footer"><button id="rewardInventoryBtn" type="button">查看我的仓库</button><button id="rewardDoneBtn" type="button" class="submit-btn">收下奖励</button></div></div>
         </div>
     </div>
 
@@ -981,13 +977,13 @@
     </div>
 
 <!-- 仓库弹窗 -->
-<div class="modal-overlay" id="inventoryModal" style="display: none;">
-    <div class="modal-card" style="max-width: 600px;">
+<div class="modal-overlay game-tool-modal" id="inventoryModal" style="display: none;">
+    <div class="modal-card inventory-modal-card">
         <div class="modal-header">
             <h3>📦 我的仓库</h3>
             <button class="modal-close" id="closeInventoryBtn">&times;</button>
         </div>
-        <div id="inventoryList" style="max-height: 400px; overflow-y: auto;"></div>
+        <div id="inventorySummary" class="inventory-summary"></div><div id="inventoryList"></div>
     </div>
 </div>
 
@@ -1043,6 +1039,8 @@
     <script src="boost-completion.js?v=20260917-b27"></script>
     <script src="customer-support.js?v=20260917-b28"></script>
     <script src="user-permissions.js?v=20260917-b28"></script>
-    <script src="script.js?v=20260918-b31-calculator"></script>
+    <script src="tank-catalog.js?v=20260919-b33"></script>
+    <script src="game-tools.js?v=20260919-b33"></script>
+    <script src="script.js?v=20260919-b33"></script>
 </body>
 </html>

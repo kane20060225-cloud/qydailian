@@ -103,55 +103,6 @@ const playerData = [
     { key: 'budget',   name: '特惠打手', rate: 0.9, identity: 'budget' }
 ];
 
-const chestsConfig = [
-    { id: 1, name: '美国集装箱箱',   price: 198,  image: 'images/chests/chest_1.png', desc: '经典战斗资源补给，开出强力道具。' },
-    { id: 2, name: '苏联集装箱',     price: 198,  image: 'images/chests/chest_2.png', desc: '火焰主题，内含稀有坦克碎片。' },
-    { id: 3, name: '顶尖捕食者集装箱', price: 498, image: 'images/chests/chest_3.png', desc: '夜战专属，高概率出全局经验。' },
-    { id: 4, name: '超赞集装箱',      price: 288, image: 'images/chests/chest_4.png', desc: '雷电系列，有机会获得高级坦克。' },
-    { id: 5, name: '我全都要集装箱',   price: 98,  image: 'images/chests/chest_5.png', desc: '冰雪奇缘，内含稀有银币加成。' },
-    { id: 6, name: '超大集装箱',      price: 198, image: 'images/chests/chest_6.png', desc: '经典怀旧，出金币概率较高。' },
-    { id: 7, name: '重坦集装箱',      price: 88,  image: 'images/chests/chest_7.png', desc: '未来科技，有极小概率出绝版坦克。' },
-    { id: 8, name: '泰坦集装箱箱',    price: 388, image: 'images/chests/chest_8.png', desc: '专为狂战士打造，必出好东西。' },
-    { id: 9, name: '赛季集装箱',      price: 588, image: 'images/chests/chest_9.png', desc: '传奇级别，概率获得稀有指挥官坦克。' }
-];
-
-const normalPool = [
-    { name: '银币 x50000',       weight: 30 },
-    { name: '银币强化剂 x10',   weight: 20 },
-    { name: '战斗经验强化剂 x10', weight: 20 },
-    { name: '全局经验强化剂 x10', weight: 15 },
-    { name: '金币 x500',        weight: 10 }
-];
-const normalTotalWeight = normalPool.reduce((s, i) => s + i.weight, 0);
-
-const rarePool = [
-    { name: '概念型1B',       weight: 50 },
-    { name: '116F3',            weight: 40 },
-    { name: 'BZT70',        weight: 30 },
-    { name: '五式重战车',       weight: 20 },
-    { name: 'F1.0WT',         weight: 20 },
-    { name: 'GSOR坦克',             weight: 20 },
-    { name: 'SPHT',         weight: 10 },
-    { name: '菲利斯',           weight: 10 }
-];
-const rareTotalWeight = rarePool.reduce((s, i) => s + i.weight, 0);
-
-const tankList = [
-    "SPHT", "鼠式", "IS-7", "AMX 50B", "M48巴顿", "E-100", "T110E5", "FV215b", "T-62A", "豹1",
-    "Bat.-Chat. 25t", "STB-1", "140工程", "60TP", "起重机", "M40/65", "TVP T50/51", "AMX 30B",
-    "WZ-132-1", "T-100 LT", "谢里登", "Rhm. Pzw.", "蟋蟀15", "FV4005", "Strv K", "Foch 155", "斯柯达T27",
-    "T95E6", "超级征服者", "TRV", "263工程", "FV215b 183", "穆拉特工程", "Type 5 Heavy", "T110E3",
-    "E100歼击车", "T110E4", "獾先生FV217", "268工程", "WZ-113G FT", "T57重型", "埃里希概念车",
-    "VK 72.01(K)", "酋长MK6", "752工程", "Carro 45T", "Rinoceronte", "Vz.55", "Minotauro", "Ho-Ri III",
-    "GSOR坦克", "CC狮", "BZ-75", "M-VI-Y", "菲利斯", "AC阿特拉斯", "野牛C45", "CS-63", "Object 430U", "K-91",
-    "T-22中型", "E 50 M", "Panzer 58", "121B", "122 TM", "56TP", "斯柯达T56", "埃米尔1951", "AMX 30原", "T77",
-    "JPanther II", "268/4工程", "德古拉", "粉碎者", "歼灭者", "T-34-85鲁迪", "WZ-113", "WZ-121", "71式",
-    "NC70B", "BZT-70", "260工程", "114SP2", "ISU-130", "T-34-3", "T-44-100", "XM66F", "M6A2E1", "T34", "AMX CDC",
-    "FCM 50 t", "Strv 81", "WZ-111 5A", "116F3", "KPZ70", "SU-130PM", "TS-5", "WZ-120-1G FT", "IS-6", "252U工程"
-];
-while (tankList.length < 100) tankList.push("随机坦克" + (tankList.length + 1));
-
-
 // ==================== 全局 fetch 包装（自动处理401） ====================
 const originalFetch = window.fetch;
 window.fetch = async function(...args) {
@@ -1417,8 +1368,9 @@ async function getTickets() {
 async function updateTicketDisplay() {
   const el = getEl('ticketBalance');
   if (!el) return;
+  const revision = GameTools.beginBalanceRead();
   const tickets = await getTickets();
-  el.textContent = tickets;
+  GameTools.applyBalanceRead(tickets, revision);
 }
 
 // 签到
@@ -1468,159 +1420,14 @@ async function doRecharge() {
   return OrderCenter.createRecharge();
 }
 
-// 渲染箱子列表（从后端加载）
-async function renderChests() {
-  const grid = getEl('chestGrid');
-  if (!grid) return;
-  try {
-    const res = await fetch(`${API_BASE}/chest/configs`);
-    const chests = await res.json();
-    grid.innerHTML = '';
-    chests.forEach(chest => {
-      const div = document.createElement('div');
-      div.className = 'chest-item';
-      div.innerHTML = `
-        <img src="${chest.image}" alt="${chest.name}" onerror="this.src='images/chests/placeholder.png';">
-        <div class="chest-name">${chest.name}</div>
-        <div class="chest-price">🪙 ${chest.price} <span class="chest-currency">军需券</span></div>
-      `;
-      div.addEventListener('click', () => openChestDetail(chest.id));
-      grid.appendChild(div);
-    });
-  } catch (err) {
-    grid.innerHTML = '<p style="color:var(--red)">加载失败</p>';
-  }
-}
-
-// 打开箱子详情弹窗（动态显示该箱子独立奖池概率）
-async function openChestDetail(chestId) {
-  try {
-    const res = await fetch(`${API_BASE}/chest/configs`);
-    const chests = await res.json();
-    const chest = chests.find(c => c.id == chestId);
-    if (!chest) return;
-
-    // 设置基本信息
-    getEl('chestDetailTitle').textContent = chest.name;
-    getEl('chestDetailImg').src = chest.image;
-    getEl('chestDetailDesc').textContent = chest.description;
-    getEl('chestPriceDisplay').textContent = chest.price;
-
-    // ---- 构建概率显示区 ----
-    let probHtml = '<div class="prob-list"><div><strong>奖励类别</strong><strong>概率</strong></div>';
-
-    // 1. 显示稀有物品（总概率5%）
-    const rareItems = chest.rare_items || [];
-    const rareTotalWeight = rareItems.reduce((sum, item) => sum + item.weight, 0);
-    rareItems.forEach(item => {
-      const p = rareTotalWeight > 0 ? (item.weight / rareTotalWeight * 5).toFixed(2) : '0';
-      probHtml += `<div><span class="prob-label">${item.item_name}</span><span class="prob-value">${p}%</span></div>`;
-    });
-
-    // 2. 显示普通奖励（每项独立概率）
-    const commonRewards = chest.common_rewards || [];
-    commonRewards.forEach(reward => {
-      const p = parseFloat(reward.drop_chance).toFixed(2);
-      const range = `${reward.min_quantity} - ${reward.max_quantity}`;
-      probHtml += `<div><span class="prob-label">${reward.item_name}（数量 ${range}）</span><span class="prob-value">${p}%</span></div>`;
-    });
-
-    probHtml += '</div>';
-    getEl('chestDetailProb').innerHTML = probHtml;
-
-    // 重置错误提示
-    const buyMsg = getEl('chestBuyMsg');
-    if (buyMsg) buyMsg.style.display = 'none';
-
-    // 显示弹窗
-    getEl('chestDetailModal').style.display = 'flex';
-
-    // 记录当前箱子ID，供开箱按钮使用
-    window._currentChestId = chestId;
-  } catch (err) {
-    console.error('打开箱子详情失败:', err);
-    showToast('加载失败');
-  }
-}
-// 开箱按钮点击（购买箱子）
-getEl('buyChestBtn')?.addEventListener('click', async () => {
-  const chestId = window._currentChestId;
-  if (!chestId) return;
-  const token = safeGetItem('token');
-  if (!token) { showToast('请先登录'); return; }
-  try {
-    const res = await fetch(`${API_BASE}/chest/open`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ chestId })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      // data.rewards 是数组，例如 [{item_name:'银币', quantity:500000, rarity:'normal'}, ...]
-      const rewardText = data.rewards.map(r => `${r.item_name} x${r.quantity}`).join('、');
-      showToast(`🎁 获得：${rewardText}`);
-      updateTicketDisplay();
-      getEl('chestDetailModal').style.display = 'none';
-    } else {
-      const buyMsg = getEl('chestBuyMsg');
-      if (buyMsg) { buyMsg.textContent = data.error || '开箱失败'; buyMsg.style.display = 'block'; }
-    }
-  } catch (err) {
-    showToast('网络错误');
-  }
-});
-
-// 我的仓库
-async function loadInventory() {
-  const token = safeGetItem('token');
-  if (!token) { showToast('请先登录'); return; }
-  try {
-    const res = await fetch(`${API_BASE}/chest/inventory`, { headers: { 'Authorization': `Bearer ${token}` } });
-    const items = await res.json();
-    const list = getEl('inventoryList');
-    if (!items.length) {
-      list.innerHTML = '<p>仓库是空的，快去开箱吧！</p>';
-    } else {
-      let html = '<table><tr><th>物品</th><th>类型</th><th>数量</th><th>获得时间</th></tr>';
-      items.forEach(item => {
-        html += `<tr>
-          <td>${item.item_name}</td>
-          <td>${item.rarity === 'rare' ? '稀有' : '普通'}</td>
-          <td>${item.quantity}</td>
-          <td>${new Date(item.obtained_at).toLocaleString()}</td>
-        </tr>`;
-      });
-      html += '</table>';
-      list.innerHTML = html;
-    }
-    getEl('inventoryModal').style.display = 'flex';
-  } catch (err) { showToast('加载仓库失败'); }
-}
-
-// 绑定按钮事件
+// These two tools own their UI; account, checkout and other panels stay unchanged.
+GameTools.init({ token: () => safeGetItem('token'), toast: showToast, onUnauthorized: promptLoginExpired, refreshTickets: updateTicketDisplay });
+function renderChests() { return GameTools.loadChests(); }
+function openChestDetail(chestId) { return GameTools.selectChest(chestId); }
+function loadInventory() { return GameTools.loadInventory(); }
 getEl('checkinBtn')?.addEventListener('click', doCheckin);
 getEl('rechargeBtn')?.addEventListener('click', doRecharge);
-getEl('inventoryBtn')?.addEventListener('click', loadInventory);
-getEl('closeInventoryBtn')?.addEventListener('click', () => getEl('inventoryModal').style.display = 'none');
-getEl('inventoryModal')?.addEventListener('click', (e) => {
-  if (e.target === getEl('inventoryModal')) getEl('inventoryModal').style.display = 'none';
-});
-
-
-// 关闭箱子详情弹窗
-getEl('closeChestDetailBtn')?.addEventListener('click', () => {
-    const m = getEl('chestDetailModal');
-    if (m) m.style.display = 'none';
-});
-getEl('chestDetailModal')?.addEventListener('click', (e) => {
-    if (e.target === getEl('chestDetailModal')) e.target.style.display = 'none';
-});
-// 初始化开箱模拟器
-function initChestSimulator() {
-  updateTicketDisplay();
-  renderChests();
-}
-
+function initChestSimulator() { updateTicketDisplay(); renderChests(); }
 // ==================== 实用工具面板控制 ====================
 const toolTabs = document.querySelectorAll('.tool-tab');
 const toolPanels = {
@@ -1648,17 +1455,7 @@ function switchTool(toolName) {
         if (chestGrid && chestGrid.children.length === 0) renderChests();
     }
 
-    if (toolName === 'randomtank') {
-        requestAnimationFrame(() => {
-            const canvas = getEl('wheelCanvas');
-            if (canvas) {
-                canvas.width = canvas.offsetWidth || 400;
-                canvas.height = canvas.offsetHeight || 400;
-                wheelCtx = canvas.getContext('2d');
-                drawWheel(wheelAngle);
-            }
-        });
-    }
+    if (toolName === 'randomtank') GameTools.enterRandom();
 }
 
 function resetToolsOnEnter() {
@@ -1675,47 +1472,6 @@ toolTabs.forEach(tab => {
         if (toolName) switchTool(toolName);
     });
 });
-
-// ==================== 转盘逻辑 ====================
-let wheelAngle = 0, spinning = false, wheelCanvas = getEl('wheelCanvas'), wheelCtx = wheelCanvas?.getContext('2d') || null;
-
-function drawWheel(rotation = 0) {
-    if (!wheelCtx || !wheelCanvas) return;
-    const w = wheelCanvas.width, h = wheelCanvas.height, cx = w/2, cy = h/2, radius = Math.min(cx,cy)-5, sliceAngle = (2*Math.PI)/tankList.length;
-    wheelCtx.clearRect(0,0,w,h);
-    for (let i=0;i<tankList.length;i++) {
-        const startAngle = i*sliceAngle+rotation, endAngle = startAngle+sliceAngle;
-        wheelCtx.beginPath(); wheelCtx.moveTo(cx,cy); wheelCtx.arc(cx,cy,radius,startAngle,endAngle); wheelCtx.closePath();
-        wheelCtx.fillStyle = i%2===0?'#2a3a50':'#1e2a3a'; wheelCtx.fill(); wheelCtx.strokeStyle='#0a0f1a'; wheelCtx.lineWidth=1; wheelCtx.stroke();
-        wheelCtx.save(); wheelCtx.translate(cx,cy); wheelCtx.rotate(startAngle+sliceAngle/2); wheelCtx.textAlign='right'; wheelCtx.fillStyle='#e2e8f0'; wheelCtx.font='8px sans-serif'; wheelCtx.fillText(i+1, radius-10, 3); wheelCtx.restore();
-    }
-    wheelCtx.beginPath(); wheelCtx.arc(cx,cy,30,0,2*Math.PI); wheelCtx.fillStyle='#f0a050'; wheelCtx.fill(); wheelCtx.strokeStyle='#0a0f1a'; wheelCtx.lineWidth=3; wheelCtx.stroke();
-    wheelCtx.fillStyle='#fff'; wheelCtx.font='bold 14px sans-serif'; wheelCtx.textAlign='center'; wheelCtx.textBaseline='middle'; wheelCtx.fillText('GO', cx, cy);
-    wheelCtx.beginPath(); wheelCtx.moveTo(cx,cy-radius+8); wheelCtx.lineTo(cx-8,cy-radius-8); wheelCtx.lineTo(cx+8,cy-radius-8); wheelCtx.closePath(); wheelCtx.fillStyle='#e74c3c'; wheelCtx.fill();
-}
-function spinWheel() {
-    if (spinning || !wheelCtx || !wheelCanvas) return;
-    spinning = true;
-    const targetSlice = Math.floor(Math.random() * tankList.length), sliceAngle = (2*Math.PI)/tankList.length;
-    const targetMiddleAngle = targetSlice*sliceAngle+sliceAngle/2, fullSpins = 5+Math.floor(Math.random()*5);
-    const targetAngle = fullSpins*2*Math.PI + (2*Math.PI-targetMiddleAngle) + Math.PI/2;
-    const startAngle = wheelAngle, duration = 4000, startTime = performance.now();
-    function animate(now) {
-        const elapsed = now - startTime, progress = Math.min(elapsed/duration, 1), ease = 1 - Math.pow(1-progress,3);
-        wheelAngle = startAngle + targetAngle * ease; drawWheel(wheelAngle);
-        if (progress < 1) requestAnimationFrame(animate);
-        else {
-            wheelAngle %= (2*Math.PI);
-            const normalizedAngle = (wheelAngle+Math.PI*2)%(Math.PI*2), pointerAngle = (2*Math.PI-normalizedAngle+Math.PI/2)%(2*Math.PI);
-            const finalSlice = Math.floor(pointerAngle/sliceAngle) % tankList.length;
-            const resultEl = getEl('wheelResult'); if (resultEl) resultEl.textContent = `🎉 抽中：${tankList[finalSlice]}`;
-            spinning = false;
-        }
-    }
-    requestAnimationFrame(animate);
-}
-getEl('spinWheelBtn')?.addEventListener('click', spinWheel);
-getEl('wheelCanvas')?.addEventListener('click', spinWheel);
 
 // ==================== 定制化需求 ====================
 if (customRequestCard) customRequestCard.addEventListener('click', () => { if (customRequestModal) customRequestModal.style.display = 'flex'; });
