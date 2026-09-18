@@ -65,3 +65,5 @@ B28 已完成上线、生产迁移和管理员手机提醒确认，发布及备�
 开箱模拟器军需库、奖励仓库卡片和“这把玩什么”坦克卡片滚动抽选已上线，仅修改这两个工具，保留原配色及其他板块，见 [B33_DEPLOYMENT_REPORT.md](docs/B33_DEPLOYMENT_REPORT.md)。
 
 主题切换现在自动保存到账号，修复浅色刷新后被旧深色设置覆盖的问题，发布及回归验证见 [B34_DEPLOYMENT_REPORT.md](docs/B34_DEPLOYMENT_REPORT.md)。
+
+实用工具、公告与新闻的冗余介绍区已删除，保留导航标题并将正文前移，见 [B35_DEPLOYMENT_REPORT.md](docs/B35_DEPLOYMENT_REPORT.md)。
