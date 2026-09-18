@@ -3181,7 +3181,7 @@ function tpOrderForm(order = {}) {
   const localDate = order.expected_at ? new Date(order.expected_at).toISOString().slice(0, 16) : '';
   return `<div class="tp-form-grid">
     <div class="form-group"><label>游戏服务器</label><select id="tpModalPlatform">${platforms.map((item) => `<option ${item === order.platform ? 'selected' : ''}>${item}</option>`).join('')}</select></div>
-    <div class="form-group"><label>外部订单号</label><input id="tpModalExternal" maxlength="80" value="${rentalSafeText(order.external_order_no || '')}"></div>
+    <div class="form-group"><label>外部订单号</label><input id="tpModalExternal" autocomplete="off" maxlength="80" value="${rentalSafeText(order.external_order_no || '')}"></div>
     <div class="form-group tp-form-wide"><label>代练内容</label><textarea id="tpModalContent" rows="3" maxlength="2000">${rentalSafeText(order.content || '')}</textarea></div>
     <div class="form-group"><label>账号信息</label><input id="tpModalAccount" maxlength="200" value="${rentalSafeText(order.account_info || '')}"></div>
     <div class="form-group"><label>订单金额（元）</label><input id="tpModalPrice" type="number" min="0.01" max="999999.99" step="0.01" value="${rentalSafeText(order.price || '')}"></div>
@@ -3223,7 +3223,7 @@ function tpOpenAction(action, order) {
     reject: ['驳回订单', '<div class="form-group"><label>驳回原因</label><textarea id="tpActionReason" rows="3" maxlength="500" placeholder="说明需要修改的内容"></textarea></div>', '确认驳回'],
     resubmit: ['修改并重新提交', tpOrderForm(order), '重新提交'],
     complete: ['申请验收', '<div class="form-group"><label>完单说明</label><textarea id="tpCompletionNote" rows="4" maxlength="1000" placeholder="说明完成内容、结果和需要管理员核对的信息"></textarea></div>', '提交验收'],
-    pay: ['核实收款', '<div class="tp-form-grid"><div class="form-group"><label>收款渠道</label><select id="tpPaymentChannel"><option>支付宝</option><option>微信支付</option><option>银行卡</option><option>其他</option></select></div><div class="form-group"><label>交易单号</label><input id="tpPaymentReference" maxlength="80" placeholder="填写支付平台交易号"></div></div>', '确认已收款'],
+    pay: ['核实收款', '<div class="tp-form-grid"><div class="form-group"><label>收款渠道</label><select id="tpPaymentChannel"><option>支付宝</option><option>微信支付</option><option>银行卡</option><option>其他</option></select></div><div class="form-group"><label for="tpPaymentReference">交易单号</label><input type="text" id="tpPaymentReference" autocomplete="off" spellcheck="false" maxlength="80" placeholder="填写支付平台交易号"></div></div>', '确认已收款'],
     return: ['退回验收', '<div class="form-group"><label>退回原因</label><textarea id="tpActionReason" rows="3" maxlength="500" placeholder="说明需要补充或修改的内容"></textarea></div>', '确认退回'],
     finalize: ['验收通过', '确认履约内容无误。完成后订单将锁定，并保留操作记录。', '确认完成']
   }[action];

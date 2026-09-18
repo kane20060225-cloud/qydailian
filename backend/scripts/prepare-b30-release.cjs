@@ -1,0 +1,13 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+const workspace=path.resolve(__dirname,'../..'),output=path.join(workspace,'artifacts/ui-preview/b30-release');
+const files=["public/index.html","public/script.js"];
+const git=args=>cp.execFileSync('git',args,{cwd:workspace,maxBuffer:16*1024*1024}),hash=bytes=>crypto.createHash('sha256').update(bytes).digest('hex'),normalized=bytes=>hash(bytes.toString('utf8').replace(/\r\n/g,'\n'));
+const contentHash=(name,bytes)=>/\.(png|ico)$/.test(name)?hash(bytes):normalized(bytes);
+const commit=git(['rev-parse','HEAD']).toString().trim(),baseline=process.argv[2];assert.match(baseline||'',/^[a-f0-9]{40}$/);
+assert.equal(git(['status','--porcelain']).toString().trim(),'','Commit all source changes before preparing a release');
+fs.mkdirSync(output,{recursive:true});git(['archive','--format=tar','--output='+path.join(output,'runtime.tar'),commit,...files]);
+const manifest={commit,baseline_commit:baseline,release:'b30-order-autofill-release-'+commit.slice(0,10),archive_sha256:hash(fs.readFileSync(path.join(output,'runtime.tar'))),files:files.map(name=>({path:name,baseline:cp.spawnSync('git',['cat-file','-e',baseline+':'+name],{cwd:workspace}).status===0?contentHash(name,git(['show',baseline+':'+name])):null,sha256:contentHash(name,git(['show',commit+':'+name]))}))};
+fs.writeFileSync(path.join(output,'manifest.json'),JSON.stringify(manifest,null,2));fs.copyFileSync(path.join(__dirname,'deploy-b30-release.cjs'),path.join(output,'deploy.cjs'));
+console.log(JSON.stringify({output,release:manifest.release,commit,archive_sha256:manifest.archive_sha256},null,2));
+
