@@ -8,39 +8,6 @@ body .community-page > .section-top {
   border-bottom: 1px solid var(--border);
   padding: 20px max(24px, calc((100vw - 1120px) / 2));
   margin-bottom: 0;
-  flex-wrap: wrap;
-}
-body .community-page .panel-nav {
-  width: 100%;
-  flex-basis: 100%;
-  padding: 12px 0 0;
-  margin: 0;
-  border: 0;
-  border-top: 1px solid var(--border);
-  gap: 8px;
-  flex-wrap: wrap;
-}
-body .community-page .panel-nav button {
-  position: relative;
-  min-height: 42px;
-  padding: 10px 16px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-}
-body .community-page .panel-nav button.active {
-  color: var(--accent);
-  border-color: transparent;
-  background: var(--accent-soft);
-}
-body .community-page .panel-nav button.active::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 16px;
-  right: 16px;
-  height: 2px;
-  background: var(--accent);
-  border-radius: 2px;
 }
 body .community-page > .container {
   max-width: 1120px;
@@ -107,7 +74,6 @@ body .community-page .announcement-content h3:first-child { margin-top: 0; }
   body .community-page > .container { padding: 24px 16px 32px; gap: 20px; }
   body .community-page .card { padding: 20px 16px; }
   body .community-page :is(.card, .rental-account-card, .rental-filter-panel) { border-radius: 16px; }
-  body .community-page .panel-nav button { padding: 8px 12px; font-size: .8rem; }
   body .community-page .calc-grid, body .community-page .rental-price-fields { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .community-intro h3 { font-size: 1.2rem; }
 }

@@ -54,6 +54,16 @@ const { chromium } = require('playwright');
           await page.evaluate(value => showSection(value), section);
           await page.waitForTimeout(150);
           await checkLayout(section);
+          if (width > 1000 && ['rental', 'tools'].includes(section)) {
+            const inline = await page.locator('.community-page:visible .section-top').evaluate(el => {
+              const heading = el.querySelector('.section-heading').getBoundingClientRect();
+              return Array.from(el.querySelectorAll('.panel-nav button')).every(button => {
+                const rect = button.getBoundingClientRect();
+                return Math.abs(rect.y + rect.height / 2 - heading.y - heading.height / 2) < 2 && rect.x > heading.right;
+              });
+            });
+            assert.ok(inline, section + ' submenu must remain beside its title');
+          }
           assert.doesNotMatch(await page.locator('.community-page:visible .card, .community-page:visible .rental-account-card').first().evaluate(el => getComputedStyle(el).backgroundImage), /tactical-grid/);
           assert.equal(await page.locator('.community-page:visible').evaluate(el => {
             const palette = ['--accent', '--accent-soft', '--accent-border', '--accent-glow', '--bg', '--card-bg', '--surface-muted', '--border', '--text', '--text-secondary', '--price', '--primary-bg', '--utility-bg', '--utility-text'];
