@@ -603,24 +603,48 @@ document.querySelectorAll('.contact-copy-btn').forEach(btn => {
 });
 
 // ==================== 计算器 ====================
-calcTypeRadios.forEach(r => r.addEventListener('change', () => {
-    const type = r.value;
-    if (calcUnit) calcUnit.textContent = type === 'winrate' ? '胜率' : '场均伤害';
-    if (calcTargetL) calcTargetL.textContent = type === 'winrate' ? '胜率' : '场均伤害';
-    if (calcExpL) calcExpL.textContent = type === 'winrate' ? '胜率' : '场均伤害';
+function updateCalculatorMode(type, resetValues = false) {
+    const winrate = type === 'winrate';
+    [calcUnit, calcTargetL, calcExpL].forEach(label => {
+        if (label) label.textContent = winrate ? '胜率' : '场均伤害';
+    });
+    document.querySelectorAll('[data-calc-unit]').forEach(unit => {
+        unit.textContent = winrate ? '（%）' : '（伤害）';
+    });
+    const description = getEl('calcDescription');
+    if (description) description.textContent = winrate
+        ? '根据当前胜率、总场次和预期后续胜率，估算达到目标胜率还需进行的战斗场次。'
+        : '根据当前场均伤害、总场次和预期后续场均伤害，估算达到目标场均伤害还需进行的战斗场次。请使用同一统计范围的数据。';
+    ['currentValue', 'targetValue', 'expectedValue'].forEach((id, index) => {
+        const input = getEl(id);
+        if (!input) return;
+        input.placeholder = `例如 ${winrate ? [55, 60, 70][index] : [1500, 2000, 2500][index]}`;
+        if (winrate) input.max = '100';
+        else input.removeAttribute('max');
+        if (resetValues) input.value = '';
+    });
     if (calcResultDiv) calcResultDiv.style.display = 'none';
-}));
+}
+calcTypeRadios.forEach(r => r.addEventListener('change', () => updateCalculatorMode(r.value, true)));
+updateCalculatorMode(document.querySelector('input[name="calcType"]:checked')?.value || 'winrate');
 getEl('calcBtn')?.addEventListener('click', () => {
     const type = document.querySelector('input[name="calcType"]:checked')?.value || 'winrate';
     const cur = parseFloat(getEl('currentValue')?.value);
-    const battles = parseInt(getEl('currentBattles')?.value);
+    const battles = Number(getEl('currentBattles')?.value);
     const target = parseFloat(getEl('targetValue')?.value);
     const exp = parseFloat(getEl('expectedValue')?.value);
     const resultText = getEl('calcResultText');
     const copyCalcBtn = getEl('copyCalcResultBtn');
     if (!resultText || !calcResultDiv) return;
-    if (isNaN(cur) || isNaN(battles) || isNaN(target) || isNaN(exp) || battles < 1) {
+    if (![cur, battles, target, exp].every(Number.isFinite) || !Number.isSafeInteger(battles) || battles < 1 ||
+        [cur, target, exp].some(value => value < 0 || (type === 'winrate' && value > 100))) {
         resultText.innerHTML = '❌ 请填写完整有效数值';
+        if (copyCalcBtn) copyCalcBtn.style.display = 'none';
+        calcResultDiv.style.display = 'block';
+        return;
+    }
+    if (cur >= target) {
+        resultText.innerHTML = '✅ 当前数据已达标，无需再打';
         if (copyCalcBtn) copyCalcBtn.style.display = 'none';
         calcResultDiv.style.display = 'block';
         return;

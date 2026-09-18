@@ -26,6 +26,7 @@
     <link rel="stylesheet" href="profile-dashboard.css?v=20260917-b25">
     <link rel="stylesheet" href="booster-workbench.css?v=20260917-b27">
     <link rel="stylesheet" href="customer-support.css?v=20260918-b29">
+    <link rel="stylesheet" href="community-pages.css?v=20260918-b31-shape2">
 </head>
 <body>
     <script>document.body.classList.toggle('theme-light', document.documentElement.dataset.theme === 'light');</script>
@@ -285,7 +286,7 @@
     </div>
 
     <!-- 板块二：实用工具（内部子菜单） -->
-    <div id="sectionTools" class="content-section" style="display: none;">
+    <div id="sectionTools" class="content-section community-page" style="display: none;">
         <div class="section-top panel-top">
             <button class="back-btn" data-back="mainMenu">← 返回首页</button>
             <h2 class="section-heading">🧮 实用工具</h2>
@@ -297,17 +298,19 @@
         </div>
         <div class="container">
             <!-- 计算器面板 -->
+            <div class="community-intro"><h3>游戏工具箱</h3><p>计算战绩目标、模拟开箱，或随机选择下一场坦克。</p></div>
             <div id="toolCalculator" class="tool-panel">
                 <section class="card">
+                    <div class="community-card-heading"><h3>战绩提升计算器</h3><p id="calcDescription">根据当前胜率、总场次和预期后续胜率，估算达到目标胜率还需进行的战斗场次。</p></div>
                     <div class="calc-type">
                         <label class="calc-type-option"><input type="radio" name="calcType" value="winrate" checked><span class="calc-type-btn">📈 胜率</span></label>
                         <label class="calc-type-option"><input type="radio" name="calcType" value="average"><span class="calc-type-btn">🎯 场均伤害</span></label>
                     </div>
                     <div class="calc-grid">
-                        <div class="calc-field"><label>当前<span id="calcLabelUnit">胜率</span> (%)</label><input type="number" id="currentValue" placeholder="例如 55" step="0.01" min="0" max="100"></div>
-                        <div class="calc-field"><label>当前场次</label><input type="number" id="currentBattles" placeholder="例如 5000" step="1" min="1"></div>
-                        <div class="calc-field"><label>目标<span id="calcTargetLabel">胜率</span> (%)</label><input type="number" id="targetValue" placeholder="例如 60" step="0.01" min="0" max="100"></div>
-                        <div class="calc-field"><label>预期每场<span id="calcExpectedLabel">胜率</span> (%)</label><input type="number" id="expectedValue" placeholder="例如 70" step="0.01" min="0" max="100"></div>
+                        <div class="calc-field"><label for="currentValue">当前<span id="calcLabelUnit">胜率</span><span data-calc-unit>（%）</span></label><input type="number" id="currentValue" placeholder="例如 55" step="0.01" min="0" max="100"></div>
+                        <div class="calc-field"><label for="currentBattles">当前场次</label><input type="number" id="currentBattles" placeholder="例如 5000" step="1" min="1"></div>
+                        <div class="calc-field"><label for="targetValue">目标<span id="calcTargetLabel">胜率</span><span data-calc-unit>（%）</span></label><input type="number" id="targetValue" placeholder="例如 60" step="0.01" min="0" max="100"></div>
+                        <div class="calc-field"><label for="expectedValue">预期后续<span id="calcExpectedLabel">胜率</span><span data-calc-unit>（%）</span></label><input type="number" id="expectedValue" placeholder="例如 70" step="0.01" min="0" max="100"></div>
                     </div>
                     <button class="calc-btn" id="calcBtn">🔍 计算所需场次</button>
                     <div class="calc-result" id="calcResult" style="display: none;"><div id="calcResultText"></div><button class="copy-calc-btn" id="copyCalcResultBtn" style="display:none;">📋 复制结果</button></div>
@@ -351,15 +354,16 @@
     </div>
 
     <!-- 板块三：游戏新闻 -->
-    <div id="sectionNews" class="content-section" style="display: none;">
+    <div id="sectionNews" class="content-section community-page" style="display: none;">
         <div class="section-top"><button class="back-btn" data-back="mainMenu">← 返回首页</button><h2 class="section-heading">📰 游戏新闻</h2></div>
-        <div class="container"><section class="card"><div id="newsContainer" class="news-list"></div></section></div>
+        <div class="container"><div class="community-intro"><h3>游戏资讯</h3><p>了解游戏动态、版本更新与活动资讯。</p></div><section class="card"><div id="newsContainer" class="news-list"></div></section></div>
     </div>
 
     <!-- 板块四：站内公告 -->
-    <div id="sectionAnnouncement" class="content-section" style="display: none;">
+    <div id="sectionAnnouncement" class="content-section community-page" style="display: none;">
         <div class="section-top"><button class="back-btn" data-back="mainMenu">← 返回首页</button><h2 class="section-heading">📢 站内公告</h2></div>
         <div class="container">
+            <div class="community-intro"><h3>平台公告</h3><p>服务说明、平台通知与使用须知。</p></div>
             <section class="card">
                 <div class="announcement-content">
                     <!-- 动态公告内容将由 JS 填充 -->
@@ -370,7 +374,7 @@
 
 
     <!-- ==================== 板块六：账号租赁 ==================== -->
-    <div id="sectionRental" class="content-section" style="display: none;">
+    <div id="sectionRental" class="content-section community-page" style="display: none;">
         <div class="section-top panel-top">
             <button class="back-btn" data-back="mainMenu">← 返回首页</button>
             <h2 class="section-heading">🎮 账号租赁</h2>
@@ -382,6 +386,7 @@
             </nav>
         </div>
         <div class="container">
+            <div class="community-intro"><h3>账号租赁</h3><p>查找心仪账号、发布出租信息，管理租用与出租记录。</p></div>
             <!-- 租号大厅 -->
             <div id="rentalHallView" class="rental-view">
                 <details id="rentalFilterPanel" class="rental-filter-panel">
@@ -422,7 +427,7 @@
                         <label>坦克清单（选填，每行一个）</label>
                         <textarea id="rentalTankList" rows="4" placeholder="例如：T-54 / IS-7 / ..."></textarea>
                     </div>
-                    <div class="form-group" style="display:flex; gap:10px;">
+                    <div class="form-group rental-price-fields">
                         <div style="flex:1;">
                             <label>时租价格（元/小时）</label>
                             <input type="number" id="rentalHourly" step="0.01" min="0" value="0">
@@ -1038,6 +1043,6 @@
     <script src="boost-completion.js?v=20260917-b27"></script>
     <script src="customer-support.js?v=20260917-b28"></script>
     <script src="user-permissions.js?v=20260917-b28"></script>
-    <script src="script.js?v=20260918-order-autofill"></script>
+    <script src="script.js?v=20260918-b31-calculator"></script>
 </body>
 </html>
