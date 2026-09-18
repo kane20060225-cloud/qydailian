@@ -57,3 +57,5 @@ B28 已完成上线、生产迁移和管理员手机提醒确认，发布及备�
 打手工作台卡片、收益明细与测试收益核对冲正见 [B26_DEPLOYMENT_REPORT.md](docs/B26_DEPLOYMENT_REPORT.md)。B26 无数据库迁移，后端已重启；测试收益由管理员逐单核对后操作。
 
 结单截图必填、管理员审核后结算及历史测试收入清零见 [B27_DEPLOYMENT_REPORT.md](docs/B27_DEPLOYMENT_REPORT.md)。B27 新增审核和测试收入记录表；历史现金收益已清零并保留原流水，新订单从审核通过后开始计入收益。
+
+租号、公告、新闻和实用工具保留原配色的形态统一及场均计算器修复已上线，部署、备份和云同步记录见 [B31_DEPLOYMENT_REPORT.md](docs/B31_DEPLOYMENT_REPORT.md)。B31 仅发布前端。

@@ -1,5 +1,5 @@
 'use strict';
-// Serve local assets and synthetic API fixtures; never contact production.
+// Use synthetic API fixtures. Optional live asset checks permit same-origin GET/HEAD only.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -7,13 +7,13 @@ const express = require('express');
 const { chromium } = require('playwright');
 
 (async () => {
-  const output = path.resolve(__dirname, '../../artifacts/community-ui');
+  const output = path.resolve(__dirname, process.env.COMMUNITY_VERIFY_ORIGIN ? '../../artifacts/ui-preview/live-community-ui' : '../../artifacts/community-ui');
   fs.mkdirSync(output, { recursive: true });
   const app = express();
   app.use(express.static(path.resolve(__dirname, '../../public')));
   const server = app.listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
-  const origin = `http://127.0.0.1:${server.address().port}`;
+  const origin = process.env.COMMUNITY_VERIFY_ORIGIN || `http://127.0.0.1:${server.address().port}`;
   let browser;
   try {
     browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}) });
@@ -32,6 +32,7 @@ const { chromium } = require('playwright');
         await context.route('**/*', async route => {
           const url = new URL(route.request().url());
           if (url.origin !== origin) return route.abort();
+          if (!['GET', 'HEAD'].includes(route.request().method())) return route.abort();
           if (!url.pathname.startsWith('/api/')) return route.continue();
           let data = [];
           if (url.pathname === '/api/service-content') data = require('../lib/service-content').published({ revision: 1, ...require('../lib/service-content').defaults });
