@@ -67,3 +67,5 @@ B28 已完成上线、生产迁移和管理员手机提醒确认，发布及备�
 主题切换现在自动保存到账号，修复浅色刷新后被旧深色设置覆盖的问题，发布及回归验证见 [B34_DEPLOYMENT_REPORT.md](docs/B34_DEPLOYMENT_REPORT.md)。
 
 实用工具、公告与新闻的冗余介绍区已删除，保留导航标题并将正文前移，见 [B35_DEPLOYMENT_REPORT.md](docs/B35_DEPLOYMENT_REPORT.md)。
+
+QY Blitz PWA 已上线，支持主屏幕安装和独立窗口；业务 API 不进入离线缓存。发布验收、未 PWA 基线标签及完整回退流程见 [B37_DEPLOYMENT_REPORT.md](docs/B37_DEPLOYMENT_REPORT.md)，使用和检查说明见 [PWA_RUNBOOK.md](docs/PWA_RUNBOOK.md)。
