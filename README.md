@@ -61,3 +61,5 @@ B28 已完成上线、生产迁移和管理员手机提醒确认，发布及备�
 租号、公告、新闻和实用工具保留原配色的形态统一及场均计算器修复已上线，部署、备份和云同步记录见 [B31_DEPLOYMENT_REPORT.md](docs/B31_DEPLOYMENT_REPORT.md)。B31 仅发布前端。
 
 实用工具与账号租赁子菜单已恢复原有标题右侧横排，见 [B32_DEPLOYMENT_REPORT.md](docs/B32_DEPLOYMENT_REPORT.md)。
+
+开箱模拟器军需库、奖励仓库卡片和“这把玩什么”坦克卡片滚动抽选已上线，仅修改这两个工具，保留原配色及其他板块，见 [B33_DEPLOYMENT_REPORT.md](docs/B33_DEPLOYMENT_REPORT.md)。
