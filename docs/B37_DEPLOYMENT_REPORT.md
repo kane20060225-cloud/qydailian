@@ -20,9 +20,7 @@ PM2 `my-backend`重启后PID为321478，Nginx语法检查与reload成功。健�
 
 ## 备份与云同步
 
-未PWA源码基线为`bf4d35c77eab40f1dd7165b6c311d9a6d4a50188`，已创建本地注释标签`pre-pwa-20260919`。源码、部署/回退工具与本报告均已提交到本地Git，目标为既有GitHub仓库`kane20060225-cloud/qydailian`的`main`和`codex/b7-ux-foundation`，计划使用原子快进推送，不强制重写历史。
-
-**云同步尚未完成**：自动审批拒绝推送，要求用户明确授权该具体GitHub目标与完整推送内容。随后只读SSH身份核对确认账号归属与仓库所有者匹配，增量检查未发现私钥/provider token，也没有跟踪.env、.pem、运行备份或artifacts，但重审仍要求该具体授权。两个云分支仍为未PWA基线，标签尚未上传。用户确认后需继续推送，并核对最终远端refs后更新本记录；生产上线及服务器/本地回退备份不受此阻拦影响。
+未PWA源码基线为`bf4d35c77eab40f1dd7165b6c311d9a6d4a50188`，保存为云端注释标签`pre-pwa-20260919`。源码、部署/回退工具与本报告已原子快进同步到既有GitHub仓库`kane20060225-cloud/qydailian`的`main`和`codex/b7-ux-foundation`，没有强制重写历史。推送内容检查未发现私钥/provider token，也没有跟踪.env、.pem、运行备份或artifacts。
 
 生产独立发布目录为：
 
