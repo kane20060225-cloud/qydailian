@@ -40,7 +40,11 @@ const { chromium } = require('playwright');
           else if (url.pathname === '/api/user/credits') data = { qy_credits: 1200 };
           else if (url.pathname === '/api/user/profile') data = { id: 7, username: '测试用户', role: 'user' };
           else if (url.pathname === '/api/announcements') data = { title: '平台公告', content: '欢迎来到 QingYi 情谊平台！\n请仔细确认服务内容、价格及相关要求。\n订单进度可在个人中心查看。' };
-          else if (url.pathname === '/api/game-news') data = [{ title: '版本更新与活动资讯', content: '了解新版本内容及活动开放时间。', created_at: '2026-09-18T00:00:00Z' }, { title: '游戏动态', content: '更多游戏资讯将在这里发布。', created_at: '2026-09-17T00:00:00Z' }];
+          else if (url.pathname === '/api/game-news') data = [
+            { id: 1, title: '版本更新与活动资讯', summary: '了解新版本内容及活动开放时间。', content: '新版本现已上线。', category: 'in_game', label: '版本', cover_url: '/bg.webp', is_featured: 1, published_at: '2026-09-18T00:00:00Z', created_at: '2026-09-18T00:00:00Z' },
+            { id: 2, title: '游戏动态', summary: '更多游戏资讯将在这里发布。', content: '战场动态持续更新。', category: 'in_game', label: '动态', created_at: '2026-09-17T00:00:00Z' },
+            { id: 3, title: '社区挑战赛', summary: '和队友一起参与社区挑战。', content: '社区挑战赛现已开放报名。', category: 'community', label: '赛事', cover_url: '/bg.webp', published_at: '2026-09-19T00:00:00Z', created_at: '2026-09-19T00:00:00Z' }
+          ];
           else if (url.pathname === '/api/rental/accounts') data = [{ id: 1, client_type: 'Android', tank_list: 'IS-7\nT-54\nE 100', hourly_price: 2, daily_price: 24, available_time_desc: '每天 18:00–24:00', rules: '禁止改密；禁止排位', owner_name: '测试出租方', availability_status: 'available' }];
           return route.fulfill({ json: data });
         });
@@ -54,6 +58,16 @@ const { chromium } = require('playwright');
           await page.evaluate(value => showSection(value), section);
           await page.waitForTimeout(150);
           await checkLayout(section);
+          if (section === 'news') {
+            assert.equal(await page.locator('.game-news-card').count(), 2);
+            await page.locator('[data-news-category="community"]').click();
+            assert.equal(await page.locator('.game-news-card').count(), 1);
+            await page.locator('.game-news-card-button').click();
+            assert.equal(await page.locator('#gameNewsDetailModal').isVisible(), true);
+            await page.locator('#closeGameNewsDetailBtn').click();
+            assert.equal(await page.locator('#gameNewsDetailModal').isVisible(), false);
+            await page.locator('[data-news-category="in_game"]').click();
+          }
           if (width > 1000 && ['rental', 'tools'].includes(section)) {
             const inline = await page.locator('.community-page:visible .section-top').evaluate(el => {
               const heading = el.querySelector('.section-heading').getBoundingClientRect();
@@ -64,7 +78,9 @@ const { chromium } = require('playwright');
             });
             assert.ok(inline, section + ' submenu must remain beside its title');
           }
-          assert.doesNotMatch(await page.locator('.community-page:visible .card, .community-page:visible .rental-account-card').first().evaluate(el => getComputedStyle(el).backgroundImage), /tactical-grid/);
+          const communitySurface = page.locator('.community-page:visible .card, .community-page:visible .rental-account-card, .community-page:visible .game-news-card-button').first();
+          assert.ok(await communitySurface.count(), `${section}: expected a visible community surface`);
+          assert.doesNotMatch(await communitySurface.evaluate(el => getComputedStyle(el).backgroundImage), /tactical-grid/);
           assert.equal(await page.locator('.community-page:visible').evaluate(el => {
             const palette = ['--accent', '--accent-soft', '--accent-border', '--accent-glow', '--bg', '--card-bg', '--surface-muted', '--border', '--text', '--text-secondary', '--price', '--primary-bg', '--utility-bg', '--utility-text'];
             const original = getComputedStyle(document.body), current = getComputedStyle(el);

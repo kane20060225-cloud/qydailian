@@ -43,6 +43,7 @@ const {createSupportRouter}=require('./routes/customer-support');
 const {createPermissionsRouter}=require('./routes/user-permissions');
 const serviceContent=require('./lib/service-content');
 const loginDevices=require('./lib/login-devices');
+const {normalizeGameNewsInput}=require('./lib/game-news');
 const locateLoginIp=loginDevices.createLocator();
 const {changeAvailability,validateChange}=require('./lib/booster-availability');
 const { paymentFormParams, createRechargeOrder, processTrackedRecharge,
@@ -493,8 +494,17 @@ async function initDB() {
         id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(200) NOT NULL,
         content TEXT NOT NULL,
+        category ENUM('in_game','community') NOT NULL DEFAULT 'in_game',
+        summary VARCHAR(280) NULL,
+        cover_url VARCHAR(1000) NULL,
+        label VARCHAR(40) NULL,
+        source_name VARCHAR(100) NULL,
+        source_url VARCHAR(1000) NULL,
+        is_featured TINYINT(1) NOT NULL DEFAULT 0,
+        published_at DATETIME NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_game_news_category_published (category, is_featured, published_at, id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
@@ -2355,7 +2365,8 @@ app.get('/api/announcements', async (req, res) => {
 
 app.get('/api/game-news', async (req, res) => {
   try {
-    const [rows] = await pool.execute('SELECT * FROM game_news ORDER BY created_at DESC LIMIT 10');
+    const [rows] = await pool.execute('SELECT * FROM game_news ORDER BY COALESCE(published_at, created_at) DESC, id DESC LIMIT 30');
+    res.set('Cache-Control', 'no-store');
     res.json(rows);
   } catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
@@ -2366,7 +2377,7 @@ app.get('/api/admin/announcements', adminMiddleware, async (req, res) => {
   catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 app.get('/api/admin/game-news', adminMiddleware, async (req, res) => {
-  try { const [rows] = await pool.execute('SELECT * FROM game_news ORDER BY created_at DESC'); res.json(rows); }
+  try { const [rows] = await pool.execute('SELECT * FROM game_news ORDER BY COALESCE(published_at, created_at) DESC, id DESC'); res.json(rows); }
   catch (err) { res.status(500).json({ error: '服务器错误' }); }
 });
 
@@ -2385,14 +2396,21 @@ app.post('/api/admin/announcements', adminMiddleware, async (req, res) => {
 });
 
 app.post('/api/admin/game-news', adminMiddleware, async (req, res) => {
-  const { id, title, content } = req.body;
-  if (!title || !content) return res.status(400).json({ error: '标题和内容必填' });
+  let item;
+  try { item = normalizeGameNewsInput(req.body); }
+  catch (err) { return res.status(400).json({ error: err.message }); }
+  const values = [item.title, item.content, item.category, item.summary, item.cover_url, item.label,
+    item.source_name, item.source_url, item.is_featured, item.published_at];
   try {
-    if (id) {
-      await pool.execute('UPDATE game_news SET title=?, content=? WHERE id=?', [title, content, id]);
+    if (req.body.id) {
+      await pool.execute(`UPDATE game_news SET title=?, content=?, category=?, summary=?, cover_url=?, label=?,
+        source_name=?, source_url=?, is_featured=?, published_at=COALESCE(?, created_at) WHERE id=?`,
+      [...values, req.body.id]);
       res.json({ success: true, message: '已更新' });
     } else {
-      await pool.execute('INSERT INTO game_news (title, content) VALUES (?, ?)', [title, content]);
+      await pool.execute(`INSERT INTO game_news
+        (title, content, category, summary, cover_url, label, source_name, source_url, is_featured, published_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))`, values);
       res.json({ success: true, message: '已创建' });
     }
   } catch (err) { res.status(500).json({ error: '服务器错误' }); }

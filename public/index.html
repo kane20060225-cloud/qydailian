@@ -33,6 +33,7 @@
     <link rel="stylesheet" href="booster-workbench.css?v=20260917-b27">
     <link rel="stylesheet" href="customer-support.css?v=20260918-b29">
     <link rel="stylesheet" href="community-pages.css?v=20260918-b32-inline-nav">
+    <link rel="stylesheet" href="game-news.css?v=20260919-b38">
     <link rel="stylesheet" href="game-tools.css?v=20260919-b33">
     <link rel="stylesheet" href="pwa.css?v=20260919-pwa1">
 </head>
@@ -49,7 +50,7 @@
             <a class="site-nav-link" href="#rental" data-nav-target="rental" draggable="false">账号租赁</a>
             <a class="site-nav-link" href="#tools" data-nav-target="tools" draggable="false">实用工具</a>
             <a class="site-nav-link" href="#announcement" data-nav-target="announcement" draggable="false">站内公告</a>
-            <a class="site-nav-link" href="#news" data-nav-target="news" draggable="false">游戏新闻</a>
+            <a class="site-nav-link" href="#news" data-nav-target="news" draggable="false">游戏资讯</a>
         </nav>
         <div class="user-actions" id="userActions">
             <button class="theme-toggle-btn" id="themeToggleBtn" type="button" aria-label="切换到浅色主题" title="切换到浅色主题">☀</button>
@@ -135,7 +136,7 @@
             <div class="quick-grid">
                 <button class="menu-card quick-card" data-target="tools"><span class="menu-icon">🧮</span><span><strong>实用工具</strong><small>计算器、开箱模拟器、随机坦克</small></span></button>
                 <button class="menu-card quick-card" data-target="announcement"><span class="menu-icon">📢</span><span><strong>站内公告</strong><small>下单须知与服务说明</small></span></button>
-                <button class="menu-card quick-card" data-target="news"><span class="menu-icon">📰</span><span><strong>游戏新闻</strong><small>最新公告与活动资讯</small></span></button>
+                <button class="menu-card quick-card" data-target="news"><span class="menu-icon">📰</span><span><strong>游戏资讯</strong><small>游戏动态、社区与赛事资讯</small></span></button>
             </div>
         </section>
     </main>
@@ -368,10 +369,25 @@
         </div>
     </div>
 
-    <!-- 板块三：游戏新闻 -->
+    <!-- 板块三：游戏资讯 -->
     <div id="sectionNews" class="content-section community-page" style="display: none;">
-        <div class="section-top"><button class="back-btn" data-back="mainMenu">← 返回首页</button><h2 class="section-heading">📰 游戏新闻</h2></div>
-        <div class="container"><section class="card"><div id="newsContainer" class="news-list"></div></section></div>
+        <div class="section-top"><button class="back-btn" data-back="mainMenu">← 返回首页</button><h2 class="section-heading">📰 游戏资讯</h2></div>
+        <div class="container game-news-page">
+            <div class="game-news-heading">
+                <div>
+                    <span class="game-news-kicker">BATTLEFIELD INTELLIGENCE</span>
+                    <h3>战场情报中心</h3>
+                    <p>版本、活动、社区和赛事动态，都在这里及时掌握。</p>
+                </div>
+                <nav class="game-news-tabs" id="gameNewsTabs" role="tablist" aria-label="游戏资讯分类">
+                    <button class="game-news-tab active" type="button" role="tab" aria-selected="true" data-news-category="in_game">游戏内动态</button>
+                    <button class="game-news-tab" type="button" role="tab" aria-selected="false" data-news-category="community">社区与赛事</button>
+                </nav>
+            </div>
+            <section class="game-news-surface" aria-live="polite" aria-busy="true">
+                <div id="newsContainer" class="game-news-list"></div>
+            </section>
+        </div>
     </div>
 
     <!-- 板块四：站内公告 -->
@@ -592,7 +608,7 @@
                 <h4 style="margin-bottom:16px;">📰 动态内容管理</h4>
                 <div class="content-manager-tabs" style="display:flex; gap:10px; margin-bottom:16px;">
                     <button class="content-mgr-tab active" data-ctype="announcements">📢 站内公告</button>
-                    <button class="content-mgr-tab" data-ctype="game-news">📰 游戏新闻</button>
+                    <button class="content-mgr-tab" data-ctype="game-news">📰 游戏资讯</button>
                     <button class="content-mgr-tab" data-ctype="projects">⚡ 代练项目</button>
                     <button class="content-mgr-tab" data-ctype="activities">🎉 活动管理</button>
                 </div>
@@ -834,7 +850,55 @@
             </div>
             <div class="form-group">
                 <label>标题</label>
-                <input type="text" id="contentEditorInputTitle" placeholder="请输入标题">
+                <input type="text" id="contentEditorInputTitle" maxlength="200" placeholder="请输入标题">
+            </div>
+            <div id="contentEditorNewsFields" class="content-editor-news-fields" hidden>
+                <div class="content-editor-news-grid">
+                    <div class="form-group">
+                        <label for="contentEditorNewsCategory">所属栏目</label>
+                        <select id="contentEditorNewsCategory">
+                            <option value="in_game">游戏内动态</option>
+                            <option value="community">社区与赛事</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="contentEditorNewsLabel">内容标签</label>
+                        <input type="text" id="contentEditorNewsLabel" maxlength="40" placeholder="例如：版本、活动、赛事">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="contentEditorNewsSummary">卡片摘要</label>
+                    <textarea id="contentEditorNewsSummary" rows="3" maxlength="280" placeholder="用一句话说明这条资讯的核心内容；留空时将从正文自动提取。"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="contentEditorNewsCover">封面图片</label>
+                    <div class="content-editor-cover-row">
+                        <input type="url" id="contentEditorNewsCover" maxlength="1000" placeholder="https://... 或 /uploads/...">
+                        <input type="file" id="contentEditorCoverFileInput" accept="image/*" hidden>
+                        <button type="button" class="submit-btn" id="contentEditorCoverUploadBtn">上传封面</button>
+                    </div>
+                    <img id="contentEditorCoverPreview" class="content-editor-cover-preview" alt="封面预览" hidden>
+                </div>
+                <div class="content-editor-news-grid">
+                    <div class="form-group">
+                        <label for="contentEditorNewsPublishedAt">发布时间</label>
+                        <input type="datetime-local" id="contentEditorNewsPublishedAt">
+                    </div>
+                    <div class="form-group content-editor-featured-field">
+                        <label><input type="checkbox" id="contentEditorNewsFeatured"> 设为重点资讯</label>
+                        <small>重点资讯会优先显示在栏目顶部。</small>
+                    </div>
+                </div>
+                <div class="content-editor-news-grid">
+                    <div class="form-group">
+                        <label for="contentEditorNewsSourceName">来源名称</label>
+                        <input type="text" id="contentEditorNewsSourceName" maxlength="100" placeholder="例如：Wargaming 官方">
+                    </div>
+                    <div class="form-group">
+                        <label for="contentEditorNewsSourceUrl">原文链接</label>
+                        <input type="url" id="contentEditorNewsSourceUrl" maxlength="1000" placeholder="https://...">
+                    </div>
+                </div>
             </div>
             <div class="form-group">
                 <label>内容（支持 Markdown 图片：![描述](图片地址) ）</label>
@@ -854,6 +918,23 @@
             <button class="submit-btn" id="contentEditorSaveBtn">💾 保存</button>
             <p class="modal-footer-text">提示：图片上传后可复制生成的地址插入到内容中</p>
         </div>
+    </div>
+
+    <!-- 游戏资讯详情弹窗 -->
+    <div class="modal-overlay game-news-detail-modal" id="gameNewsDetailModal" style="display: none;">
+        <article class="modal-card game-news-detail-card" role="document" aria-labelledby="gameNewsDetailTitle">
+            <div class="modal-header">
+                <div>
+                    <span id="gameNewsDetailCategory" class="game-news-detail-category"></span>
+                    <h3 id="gameNewsDetailTitle">游戏资讯</h3>
+                </div>
+                <button class="modal-close" id="closeGameNewsDetailBtn" type="button" aria-label="关闭资讯详情">&times;</button>
+            </div>
+            <img id="gameNewsDetailCover" class="game-news-detail-cover" alt="" hidden>
+            <div id="gameNewsDetailMeta" class="game-news-detail-meta"></div>
+            <div id="gameNewsDetailContent" class="game-news-detail-content"></div>
+            <a id="gameNewsDetailSource" class="game-news-detail-source" target="_blank" rel="noopener noreferrer" hidden>查看原文 <span aria-hidden="true">↗</span></a>
+        </article>
     </div>
 
     <!-- 商品编辑弹窗 -->
@@ -1054,8 +1135,9 @@
     <script src="user-permissions.js?v=20260917-b28"></script>
     <script src="tank-catalog.js?v=20260919-b33"></script>
     <script src="game-tools.js?v=20260919-b33"></script>
+    <script src="game-news.js?v=20260919-b38"></script>
     <script src="theme-preference.js?v=20260919-b34"></script>
     <script src="pwa.js?v=20260919-pwa1"></script>
-    <script src="script.js?v=20260919-b36-nav-drag"></script>
+    <script src="script.js?v=20260919-b38-game-news"></script>
 </body>
 </html>

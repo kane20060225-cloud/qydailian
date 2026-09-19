@@ -2560,21 +2560,21 @@ async function loadAnnouncement() {
 async function loadGameNews() {
   const container = getEl('newsContainer');
   if (!container) return;
+  const tabs = getEl('gameNewsTabs');
+  if (!window.GameNewsUI) {
+    container.textContent = '游戏资讯组件加载失败';
+    return;
+  }
+  window.GameNewsUI.renderStatus(document, container, 'loading', '正在接收战场情报…');
   try {
     const res = await fetch(`${API_BASE}/game-news`);
+    if (!res.ok) throw new Error('加载失败');
     const news = await res.json();
-    if (news && news.length) {
-      container.innerHTML = news.map(n => `
-        <div class="news-item">
-          <div class="news-title">${n.title}</div>
-          <div class="news-time">${new Date(n.created_at).toLocaleString()}</div>
-          <div class="news-content">${renderContentWithImages(n.content)}</div>
-        </div>
-      `).join('');
-    } else {
-      container.innerHTML = '<p>暂无新闻</p>';
-    }
-  } catch (e) { container.innerHTML = '<p style="color:var(--red)">加载失败</p>'; }
+    if (!Array.isArray(news)) throw new Error('数据格式错误');
+    window.GameNewsUI.render(document, container, tabs, news);
+  } catch (e) {
+    window.GameNewsUI.renderStatus(document, container, 'error', '游戏资讯加载失败，请稍后重试。');
+  }
 }
 
 
@@ -2619,23 +2619,37 @@ function renderContentEditor(type, items) {
     </div>`;
   if (items && items.length) {
     items.forEach(item => {
+      const preview = item.summary || item.content || '';
+      const newsMeta = type === 'game-news' ? `
+        <div class="content-news-admin-meta">
+          <span>${item.category === 'community' ? '社区与赛事' : '游戏内动态'}</span>
+          ${item.label ? `<span>${escapeContentMarkup(item.label)}</span>` : ''}
+          ${Number(item.is_featured) === 1 ? '<span>重点资讯</span>' : ''}
+        </div>` : '';
       html += `
       <div class="content-item-card" data-id="${item.id}">
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <strong>${item.title}</strong>
+          <strong>${escapeContentMarkup(item.title)}</strong>
           <div>
             <button class="edit-content-btn" data-type="${type}" data-id="${item.id}">编辑</button>
             <button class="delete-content-btn" data-type="${type}" data-id="${item.id}">删除</button>
           </div>
         </div>
+        ${newsMeta}
         <p style="font-size:0.8rem; color: var(--text-muted);">${new Date(item.created_at).toLocaleString()}</p>
-        <pre style="white-space: pre-wrap; font-family: inherit; margin-top: 8px;">${item.content.substring(0, 100)}...</pre>
+        <pre style="white-space: pre-wrap; font-family: inherit; margin-top: 8px;">${escapeContentMarkup(preview.substring(0, 100))}${preview.length > 100 ? '…' : ''}</pre>
       </div>`;
     });
   } else {
     html += '<p>暂无内容</p>';
   }
   return html;
+}
+
+function escapeContentMarkup(value) {
+  return String(value ?? '').replace(/[&<>"']/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[character]);
 }
 
 function bindContentEditorEvents(type) {
@@ -2682,9 +2696,41 @@ function showContentForm(type, item) {
   getEl('contentEditorTitle').textContent = item ? '编辑内容' : '新增内容';
   getEl('contentEditorInputTitle').value = item ? item.title : '';
   getEl('contentEditorTextarea').value = item ? item.content : '';
+  const isNews = type === 'game-news';
+  const newsFields = getEl('contentEditorNewsFields');
+  if (newsFields) newsFields.hidden = !isNews;
+  if (isNews) {
+    getEl('contentEditorNewsCategory').value = item?.category === 'community' ? 'community' : 'in_game';
+    getEl('contentEditorNewsLabel').value = item?.label || '';
+    getEl('contentEditorNewsSummary').value = item?.summary || '';
+    getEl('contentEditorNewsCover').value = item?.cover_url || '';
+    getEl('contentEditorNewsPublishedAt').value = toLocalDateTimeInput(item?.published_at || item?.created_at);
+    getEl('contentEditorNewsSourceName').value = item?.source_name || '';
+    getEl('contentEditorNewsSourceUrl').value = item?.source_url || '';
+    getEl('contentEditorNewsFeatured').checked = Number(item?.is_featured) === 1;
+    updateContentCoverPreview(item?.cover_url || '');
+  }
   getEl('contentEditorError').textContent = '';
   getEl('contentEditorPreview').innerHTML = '';
   getEl('contentEditorModal').style.display = 'flex';
+}
+
+function toLocalDateTimeInput(value) {
+  if (!value) return '';
+  const normalized = typeof value === 'string' && /^\d{4}-\d{2}-\d{2} /.test(value) ? value.replace(' ', 'T') : value;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return '';
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function updateContentCoverPreview(value) {
+  const preview = getEl('contentEditorCoverPreview');
+  if (!preview) return;
+  const safeUrl = window.GameNewsUI?.safeMediaUrl(value) || '';
+  preview.hidden = !safeUrl;
+  preview.removeAttribute('src');
+  if (safeUrl) preview.src = safeUrl;
 }
 
 // 编辑器初始化（立即执行，因为 script 在 body 底部）
@@ -2697,6 +2743,9 @@ function showContentForm(type, item) {
   const textarea = getEl('contentEditorTextarea');
   const preview = getEl('contentEditorPreview');
   const msgEl = getEl('contentEditorUploadMsg');
+  const coverInput = getEl('contentEditorNewsCover');
+  const coverUploadBtn = getEl('contentEditorCoverUploadBtn');
+  const coverFileInput = getEl('contentEditorCoverFileInput');
 
   if (!saveBtn || !modal) return; // 弹窗还未加载则退出（初次加载时可能无）
 
@@ -2711,6 +2760,16 @@ function showContentForm(type, item) {
     const token = safeGetItem('token');
     const endpoint = getEndpointForType(currentEditType);
     const body = { title, content };
+    if (currentEditType === 'game-news') {
+      body.category = getEl('contentEditorNewsCategory').value;
+      body.label = getEl('contentEditorNewsLabel').value.trim();
+      body.summary = getEl('contentEditorNewsSummary').value.trim();
+      body.cover_url = coverInput.value.trim();
+      body.published_at = getEl('contentEditorNewsPublishedAt').value || null;
+      body.source_name = getEl('contentEditorNewsSourceName').value.trim();
+      body.source_url = getEl('contentEditorNewsSourceUrl').value.trim();
+      body.is_featured = getEl('contentEditorNewsFeatured').checked;
+    }
     if (currentEditItem) body.id = currentEditItem.id;
     try {
       const res = await fetch(`${API_BASE}${endpoint}`, {
@@ -2735,6 +2794,35 @@ function showContentForm(type, item) {
   modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
 
   uploadBtn.addEventListener('click', () => fileInput.click());
+  coverUploadBtn?.addEventListener('click', () => coverFileInput.click());
+  coverInput?.addEventListener('input', () => updateContentCoverPreview(coverInput.value));
+
+  coverFileInput?.addEventListener('change', () => {
+    const file = coverFileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async event => {
+      try {
+        const token = safeGetItem('token');
+        const res = await fetch(`${API_BASE}/upload-image`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ image: event.target.result })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.url) throw new Error(data.error || '上传失败');
+        coverInput.value = data.url;
+        updateContentCoverPreview(data.url);
+        msgEl.textContent = '封面上传成功';
+      } catch (error) {
+        msgEl.textContent = error.message || '封面上传失败';
+      } finally {
+        coverFileInput.value = '';
+        setTimeout(() => { msgEl.textContent = ''; }, 2500);
+      }
+    };
+    reader.readAsDataURL(file);
+  });
 
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files[0];
