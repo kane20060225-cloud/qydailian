@@ -14,7 +14,7 @@ test('B38 plan is read-only and apply only adds game-news fields and index', asy
   let writes = 0;
   const conn = { execute: async (sql, params = []) => {
     if (sql.includes('information_schema.tables')) return [[{ total: 1 }]];
-    if (sql.includes('information_schema.columns')) return [[...columns].map(column_name => ({ column_name }))];
+    if (sql.includes('information_schema.columns')) return [[...columns].map(COLUMN_NAME => ({ COLUMN_NAME }))];
     if (sql.includes('information_schema.statistics')) return [hasIndex ? [{ index_name: INDEX_NAME }] : []];
     if (sql.startsWith('SELECT source_url FROM game_news')) {
       return [[...seedUrls].map(source_url => ({ source_url }))];

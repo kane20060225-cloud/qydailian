@@ -66,10 +66,10 @@ async function healthy(port) {
     } else assert.equal(file.baseline, null, 'Missing baseline file: ' + file.path);
   }
 
-  fs.mkdirSync(root + '/backup', { mode: 0o700 });
+  fs.mkdirSync(root + '/backup', { mode: 0o700, recursive: true });
   run('tar', ['-czf', root + '/backup/public-before.tar.gz', '-C', site, 'public']);
   run('tar', ['-cf', root + '/backup/runtime-before.tar', '-C', site, ...before.existing]);
-  fs.mkdirSync(root + '/code', { mode: 0o700 });
+  fs.mkdirSync(root + '/code', { mode: 0o700, recursive: true });
   assert.deepEqual(run('tar', ['-tf', root + '/runtime.tar']).toString().trim().split('\n').filter(name => !name.endsWith('/')).sort(), [...allowed].sort());
   run('tar', ['-xf', root + '/runtime.tar', '-C', root + '/code']);
   for (const file of manifest.files) assert.equal(contentHash(fs.readFileSync(root + '/code/' + file.path)), file.sha256);
@@ -93,9 +93,9 @@ async function healthy(port) {
       await isolated.query(schema.toString('utf8'));
       await isolated.execute("INSERT INTO game_news (title,content) VALUES ('Legacy news','Legacy body')");
       const first = await migrationModule.runMigration(isolated, { apply: true });
-      assert.ok(first.every(item => item.status === 'applied'));
+      assert.ok(first.every(item => item.status === 'applied'), JSON.stringify(first));
       const second = await migrationModule.runMigration(isolated, { apply: true });
-      assert.ok(second.every(item => item.status === 'applied'));
+      assert.ok(second.every(item => item.status === 'applied'), JSON.stringify(second));
       const [rows] = await isolated.execute('SELECT title,category,source_url FROM game_news ORDER BY id');
       assert.equal(rows.length, 3);
       assert.equal(rows[0].category, 'in_game');
@@ -199,4 +199,7 @@ async function healthy(port) {
       console.error('B38 runtime rollback completed; additive news schema and seeded rows retained.');
     }
   }
-})().catch(error => { console.error('B38 deployment failed:', error.code || error.message); process.exitCode = 1; });
+})().catch(error => {
+  console.error('B38 deployment failed:', error.stack || error.code || error.message);
+  process.exitCode = 1;
+});

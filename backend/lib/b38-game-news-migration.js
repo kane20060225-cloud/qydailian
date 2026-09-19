@@ -49,7 +49,10 @@ async function inspect(conn) {
     `SELECT index_name FROM information_schema.statistics
      WHERE table_schema=DATABASE() AND table_name='game_news' AND index_name=?`, [INDEX_NAME]
   );
-  const columnNames = new Set(columns.map(row => row.column_name));
+  // MySQL/MariaDB drivers may preserve information_schema column labels in
+  // either lower or upper case. Normalize both so an already-applied column
+  // is never treated as pending on production.
+  const columnNames = new Set(columns.map(row => row.column_name || row.COLUMN_NAME));
   let seedUrls = new Set();
   if (columnNames.has('source_url')) {
     const [seedRows] = await conn.execute(
