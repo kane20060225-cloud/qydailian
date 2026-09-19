@@ -40,9 +40,16 @@ const origin = 'https://wotbqydailian.vip';
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${width}/${theme}/${target}`);
       }
       await page.evaluate(() => showSection('mainMenu'));
+      assert.equal(await page.locator('#pwaInstallArea').isVisible(), true);
       await page.screenshot({ path: path.join(output, `${theme}-${width}-home.png`), fullPage: true });
       layouts.push({ width, theme });
     }
+    const guideTrigger = await page.locator('#pwaGuideButton').isVisible() ? page.locator('#pwaGuideButton') : page.locator('#pwaInstallButton');
+    await guideTrigger.click();
+    assert.equal(await page.locator('#pwaInstallGuide').isVisible(), true);
+    assert.ok(await page.locator('#pwaGuideSteps li').count() >= 3);
+    await page.screenshot({ path: path.join(output, 'desktop-install-guide.png'), fullPage: true });
+    await page.locator('#pwaGuideDoneButton').click();
     const keys = await page.evaluate(async () => (await (await caches.open('qy-pwa-v1')).keys()).map(key => new URL(key.url).pathname));
     assert.equal(keys.some(route => route.startsWith('/api') || route.startsWith('/uploads') || route === '/' || route === '/index.html'), false);
     assert.ok(keys.includes('/offline.html'));

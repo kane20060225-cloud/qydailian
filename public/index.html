@@ -35,7 +35,7 @@
     <link rel="stylesheet" href="community-pages.css?v=20260918-b32-inline-nav">
     <link rel="stylesheet" href="game-news.css?v=20260919-b38">
     <link rel="stylesheet" href="game-tools.css?v=20260919-b33">
-    <link rel="stylesheet" href="pwa.css?v=20260919-pwa1">
+    <link rel="stylesheet" href="pwa.css?v=20260919-pwa2">
 </head>
 <body>
     <script>document.body.classList.toggle('theme-light', document.documentElement.dataset.theme === 'light');</script>
@@ -95,13 +95,35 @@
                     <span>价格透明</span><span>进度可查</span><span>人工客服</span>
                 </div>
                 <div id="pwaInstallArea" class="pwa-install-area" hidden>
-                    <button id="pwaInstallButton" class="pwa-install-button" type="button" hidden>安装应用</button>
-                    <details id="pwaIosHelp" hidden>
-                        <summary>添加 QY Blitz 到主屏幕</summary>
-                        <p>点击 Safari 分享按钮 → 添加到主屏幕，然后从桌面图标打开。</p>
-                    </details>
-                    <p id="pwaInstallStatus" role="status" hidden></p>
+                    <img class="pwa-install-icon" src="/icons/pwa-192.png" alt="" width="48" height="48">
+                    <div class="pwa-install-copy">
+                        <strong id="pwaInstallTitle">将 QY Blitz 放到桌面</strong>
+                        <span id="pwaInstallHint">像应用一样打开，访问更快捷。</span>
+                        <p id="pwaInstallStatus" role="status" aria-live="polite" hidden></p>
+                    </div>
+                    <div class="pwa-install-actions">
+                        <button id="pwaInstallButton" class="pwa-install-button" type="button" aria-describedby="pwaInstallHint">
+                            <span aria-hidden="true">↓</span><span id="pwaInstallButtonLabel">安装到桌面</span>
+                        </button>
+                        <button id="pwaGuideButton" class="pwa-guide-button" type="button" aria-haspopup="dialog" aria-controls="pwaInstallGuide" hidden>查看安装步骤</button>
+                    </div>
                 </div>
+                <dialog id="pwaInstallGuide" class="pwa-install-guide" aria-labelledby="pwaGuideTitle">
+                    <header>
+                        <div><span>安装指南</span><h2 id="pwaGuideTitle">添加到桌面</h2></div>
+                        <button id="pwaGuideClose" class="pwa-guide-close" type="button" aria-label="关闭安装指南">×</button>
+                    </header>
+                    <div class="pwa-guide-body">
+                        <span id="pwaPlatformBadge" class="pwa-platform-badge">当前设备</span>
+                        <p id="pwaGuideIntro"></p>
+                        <ol id="pwaGuideSteps"></ol>
+                        <p id="pwaGuideNote" class="pwa-guide-note"></p>
+                    </div>
+                    <footer>
+                        <button id="pwaGuideInstallButton" class="pwa-install-button" type="button" hidden>立即安装</button>
+                        <button id="pwaGuideDoneButton" class="pwa-guide-done" type="button">我知道了</button>
+                    </footer>
+                </dialog>
             </div>
             <div class="hero-panel" aria-label="下单流程">
                 <span class="hero-panel-label">下单只需三步</span>
@@ -1137,7 +1159,7 @@
     <script src="game-tools.js?v=20260919-b33"></script>
     <script src="game-news.js?v=20260919-b38"></script>
     <script src="theme-preference.js?v=20260919-b34"></script>
-    <script src="pwa.js?v=20260919-pwa1"></script>
+    <script src="pwa.js?v=20260919-pwa2"></script>
     <script src="script.js?v=20260919-b38-game-news"></script>
 </body>
 </html>

@@ -10,8 +10,8 @@
 | `backend/server.js`（修改） | 仅调整静态响应头：worker 禁止 HTTP 缓存，根 scope 允许头，Manifest 明确 MIME，入口与注册脚本重验证。认证、API、数据库逻辑未修改。 |
 | `public/manifest.webmanifest` | QY Blitz 名称、中文描述、standalone、品牌色、根 scope 与图标声明。 |
 | `public/service-worker.js` | 静态资源白名单、网络优先、准确版本回退、离线提示、版本更新与旧缓存清理。 |
-| `public/pwa.js` | 注册与错误处理、更新检查、Android 安装事件、已安装状态与 standalone 检测、iOS Safari 帮助。 |
-| `public/pwa.css` | 首页小型安装入口样式，适配现有深浅主题，不增加悬浮按钮。 |
+| `public/pwa.js` | 注册与错误处理、更新检查、原生安装事件、已安装状态与 standalone 检测，以及按设备生成的桌面/主屏幕安装指南。 |
+| `public/pwa.css` | 首页常驻安装卡片和安装指南弹窗，适配现有深浅主题与移动端。 |
 | `public/offline.html` | 无用户数据的独立离线提示页；提醒联网核对订单后再操作。 |
 | `public/icons/pwa-192.png`、`pwa-512.png` | 普通安装图标。 |
 | `public/icons/pwa-maskable-192.png`、`pwa-maskable-512.png` | 不透明品牌背景及安全留白，适配 Android 图标裁切。 |
@@ -32,7 +32,7 @@
 - 静态缓存只接受无查询参数或唯一的 `v` 版本参数，版本必须完全匹配；新版本响应成功后清除该资源旧版本，防止无限增长。401/403/404/500、重定向、错误 MIME、`private`/`no-store`/`Vary: *` 响应不写入缓存。
 - worker 安装只预缓存中性的离线页。首次访问的资源在 worker 控制页面后再次请求才缓存，这是正常行为。
 - 更新设置 `updateViaCache: 'none'`；注册后、重新联网时及页面回到前台时检查更新（前台检查限每小时一次）。安装后立即激活并清理本项目旧缓存；不删除其他应用缓存，不自动刷新填单或付款页面。新首页和静态请求优先读网络，所以不会长期锁定旧资源。
-- Android 按钮仅在收到 `beforeinstallprompt` 后显示；安装完成或 standalone 中隐藏。iOS 使用首页内可展开帮助，无定时弹窗，也无需推送权限。
+- 浏览器模式下首页始终显示安装入口：收到 `beforeinstallprompt` 时按钮直接打开系统安装框，否则打开当前平台的操作指南。安装完成或 standalone 中隐藏；没有定时弹窗，也无需推送权限。
 - 桌面和 iOS 分别通过 `matchMedia('(display-mode: standalone)')`、`navigator.standalone` 检测。检测不改变 fetch、Token、Cookie 或页面跳转。
 
 ## 发布步骤
@@ -177,5 +177,9 @@ node rollback.cjs --restore-pre-pwa
 源码基线以云端 `pre-pwa-20260919` 标签保存，源码回退用 `git revert` 记录，不能强制重置远端分支；如有后续提交应仅撤销 PWA 的相关变更。服务器运行回退与源码回退需分别执行并核对，不能用云端回退替代客户端 worker 退役。
 
 浏览器验收已包含真实升级至退役 worker，确认注册注销、PWA 缓存消失、其他缓存与 Token 保留、API 继续走网络。生产浏览器验收脚本 `verify-pwa-production-browser.cjs` 使用独立测试 profile，匿名 GET/HEAD，只读验证 HTTPS 注册、安装条件、布局和断网恢复。
+
+## B39 安装入口升级
+
+B39 将首页安装入口改为浏览器模式下常驻：支持 `beforeinstallprompt` 时直接打开系统安装框，否则按 iPhone/iPad、Mac Safari、Android、桌面 Chrome/Edge 生成对应步骤。发布包只允许替换 `public/index.html`、`public/pwa.js`、`public/pwa.css`，不迁移数据库、不重启后端；发布前核对生产基线并备份完整 public 和三份目标文件，失败自动恢复。使用 `prepare-b39-release.cjs` 打包，服务器使用 `deploy-b39-release.cjs` 原子发布，必要时以 `rollback-b39-release.cjs --restore-static` 恢复。
 
 参考：[Chrome 安装 Manifest 条件](https://developer.chrome.com/docs/lighthouse/pwa/installable-manifest)、[WebKit 主屏幕 Web App 与 standalone](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/)、[WebKit 主屏幕应用数据隔离](https://webkit.org/blog/14787/webkit-features-in-safari-17-2/)。

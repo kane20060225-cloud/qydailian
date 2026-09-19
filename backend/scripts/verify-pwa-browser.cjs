@@ -74,7 +74,7 @@ const { app: website } = require('../server');
       for (const theme of ['dark', 'light']) {
         await page.evaluate(theme => applyTheme(theme), theme);
         await page.evaluate(() => showSection('mainMenu'));
-        const originalHidden = await page.locator('#pwaInstallButton').isHidden();
+        assert.equal(await page.locator('#pwaInstallArea').isVisible(), true);
         // Native event may already be emitted; never assert a fixed browser engagement policy.
         await page.evaluate(() => {
           const event = new Event('beforeinstallprompt', { cancelable: true });
@@ -83,11 +83,12 @@ const { app: website } = require('../server');
           window.dispatchEvent(event);
         });
         assert.equal(await page.locator('#pwaInstallButton').isVisible(), true);
+        assert.equal(await page.locator('#pwaInstallButtonLabel').textContent(), '安装到桌面');
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${width}/${theme}: overflow`);
         await page.screenshot({ path: path.join(output, `${theme}-${width}-install.png`), fullPage: true });
         await page.locator('#pwaInstallButton').click();
-        assert.equal(await page.locator('#pwaInstallButton').isHidden(), true);
-        if (!originalHidden) console.log('Browser also offered its native install prompt.');
+        assert.equal(await page.locator('#pwaInstallButton').isVisible(), true);
+        assert.equal(await page.locator('#pwaInstallButtonLabel').textContent(), '查看安装方法');
       }
     }
     await page.evaluate(() => {
@@ -150,7 +151,14 @@ const { app: website } = require('../server');
       const iosPage = await ios.newPage();
       iosPage.on('pageerror', error => errors.push(error.message));
       await iosPage.goto(origin, { waitUntil: 'networkidle' });
-      assert.equal(await iosPage.locator('#pwaIosHelp').isVisible(), !standalone);
+      assert.equal(await iosPage.locator('#pwaInstallArea').isVisible(), !standalone);
+      if (!standalone) {
+        await iosPage.locator('#pwaInstallButton').click();
+        assert.equal(await iosPage.locator('#pwaInstallGuide').isVisible(), true);
+        assert.equal(await iosPage.locator('#pwaGuideSteps li').count(), 3);
+        await iosPage.screenshot({ path: path.join(output, `ios-install-guide-${standalone ? 'standalone' : 'browser'}.png`), fullPage: true });
+        await iosPage.locator('#pwaGuideDoneButton').click();
+      }
       assert.equal(await iosPage.evaluate(() => document.documentElement.dataset.displayMode), standalone ? 'standalone' : 'browser');
       await iosPage.evaluate(() => showSection('rental'));
       assert.equal(await iosPage.evaluate(() => document.body.dataset.currentSection), 'rental');
@@ -165,7 +173,7 @@ const { app: website } = require('../server');
     const ipadPage = await ipad.newPage();
     ipadPage.on('pageerror', error => errors.push(error.message));
     await ipadPage.goto(origin, { waitUntil: 'networkidle' });
-    assert.equal(await ipadPage.locator('#pwaIosHelp').isVisible(), true);
+    assert.equal(await ipadPage.locator('#pwaInstallArea').isVisible(), true);
     await ipad.close();
     const appMode = await browser.newContext();
     await appMode.addInitScript(() => {

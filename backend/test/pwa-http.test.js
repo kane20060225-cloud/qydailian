@@ -63,6 +63,11 @@ test('Express exposes the root-scope PWA with valid metadata, icons and no missi
     }
     assert.equal((html.match(/rel="manifest"/g) || []).length, 1);
     assert.equal((html.match(/rel="apple-touch-icon"/g) || []).length, 1);
+    if (route !== '/offline.html') {
+      for (const id of ['pwaInstallArea', 'pwaInstallButton', 'pwaInstallGuide', 'pwaGuideSteps']) {
+        assert.equal((html.match(new RegExp(`id="${id}"`, 'g')) || []).length, 1, `${route}: ${id}`);
+      }
+    }
   }
   const source = fs.readFileSync(path.join(publicDir, 'pwa.js'), 'utf8');
   assert.equal((source.match(/serviceWorker\.register\(/g) || []).length, 1);
