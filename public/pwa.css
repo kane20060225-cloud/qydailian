@@ -50,6 +50,9 @@
 #pwaInstallStatus { margin: 4px 0 0; color: var(--accent); font-size: .72rem; line-height: 1.45; }
 
 .pwa-install-guide {
+    position: fixed;
+    inset: 0;
+    margin: auto;
     width: min(520px, calc(100vw - 28px));
     max-height: min(720px, calc(100dvh - 28px));
     padding: 0;
